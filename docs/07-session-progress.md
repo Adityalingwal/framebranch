@@ -374,7 +374,30 @@ replaced — Parts 6/7/8 kab ke complete the]
 
 Parts 1-8 SAB COMPLETE (PRD + HLD + LLD + test/benchmark plan). docs/13
 final-review triage: F1-F14 + Q1-Q3 SAB RESOLVED/ANSWERED (running log
-docs/13 ke top par); closure-verification docs/14 ke 10 items bhi closed. AB: 9-milestone build order confirm
+docs/13 ke top par); closure-verification docs/14 ke 10 items bhi closed +
+**Codex formal GO (docs/14 Final gate)**.
+
+## CODE PHASE — progress (2026-08-03 se)
+
+Workflow: code Claude background-agents (FABLE 5 only) se, Codex =
+reviewer checkpoints par (M2-3 / M4-5 / M7-8 ke baad, merge se pehle).
+Git: agent kabhi git nahi chalata — sab commit/push Aditya khud;
+conventional commits (chore/feat/test/fix); branches = main + feat/engine
+(M2-3) + feat/merge-otio (M4-6) + feat/app (M7-9). Har agent-assumption
+repo-root IMPLEMENTATION-NOTES.md mein dated; briefs `briefs/` (gitignored,
+local-only). Agents ka reading-map: docs/00-INDEX.md.
+
+- **M1 Skeleton ✅ DONE (2026-08-03):** pnpm monorepo + packages/engine
+  (khaali + sanity test) + strict TS + eslint/prettier + vitest + ci.yml
+  (T5 order; fuzz/coverage TODO-marked) + IMPLEMENTATION-NOTES.md (8
+  trivial tooling assumptions dated). Local typecheck/lint/test green.
+  Aditya ne first commit + push kiya (main), phir feat/engine branch.
+  NOTE: purana research-README M1-stub se replace hua (backup scratchpad
+  mein tha — content docs/01-06 mein waise bhi covered).
+- **M2 Engine core 🔄 IN PROGRESS (2026-08-03):** Fable-5 background
+  agent launched; brief = briefs/m2-engine-core-brief.md (goal: time.ts/
+  types.ts/invariants.ts/verbs.ts + index applyCommand + T1-style tests;
+  diff/merge/OTIO NAHI). Result aane par yahan update karo. AB: 9-milestone build order confirm
 (upar PROPOSED table) → CODE → Part 9: demo video + Vercel deploy +
 docs-consolidation + application (email + Twitter/LinkedIn post).
 
