@@ -1,0 +1,10 @@
+# Design docs and historical material are hand-written — never reformatted by tooling.
+docs/
+archive/
+palmier_pro_analysis.md
+
+# Generated / vendored
+node_modules/
+dist/
+coverage/
+pnpm-lock.yaml

@@ -1,0 +1,50 @@
+# FrameBranch CI — step order is LOCKED by docs/12 T5:
+#   (1) typecheck -> (2) lint -> (3) unit+golden+integration tests
+#   -> (4) fuzz 10k (seed-print) -> (5) coverage + lock-ID gap-script.
+# Any step fail = merge block. Benchmarks are intentionally NOT in CI
+# (T5 lock: CI hardware inconsistent -> local script + committed report).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        # pnpm version comes from the root package.json "packageManager" field.
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (T5 step 1)
+        run: pnpm typecheck
+
+      - name: Lint (T5 step 2)
+        run: pnpm lint
+
+      - name: Tests — unit + golden + integration (T5 step 3)
+        run: pnpm test
+
+      # TODO(M4): Fuzz 10k with seed printing (T5 step 4). Enable once the
+      # fuzz harness (docs/12 T3) lands in Milestone 4. Placeholder only —
+      # it must run AFTER tests and BEFORE coverage per the T5 locked order.
+      # - name: Fuzz 10k, seed-print (T5 step 4)
+      #   run: pnpm --filter @framebranch/engine fuzz
+
+      # TODO: Coverage + lock-ID gap-script (T5 step 5). Enable once the
+      # gap-script (docs/12 T1 pehredaar #1) is written in the code phase.
+      # - name: Coverage + lock-ID gap-script (T5 step 5)
+      #   run: pnpm --filter @framebranch/engine coverage && node scripts/lock-id-gap-check.mjs
