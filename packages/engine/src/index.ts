@@ -1,13 +1,64 @@
 /**
  * FrameBranch engine — public API entry point ("public darwaza", docs/11 C7).
  *
- * The 7-function public API will live here (comment only — no implementations
- * yet; Milestone 1 is repo skeleton only):
- *
- *   applyCommand, computeDiff, startMerge, applyChoice,
- *   finalizeCheck, importOtio, exportOtio
+ * Milestones 2-3 export applyCommand + computeDiff + public types ONLY.
+ * The remaining 5 API functions (startMerge, applyChoice, finalizeCheck,
+ * importOtio, exportOtio) arrive in later milestones — no stubs.
  *
  * apps/web will import ONLY from this index (small door = free internal
  * refactoring). Pure core: no DB / network / UI imports, ever.
  */
-export {};
+
+export { applyCommand } from "./verbs";
+export { computeDiff } from "./diff";
+
+export type {
+  AddedEntry,
+  DiffEntry,
+  DiffPropertyName,
+  DiffResult,
+  MovedEntry,
+  PropertyChangedEntry,
+  RawChangedEntry,
+  RemovedEntry,
+  SlippedEntry,
+  SplitEntry,
+  TrimmedEntry,
+} from "./diff";
+
+export type { RationalTime } from "./time";
+export type {
+  AddClipMediaCommand,
+  AddClipTextCommand,
+  ApplyError,
+  ApplyNoChange,
+  ApplyOk,
+  ApplyOptions,
+  ApplyResult,
+  Clip,
+  ClipProperties,
+  Command,
+  DeleteClipCommand,
+  EngineError,
+  ErrorCode,
+  Lineage,
+  MediaKind,
+  MediaRef,
+  MoveCommand,
+  Position,
+  PropertyChangeCommand,
+  PropertyName,
+  PropertyValue,
+  RippleDeleteCommand,
+  SlipCommand,
+  SplitCommand,
+  TextClip,
+  TextClipProperties,
+  TextFont,
+  TextStyle,
+  Timeline,
+  TimeRange,
+  Track,
+  TrackKind,
+  TrimCommand,
+} from "./types";

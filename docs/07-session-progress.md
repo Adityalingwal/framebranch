@@ -374,7 +374,48 @@ replaced — Parts 6/7/8 kab ke complete the]
 
 Parts 1-8 SAB COMPLETE (PRD + HLD + LLD + test/benchmark plan). docs/13
 final-review triage: F1-F14 + Q1-Q3 SAB RESOLVED/ANSWERED (running log
-docs/13 ke top par); closure-verification docs/14 ke 10 items bhi closed. AB: 9-milestone build order confirm
+docs/13 ke top par); closure-verification docs/14 ke 10 items bhi closed +
+**Codex formal GO (docs/14 Final gate)**.
+
+## CODE PHASE — progress (2026-08-03 se)
+
+Workflow: code Claude background-agents (FABLE 5 only) se, Codex =
+reviewer checkpoints par (M2-3 / M4-5 / M7-8 ke baad, merge se pehle).
+Git: agent kabhi git nahi chalata — sab commit/push Aditya khud;
+conventional commits (chore/feat/test/fix); branches = main + feat/engine
+(M2-3) + feat/merge-otio (M4-6) + feat/app (M7-9). Har agent-assumption
+repo-root IMPLEMENTATION-NOTES.md mein dated; briefs `briefs/` (gitignored,
+local-only). Agents ka reading-map: docs/00-INDEX.md.
+
+- **M1 Skeleton ✅ DONE (2026-08-03):** pnpm monorepo + packages/engine
+  (khaali + sanity test) + strict TS + eslint/prettier + vitest + ci.yml
+  (T5 order; fuzz/coverage TODO-marked) + IMPLEMENTATION-NOTES.md (8
+  trivial tooling assumptions dated). Local typecheck/lint/test green.
+  Aditya ne first commit + push kiya (main), phir feat/engine branch.
+  NOTE: purana research-README M1-stub se replace hua (backup scratchpad
+  mein tha — content docs/01-06 mein waise bhi covered).
+- **M2 Engine core ✅ DONE (2026-08-03):** time.ts + types.ts +
+  invariants.ts (EK list) + verbs.ts (8 verbs full contracts) + index
+  (sirf applyCommand). 145 tests green (BC.3 4-equations, split
+  formula-ID, N1 6×4 matrix, har error-code, har inverse round-trip).
+  13 trivial assumptions NOTES mein. M2 ke 3 open questions ka triage
+  (2026-08-03): **(1) RESOLVED — text-addClip rate-check KEEP** (F4 list
+  ka oversight tha, docs/11 amend ho gaya); **(2) PARKED FOR M5 —
+  image ka durationInSource semantics: M5 (OTIO import) brief banate
+  waqt PEHLA discuss-item — import hi ye value likhta hai, wahin OTIO
+  ki reality ke saath decide hoga** (abhi engine-level kuch atka nahi);
+  **(3) RESOLVED — BC.4 violation → E_INVALID_RANGE KEEP** (naya code
+  nahi, detail message mein; docs/11 BC.4 note). Teeno M2-questions
+  CLOSED 2026-08-03. Aditya ne commit kiya (feat/engine).
+- **M3 Diff engine ✅ DONE (2026-08-03):** diff.ts — MATCH (ID +
+  khandaan-walk) → CLASSIFY (15 rules, content-anchored atoms) → RENDER
+  (1:1 entries↔sentences) + #16 catch-all (escape-proof net). index mein
+  computeDiff (API 2/7). 38 naye tests — 16/16 rules, diff(A,A)=∅,
+  ripple #14+N×#1, khandaan goldens, double-run deterministic. Total
+  183/183 green (M2 untouched). 10 trivial assumptions NOTES mein, 0
+  open questions. **NEXT: M2+M3 commit → Codex review checkpoint #1
+  (feat/engine ka poora diff) + 3 open questions resolve → merge main →
+  M4 (merge engine, feat/merge-otio branch).** AB: 9-milestone build order confirm
 (upar PROPOSED table) → CODE → Part 9: demo video + Vercel deploy +
 docs-consolidation + application (email + Twitter/LinkedIn post).
 

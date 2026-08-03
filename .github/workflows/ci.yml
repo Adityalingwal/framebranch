@@ -44,7 +44,7 @@ jobs:
       # - name: Fuzz 10k, seed-print (T5 step 4)
       #   run: pnpm --filter @framebranch/engine fuzz
 
-      # TODO: Coverage + lock-ID gap-script (T5 step 5). Enable once the
-      # gap-script (docs/12 T1 pehredaar #1) is written in the code phase.
+      # TODO(M7): Coverage + lock-ID gap-script (T5 step 5). Enable at the
+      # M7 CI-closure once the implemented lock/test universe is complete.
       # - name: Coverage + lock-ID gap-script (T5 step 5)
       #   run: pnpm --filter @framebranch/engine coverage && node scripts/lock-id-gap-check.mjs

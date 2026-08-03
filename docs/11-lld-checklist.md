@@ -150,7 +150,12 @@
   validation (max 500, ""=E_INVALID_VALUE) creation par bhi.] Text-roop
   ke preconditions: track exists / track.kind=="text"
   (E_TRACK_KIND_MISMATCH) / no overlap / duration>0 / start>=0 /
-  textContent valid non-empty (E_INVALID_VALUE) — media-wale checks N/A.
+  textContent valid non-empty (E_INVALID_VALUE) / rate==projectRate
+  (E_RATE_MISMATCH) [M2 open-Q1 resolved 2026-08-03: rate-check yahan
+  likhna reh gaya tha — caption ke paas bhi timelineRange hai, wahi
+  galat-rate bug lagta; M2 agent ne consistency se include kiya, Aditya
+  ne KEEP lock kiya] — media-wale checks (media exists / source bounds)
+  N/A.
   textStyle optional — defaults BC.5 se materialize (Arial/48/#ffffff).
   (c) INTERNAL restore-roop (sirf engine ke andar — API/user se KABHI
   accept nahi): poora captured clip-object id SAMET wapas rakhna; yahan id
@@ -271,9 +276,16 @@
   coordinate mein, timeline number nahi — isliye move se naam kharab nahi
   hota). Nested split = chained naam (A@5 ka tukda = A@5@8) — kitne bhi level
   unique. (3) Har tukda lineage/khandaan-record STATE mein carry karta hai
-  (rootId + apna span) — op-log merge input nahi ho sakta (locked), heuristic
-  guessing rejected (docs/09 #10 philosophy), isliye state-carried lineage hi
-  ekmatra lawful raasta (proof by elimination). Kyun ye jeeta: same-cut
+  (rootId + apna span) — op-log merge input nahi ho sakta (locked). **ID-
+  namespace clarification (2026-08-04, M2/M3 review I2 owner resolution):**
+  root-clip IDs system-minted aur `@`-free hain; `@<root-local-cut>` suffix
+  SIRF split operation ke liye reserved hai. Isliye full parent-ID se trailing
+  split suffix hatana direct ancestry decoding hai, shakal/heuristic guessing
+  nahi; `lineage.rootId/span` state mein family-root + coverage authority rehta
+  hai. Public add caller se ID leta hi nahi. Future import bhi external clip ID
+  ko internal root ID ki tarah preserve nahi karega — fresh `@`-free internal
+  root ID mint karega. Is namespace ke bahar manually formula-shaped unrelated
+  root ID invalid input hai, diff bug nahi. Kyun ye jeeta: same-cut
   concurrent splits ka naam dono branches mein SAME banta → merge par auto-
   converge, zero conflict (random IDs hote to unification rule chahiye hota).
   Advisor-caught bug fixed: naive segmentId(rootId, cut) total nahi tha
@@ -487,7 +499,10 @@
   V1 mein exist nahi karta (#15 OUT). Ab tak bin-likhi assumption thi jis
   par trim-sync/split-partition/merge-math khada hai — ab official invariant
   list mein (edit-darwaza preconditions + jod-darwaza sweep dono jagah,
-  wahi ek list) + test. V2 speed feature aaye to ye rule deliberately
+  wahi ek list) + test. [M2 open-Q3 resolved 2026-08-03: BC.4 violation
+  ka error code = E_INVALID_RANGE (dedicated naya code NAHI — F8 ki
+  final-list discipline; poori detail error MESSAGE mein, e.g. "BC.4
+  violated: source 10s ≠ timeline 7s"). Aditya-locked.] V2 speed feature aaye to ye rule deliberately
   revisit hoga, silently nahi tootega. [Codex-leg catch; Aditya lock
   2026-08-02.]
 - **BC.5 (2026-08-02) LOCKED — Text defaults + color format:** textStyle
@@ -531,13 +546,21 @@
   detect, "split into two at X"). Multi-change clip = multiple sentences
   (har khaana apna rule). RippleDelete diff mein = #14 + N×#1 (net-state
   sach; "Ripple delete" naam History/op-log screen ka hai — alag, locked).
-  **#16 CATCH-ALL (jaal):** jo kisi rule mein fit na ho (bug/future data) →
-  raw before→after values sach-sach ("Clip A changed: sourceRange 5–15 →
-  5–12") — kabhi crash nahi, kabhi silent-skip nahi, kabhi AI-guess nahi
-  (Part 3 "truthful raw fallback" ka exact form). COVERAGE PROOF matrix-
-  checked: B2.1 ke finite khaane → har khaana ka rule (jagah#1, lambai#2-5,
-  khidki#6, properties#7-12, existence#13-14, partition#15) + catch-all →
-  escape impossible. [Aditya lock 2026-08-02.]
+  **#16 CATCH-ALL (diff-relevant state ka jaal):** valid internal snapshots
+  mein jo clip/track/timeline change semantic rules mein fit na ho → raw
+  before→after values sach-sach ("Clip A changed: sourceRange 5–15 → 5–12")
+  — kabhi crash nahi, kabhi silent-skip nahi, kabhi AI-guess nahi. COVERAGE
+  PROOF matrix-checked: B2.1 ke finite editable khaane → har khaana ka rule
+  (jagah#1, lambai#2-5, khidki#6, properties#7-12, existence#13-14,
+  partition#15) + enumerated structural fallback. **Scope clarification
+  (2026-08-04, M2/M3 review I3 owner resolution):** #16 arbitrary/corrupted
+  JSON ka universal deep-diff validator NAHI. `mediaRefs` V1 mein immutable
+  deployment fixtures hain (upload/replace flow nahi), isliye unke metadata ko
+  commit-diff atom nahi maana jayega. Har stored `RationalTime.rate` seed/import/
+  command boundary par `projectRate` hota hai; rate-only mismatch invalid input
+  hai, version edit nahi. Future import ko bhi dono boundaries enforce karni
+  hongi. In explicitly scoped valid-state fields ke andar escape impossible.
+  [Aditya lock 2026-08-02; scope narrowed by owner 2026-08-04.]
 - **C2 (2026-08-02) LOCKED — [Shift] ka nearest-free-slot rule:** Bucket-3
   mein [Shift A/B] dabane par engine clip ko rakhta hai: (1) dono taraf
   dekho — jo khaali jagah SABSE PAAS hai jisme clip POORI fit ho, wahi

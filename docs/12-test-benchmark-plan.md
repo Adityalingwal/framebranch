@@ -22,8 +22,9 @@
   ("B1.1: collision counterexample") — spec-checklist ban jaata hai.
   Andaza ~40-50 test functions / ~300-400 rows (demo-size healthy).
   Aditya tests PADHEGA nahi — system report karega: (1) lock-ID gap-script
-  (docs/11 lock list vs test-name list cross-check, ~10-line script, code
-  phase mein) — "BC.4 ka test missing" jaisa output; (2) coverage report
+  (docs/11 lock list vs test-name list cross-check, ~10-line script, M7 CI-
+  closure mein jab implemented lock-universe complete ho) — "BC.4 ka test
+  missing" jaisa output; (2) coverage report
   CI mein (kabhi-na-chali lines = bhoola kona detector); (3) fuzz = anjaan
   gaps ka jaal. E2E/browser-robot tests OUT (demo-size par overkill —
   9-step demo manual). [Aditya lock 2026-08-03.]
@@ -93,7 +94,13 @@
   functions) → (4) fuzz 10k (seed-print) → (5) coverage + lock-ID
   gap-script. Koi step fail = merge block; sab pass = green badge (README
   par). Benchmarks CI mein NAHI — local script + committed report (HLD #16
-  — CI hardware inconsistent, numbers unreliable). [Aditya lock 2026-08-03.]
+  — CI hardware inconsistent, numbers unreliable). **Activation clarification
+  (2026-08-04, M2/M3 review I4 owner resolution):** steps 1–3 abhi har push/PR;
+  step 4 M4 fuzz harness ke saath; step 5 M7 CI-closure par, jab M2–M7 ke
+  engine/OTIO/server tests aur lock-ID universe implemented hon. Uske baad
+  poora 1–5 order har push/PR par merge-blocking. Future locks ko missing bolne
+  wali milestone-aware machinery abhi banana required nahi. [Aditya lock
+  2026-08-03; activation timing clarified by owner 2026-08-04.]
 
 **🏁 PART 8 COMPLETE (T1-T5, 2026-08-03). NEXT: CODE (Part 8.5 build), phir
 Part 9 (demo video + deploy + docs-consolidation + application).**

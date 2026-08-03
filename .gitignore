@@ -18,3 +18,6 @@ coverage/
 
 # Deployment
 .vercel/
+
+# Agent handoff briefs (local only, never pushed)
+briefs/
