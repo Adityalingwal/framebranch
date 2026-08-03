@@ -9,6 +9,7 @@
 
 - Design is 100% LOCKED. M1-M3 are merged on `main`; M4 is next.
 - CANONICAL SET (read these): 07 → 11 → 12 → 09 → 13 → 15.
+- Current M4 derived handoff: read 16 after that canonical set.
 - Everything else is background or superseded — do NOT treat as authority.
 - Locked decisions are FINAL. If implementation seems to need something a
   doc doesn't answer, do NOT invent — report back (no improvised guesses).
@@ -23,6 +24,11 @@
 | 12-test-benchmark-plan.md | Test plan: 44 goldens + G-group server tests, fuzz recipe, benchmarks, CI | Writing any test; CI setup |
 | 13-codex-final-review.md | Final review: 14 findings + 3 questions, ALL RESOLVED (top section) | Understanding why an amendment exists |
 | 15-codex-code-review-m2-m3.md | M2/M3 implementation review + owner triage; I1 deferred to M4 and I4 to M7 | Starting M4/M7 or auditing why M2/M3 code was accepted |
+
+Current milestone handoff (derived, not higher authority):
+`16-m4-implementation-brief.md` maps the locked M4 scope, API, tests, fuzz, and
+I1 closure gate into implementation order. Read it after the canonical set; an
+amended canonical lock always wins if wording ever drifts.
 
 ## Precedence rules (when texts seem to conflict)
 

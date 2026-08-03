@@ -421,6 +421,14 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   pehle docs/15 I1 ka targeted merge edge-case/break-test matrix chalega;
   reachable proof par hi lineage-duration check add hoga. M5 start se pehle
   parked image `durationInSource` semantics discuss/lock hogi.
+- **M4 pre-implementation brief ✅ DONE (2026-08-04):** `docs/16` mein exact
+  M4 scope, 34 applicable goldens, fuzz properties, public pure-core boundary,
+  implementation order, aur I1 reachable-scenario closure matrix ek jagah.
+  Owner discussion se U1 pure merge API aur U2 private lossless `MergeDelta`
+  interpretation lock ho gaye; canonical details docs/11 C7 aur docs/12 T2/T3
+  amendments mein hain. **NEXT: M4 implementation.** I1 runtime lineage check
+  abhi decision nahi: implementation break-tests/fuzz evidence ke baad hi add
+  ya proof-by-construction se close hoga. Is prep phase mein M4 code nahi likha.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
