@@ -122,6 +122,17 @@
   project-wide — union types chahiye (Track.kind, command discriminated
   union) + interface ka declaration-merging (silent reopen) nahi chahiye;
   ek keyword = consistency.
+  [M4 I1 RECONCILIATION 2026-08-04: `duration>0 (har TimeRange)` domain rule
+  unchanged hai. Existing runtime invariant sweep materialized timeline/source
+  ranges check karta hai; lineage positivity public add/trim/split transitions
+  aur M4 common-refinement ki construction se maintained hai. Lawful
+  opposite-edge collapse/crossing M4 mein nonpositive lineage `TimeRange`
+  banne se PEHLE same-clip B1 hota hai. 34 M4 T2 goldens + seed 1295277908 ke
+  500 local/10,000 CI-mode T3 cases ne har accepted edit, draft replay, aur
+  final merge par direct `lineage.span.duration.value > 0` traverse kiya.
+  Koi reachable counterexample ya necessary merge-boundary safeguard nahi
+  mila; isliye redundant runtime lineage check add nahi hua aur docs/15 I1
+  proof-by-construction se VERIFIED-CLOSED hai.]
 - **A3 contract format (2026-08-02) LOCKED — har verb = 5 sawaal:** command
   shape / preconditions (typed errors ke saath) / exact transition / inverse
   (undo) / error cases. Preconditions = invariants ka darwaza — invariant

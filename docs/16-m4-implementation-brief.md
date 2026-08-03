@@ -1,7 +1,8 @@
 # M4 Implementation Brief — Three-Way Merge Engine
 
-> **Status:** implementation-ready docs checkpoint; U1/U2 discussion is closed
-> and no M4 implementation code has been written.
+> **Status update (2026-08-04):** implementation and implementation-phase
+> validation complete; fresh post-commit read-only review is still pending.
+> U1/U2 are locked and U3/I1 is VERIFIED-CLOSED by proof-by-construction.
 > **Prepared from live repo:** `feat/merge-otio` at `06c182d`, clean and aligned
 > with `origin/feat/merge-otio` on 2026-08-04.
 > **Authority:** this brief reconciles the canonical set in the order required by
@@ -198,7 +199,7 @@ For Bucket 3 Shift (`docs/11-lld-checklist.md:564-576`):
 | `packages/engine/src/merge.ts` | Three-way compare/composition, split refinement, B1/B2/B3 conflicts, choices-map replay, dynamic conflicts, Shift, final check. C7 permits a private `merge/` folder only if `merge.ts` becomes genuinely too large; that is a code-time call (`docs/11-lld-checklist.md:769-788`). |
 | `packages/engine/src/index.ts` | Export exactly the M4 public functions/types after their contract is locked. No M5 stubs. |
 | `packages/engine/tests/merge.test.ts` | T1/T2 lock-prefixed merge unit/golden tests. Goldens stay in the area test file, not a new golden folder (`docs/12-test-benchmark-plan.md:17-23,48-49`). |
-| M4 fuzz harness under `packages/engine/tests/` or another package-private test path | Seeded T3 generator/properties. Exact filename is not locked. |
+| M4 fuzz harness under `packages/engine/tests/` or another package-private test path | Seeded T3 generator/properties. Exact filename is not locked. `fuzz.test.ts` contains the properties; package-private `run-fuzz.mjs` batches CI execution below Vitest's worker RPC window without changing the seed/case universe. |
 | `packages/engine/package.json` | Add package-local `fuzz` command. |
 | `.github/workflows/ci.yml` | Activate existing M4 T5 step 4 after tests and before the future M7 step 5 (`docs/12-test-benchmark-plan.md:92-103`). |
 | `IMPLEMENTATION-NOTES.md` | Record only trivial code/tooling choices, not unresolved contract invention. |
@@ -474,7 +475,7 @@ Do not invent a new universal `lineage.duration === timeline.duration` invariant
 Scenario tests may assert the exact add/trim/split lockstep outcome, but I1 only
 asks whether positive lineage duration is a necessary runtime invariant.
 
-## 11. Decision closure and one evidence-gated item
+## 11. Decision closure
 
 There are **no remaining pre-implementation owner decisions**.
 
@@ -487,12 +488,14 @@ There are **no remaining pre-implementation owner decisions**.
   there is no public `applyDiff` or eighth function. Canonical record: docs/12 T3
   amendment.
 
-### U3 — I1 runtime check is deliberately evidence-gated (not a pre-code blocker)
+### U3 resolved 2026-08-04 — no redundant runtime lineage check
 
-Whether to add lineage-span nonpositive-duration checking remains open until the
-section-10 matrix and fuzz run. This is the exact owner gate in
-`docs/15-codex-code-review-m2-m3.md:120-129` and
-`docs/07-session-progress.md:419-423`.
+The section-10 lawful matrix is covered by T2, and T3 directly traverses every
+surviving lineage after edits, replay, and finalization. Opposite-edge
+zero/negative composition is classified as B1 before a nonpositive segment is
+materialized. Seed `1295277908` passed 500 local and 10,000 CI-mode cases with no
+reachable counterexample, so I1 is VERIFIED-CLOSED by proof-by-construction.
+Canonical reconciliation: docs/11 A2.3 and docs/15 I1 closure record.
 
 No other live M4 scope contradiction survived amendment precedence. In
 particular, forged split IDs (I2) and directly corrupted JSON/rates/media (I3)
@@ -525,25 +528,25 @@ round-trip, and M7 Group-G tests are not part of this gate.
 ## 13. Completion checklist
 
 - [x] U1-U2 are discussed and locked before implementation starts.
-- [ ] Only M4 files/scope are changed; no M5/M7/M8/V2 implementation appears.
-- [ ] `merge.ts` remains pure: no DB/network/UI imports and no mutation of inputs.
-- [ ] `startMerge`, `applyChoice`, `finalizeCheck` match the newly locked exact
+- [x] Only M4 files/scope are changed; no M5/M7/M8/V2 implementation appears.
+- [x] `merge.ts` remains pure: no DB/network/UI imports and no mutation of inputs.
+- [x] `startMerge`, `applyChoice`, `finalizeCheck` match the newly locked exact
       public contract and are exported only through `index.ts`.
-- [ ] Five-row three-way atom rule is complete and deterministic.
-- [ ] Split same-cut/different-cut/refinement/projection/family-delete rules pass.
-- [ ] Every conflict is B1/B2/B3, with exact fixed choices and no fourth door.
-- [ ] Conflict order and IDs are stable across repeated recomputation.
-- [ ] Parchi replay is click-order independent and dynamic counts are honest.
-- [ ] Remove-both uses base-revert; already-materialized clips never return pending.
-- [ ] Finite-universe termination passes deterministic cascade tests and fuzz.
-- [ ] Shift passes nearest/tie/zero-bound/end-placement tests and never fails.
-- [ ] All 34 M4-applicable T2 answer keys are accounted for by an exact new or
+- [x] Five-row three-way atom rule is complete and deterministic.
+- [x] Split same-cut/different-cut/refinement/projection/family-delete rules pass.
+- [x] Every conflict is B1/B2/B3, with exact fixed choices and no fourth door.
+- [x] Conflict order and IDs are stable across repeated recomputation.
+- [x] Parchi replay is click-order independent and dynamic counts are honest.
+- [x] Remove-both uses base-revert; already-materialized clips never return pending.
+- [x] Finite-universe termination passes deterministic cascade tests and fuzz.
+- [x] Shift passes nearest/tie/zero-bound/end-placement tests and never fails.
+- [x] All 34 M4-applicable T2 answer keys are accounted for by an exact new or
       proven-existing test; deferred rows remain deferred.
-- [ ] T3 properties P1-P9 and I1-P10 pass with seed replay.
-- [ ] I1 is closed exactly by section 10's evidence rule.
-- [ ] 500 local fuzz cases and at least 10,000 CI cases pass.
-- [ ] T5 CI step 4 is active; M7 step 5 remains deferred.
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test`, and fuzz are green.
+- [x] T3 properties P1-P9 and I1-P10 pass with seed replay.
+- [x] I1 is closed exactly by section 10's evidence rule.
+- [x] 500 local fuzz cases and at least 10,000 CI cases pass.
+- [x] T5 CI step 4 is active; M7 step 5 remains deferred.
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test`, and fuzz are green.
 - [ ] Focused M4 implementation commit is created only after green validation.
 - [ ] Fresh final review is a separate read-only phase against the committed diff
       and canonical docs; findings are recorded before any fix pass.

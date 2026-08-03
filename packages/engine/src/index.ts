@@ -1,9 +1,8 @@
 /**
  * FrameBranch engine — public API entry point ("public darwaza", docs/11 C7).
  *
- * Milestones 2-3 export applyCommand + computeDiff + public types ONLY.
- * The remaining 5 API functions (startMerge, applyChoice, finalizeCheck,
- * importOtio, exportOtio) arrive in later milestones — no stubs.
+ * Milestones 2-4 export applyCommand, computeDiff, and the three merge
+ * functions with public types. importOtio/exportOtio arrive in M5 — no stubs.
  *
  * apps/web will import ONLY from this index (small door = free internal
  * refactoring). Pure core: no DB / network / UI imports, ever.
@@ -11,6 +10,7 @@
 
 export { applyCommand } from "./verbs";
 export { computeDiff } from "./diff";
+export { applyChoice, finalizeCheck, startMerge } from "./merge";
 
 export type {
   AddedEntry,
@@ -27,6 +27,27 @@ export type {
 } from "./diff";
 
 export type { RationalTime } from "./time";
+export type {
+  ApplyChoiceInput,
+  DeleteChoice,
+  DeleteParticipants,
+  FinalizeCheckInput,
+  FinalizeResult,
+  MergeChoice,
+  MergeChoices,
+  MergeConflict,
+  MergeCounts,
+  MergeFailure,
+  MergeField,
+  MergeParticipants,
+  MergeResult,
+  MergeSuccess,
+  OverlapChoice,
+  OverlapParticipants,
+  StartMergeInput,
+  ValueChoice,
+  ValueParticipants,
+} from "./merge";
 export type {
   AddClipMediaCommand,
   AddClipTextCommand,

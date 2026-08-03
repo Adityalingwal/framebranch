@@ -429,6 +429,21 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   amendments mein hain. **NEXT: M4 implementation.** I1 runtime lineage check
   abhi decision nahi: implementation break-tests/fuzz evidence ke baad hi add
   ya proof-by-construction se close hoga. Is prep phase mein M4 code nahi likha.
+- **M4 merge engine — implementation + validation ✅ DONE (2026-08-04):** pure
+  `startMerge`/`applyChoice`/`finalizeCheck` (API 3–5/7), lineage-family common
+  refinement, B1/B2/B3, permanent parchi replay, dynamic conflicts, base-revert,
+  aur deterministic nearest-free Shift implemented. Exact 34 T2 merge goldens
+  + 6 C7 API/error tests green; T3 direct P1–P9/I1-P10 harness mein seed
+  `1295277908` ke 500 local + 10,000 CI-mode generated cases green. Fuzz ne
+  reachable recurring-B3 replay regression pakdi; state-aware fixed-point
+  replay fix aur permanent case-617 regression dono green. I1 lawful matrix ne
+  nonpositive lineage ka koi reachable path nahi dikhaya, isliye docs/11 A2.3
+  reconciliation ke saath proof-by-construction se VERIFIED-CLOSED; redundant
+  runtime invariant add nahi hua. CI T5 step 4 active, M7 step 5 abhi TODO.
+  Final implementation checks: typecheck green, lint green, normal suite
+  226/226 green.
+  **NEXT:** focused commit, phir committed diff par separate fresh read-only M4
+  review; uske baad hi push. PR Codex create nahi karega.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

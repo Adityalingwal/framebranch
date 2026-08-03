@@ -7,6 +7,55 @@ that a doc does not answer is a **blocker — stop work and report it, do not
 guess** (docs/00-INDEX.md standing rules). This file is the audit trail the
 owner reads to see what was decided without him.
 
+## 2026-08-04 — Milestone 4 (merge engine)
+
+Trivial code-level choices made while implementing the locked M4 merge
+contracts. No new product behavior, conflict bucket, public function, or error
+code was added:
+
+- **Private lossless fuzz delta:** `MergeDelta`, `makeDelta`, and `applyDelta`
+  live in `src/merge.ts` for T3 only. The representation is a base fingerprint
+  plus lossless top-level replacements. It is not re-exported from `index.ts`;
+  public semantic `computeDiff` remains unchanged and no public `applyDiff` was
+  added.
+- **Common-refinement IDs:** the unsplit left piece keeps the root/base ID.
+  Root-local union cuts are processed in ascending order and use the existing
+  parent-chained `@cut` rule. If refinement would otherwise reuse an ID already
+  present in the materialized timeline, the segment's root-local start cut is
+  appended deterministically until the ID is unique. This preserves B1.1
+  ancestry while making different-cut output stable and collision-free.
+- **Conflict IDs:** collision-safe content addressing uses the literal `m4:`
+  prefix plus URI-encoded canonical JSON of the locked payload (class,
+  participant IDs/track, and B1 field). The docs leave the hash primitive
+  private; this encoding keeps the full payload, so stability does not depend
+  on a truncating hash.
+- **Canonical replay:** saved choices are key-sorted before returning or
+  replaying, so equivalent choice sets serialize identically regardless of
+  click order. Saved B3 answers are replayed to a deterministic placement
+  fixed point. The same conflict ID may be applied again when a later
+  base-revert changes the timeline and legitimately recreates that pair; an
+  exact repeated state is guarded as a cycle. T3 case 617 is the fixed
+  regression for this reachable cascade.
+- **File layout:** merge types, normalization, refinement, conflict creation,
+  choice replay, and deterministic Shift remain in one sectioned `merge.ts`.
+  They form one pure-core responsibility and share private normalized types;
+  no actual dependency boundary justified splitting the file during M4.
+- **Fuzz controls:** default seed is `1295277908`; local default is 500 cases,
+  `CI=true` selects 10,000, `FRAMEBRANCH_FUZZ_CASES` overrides the count,
+  `FRAMEBRANCH_FUZZ_SEED` overrides the seed, and
+  `FRAMEBRANCH_FUZZ_CASE=<index>` replays one printed case. Normal `pnpm test`
+  excludes this deliberately long harness; the package `fuzz` script is its
+  only execution door. The runner executes at most 1,000 generated cases per
+  Vitest process because Vitest 3's worker RPC times out after 60 seconds even
+  when a longer test timeout is configured; offsets preserve the single
+  0–9,999 case universe and each chunk exits cleanly.
+- **I1 proof shape:** merge never constructs a zero/negative refined segment.
+  Opposite-edge collapse/crossing is classified as same-clip B1 before a
+  nonpositive `TimeRange` is materialized. T2 exercises the lawful matrix and
+  T3 directly checks every surviving `lineage.span.duration.value > 0` after
+  accepted edits and merge replay; this is independent of the current runtime
+  invariant checker.
+
 ## 2026-08-03 — Milestone 3 (diff engine)
 
 Trivial code-level choices made while implementing C1 (`src/diff.ts`).

@@ -38,11 +38,8 @@ jobs:
       - name: Tests — unit + golden + integration (T5 step 3)
         run: pnpm test
 
-      # TODO(M4): Fuzz 10k with seed printing (T5 step 4). Enable once the
-      # fuzz harness (docs/12 T3) lands in Milestone 4. Placeholder only —
-      # it must run AFTER tests and BEFORE coverage per the T5 locked order.
-      # - name: Fuzz 10k, seed-print (T5 step 4)
-      #   run: pnpm --filter @framebranch/engine fuzz
+      - name: Fuzz 10k, seed-print (T5 step 4)
+        run: pnpm --filter @framebranch/engine fuzz
 
       # TODO(M7): Coverage + lock-ID gap-script (T5 step 5). Enable at the
       # M7 CI-closure once the implemented lock/test universe is complete.

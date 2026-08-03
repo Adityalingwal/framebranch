@@ -1060,6 +1060,47 @@ describe("A3.8: split", () => {
     expect(piece.lineage).toEqual({ rootId: "A", span: range(8, 2) });
   });
 
+  it("B1.1: split-delete-extend-resplit collision counterexample keeps the parent-chained id unique", () => {
+    const seeded = baseTimeline();
+    const tl: Timeline = {
+      ...seeded,
+      tracks: seeded.tracks.map((track) =>
+        track.id === "v1"
+          ? { ...track, clips: [mediaClip("A", "mV", 0, 0, 100)] }
+          : track,
+      ),
+    };
+
+    const first = expectOk(split(tl, "A", 40));
+    const deleted = expectOk(
+      applyCommand(first.timeline, { op: "deleteClip", clipId: "A" }),
+    );
+    const extended = expectOk(
+      applyCommand(deleted.timeline, {
+        op: "trim",
+        clipId: "A@40",
+        edge: "start",
+        delta: t(10),
+      }),
+    );
+    const resplit = expectOk(split(extended.timeline, "A@40", 40));
+
+    const parent = clipById(resplit.timeline, "A@40") as Clip;
+    const child = clipById(resplit.timeline, "A@40@40") as Clip;
+    expect(parent.lineage).toEqual({ rootId: "A", span: range(30, 10) });
+    expect(child.lineage).toEqual({ rootId: "A", span: range(40, 60) });
+    expect(hasClip(resplit.timeline, "A")).toBe(false);
+
+    const videoTrack = resplit.timeline.tracks.find(
+      (track) => track.id === "v1",
+    );
+    expect(videoTrack?.clips.map((clip) => clip.id)).toEqual([
+      "A@40",
+      "A@40@40",
+    ]);
+    expect(new Set(videoTrack?.clips.map((clip) => clip.id)).size).toBe(2);
+  });
+
   it("B1.1: the cut name is root-local, NOT a timeline number — a moved clip splits to the same name", () => {
     const moved = expectOk(
       applyCommand(baseTimeline(), {
