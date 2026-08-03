@@ -394,10 +394,25 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   Aditya ne first commit + push kiya (main), phir feat/engine branch.
   NOTE: purana research-README M1-stub se replace hua (backup scratchpad
   mein tha — content docs/01-06 mein waise bhi covered).
-- **M2 Engine core 🔄 IN PROGRESS (2026-08-03):** Fable-5 background
-  agent launched; brief = briefs/m2-engine-core-brief.md (goal: time.ts/
-  types.ts/invariants.ts/verbs.ts + index applyCommand + T1-style tests;
-  diff/merge/OTIO NAHI). Result aane par yahan update karo. AB: 9-milestone build order confirm
+- **M2 Engine core ✅ DONE (2026-08-03):** time.ts + types.ts +
+  invariants.ts (EK list) + verbs.ts (8 verbs full contracts) + index
+  (sirf applyCommand). 145 tests green (BC.3 4-equations, split
+  formula-ID, N1 6×4 matrix, har error-code, har inverse round-trip).
+  13 trivial assumptions NOTES mein. **3 OPEN QUESTIONS pending Aditya
+  discussion (baad mein ek saath):** (1) text-addClip par rate-check
+  rakha (F4 list mein nahi tha — literal chahiye to hatana); (2) image
+  ke durationInSource ka matlab (M5 OTIO par asli rule chahiye);
+  (3) BC.4 violation → E_INVALID_RANGE reuse (alag code chahiye to C4
+  amend). Aditya ne commit kiya (feat/engine).
+- **M3 Diff engine ✅ DONE (2026-08-03):** diff.ts — MATCH (ID +
+  khandaan-walk) → CLASSIFY (15 rules, content-anchored atoms) → RENDER
+  (1:1 entries↔sentences) + #16 catch-all (escape-proof net). index mein
+  computeDiff (API 2/7). 38 naye tests — 16/16 rules, diff(A,A)=∅,
+  ripple #14+N×#1, khandaan goldens, double-run deterministic. Total
+  183/183 green (M2 untouched). 10 trivial assumptions NOTES mein, 0
+  open questions. **NEXT: M2+M3 commit → Codex review checkpoint #1
+  (feat/engine ka poora diff) + 3 open questions resolve → merge main →
+  M4 (merge engine, feat/merge-otio branch).** AB: 9-milestone build order confirm
 (upar PROPOSED table) → CODE → Part 9: demo video + Vercel deploy +
 docs-consolidation + application (email + Twitter/LinkedIn post).
 

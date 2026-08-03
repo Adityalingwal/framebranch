@@ -1,8 +1,8 @@
 /**
  * FrameBranch engine — public API entry point ("public darwaza", docs/11 C7).
  *
- * Milestone 2 exports applyCommand + public types ONLY. The remaining 6
- * API functions (computeDiff, startMerge, applyChoice, finalizeCheck,
+ * Milestones 2-3 export applyCommand + computeDiff + public types ONLY.
+ * The remaining 5 API functions (startMerge, applyChoice, finalizeCheck,
  * importOtio, exportOtio) arrive in later milestones — no stubs.
  *
  * apps/web will import ONLY from this index (small door = free internal
@@ -10,6 +10,21 @@
  */
 
 export { applyCommand } from "./verbs";
+export { computeDiff } from "./diff";
+
+export type {
+  AddedEntry,
+  DiffEntry,
+  DiffPropertyName,
+  DiffResult,
+  MovedEntry,
+  PropertyChangedEntry,
+  RawChangedEntry,
+  RemovedEntry,
+  SlippedEntry,
+  SplitEntry,
+  TrimmedEntry,
+} from "./diff";
 
 export type { RationalTime } from "./time";
 export type {
