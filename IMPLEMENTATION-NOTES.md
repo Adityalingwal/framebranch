@@ -56,13 +56,17 @@ the code-level details the docs leave open:
   the #14 owns that content). A split whose right piece was deleted leaves
   a net state identical to an end-trim and therefore renders as #4, not
   #15 — net-state authority, regression-tested.
-- **#16 completeness net:** every raw field not covered by an atom has an
-  explicit compare — kind flip (text↔media), track membership (cross-track
-  is V1 OUT), lineage.rootId, mediaRefId, the two BC.4-family consistency
-  deltas (tlDuration−spanDuration and srcDuration−tlDuration, rendered with
-  the raw timelineRange/sourceRange values), projectRate, and track
-  existence/kind. So any field change either hits a rule or hits #16 —
-  escape impossible, never crash, never skip.
+- **#16 scoped completeness net (I3 owner clarification 2026-08-04):** every
+  diff-relevant raw field not covered by an atom has an explicit compare — kind
+  flip (text↔media), track membership (cross-track is V1 OUT), lineage.rootId,
+  mediaRefId, the two BC.4-family consistency deltas
+  (tlDuration−spanDuration and srcDuration−tlDuration, rendered with the raw
+  timelineRange/sourceRange values), projectRate, and track existence/kind.
+  `Timeline.mediaRefs` metadata is excluded because V1 fixtures are immutable
+  and no upload/replace verb exists; individual `RationalTime.rate` members are
+  excluded because valid seed/import/command boundaries normalize them to
+  `projectRate`. #16 is not an arbitrary corrupted-JSON deep differ. Within the
+  valid-state diff scope, changes hit a rule or #16 — never crash/skip.
 - **Deterministic output order (documented in diff.ts header):**
   timeline-level #16 first; tracks in `a`'s order then `b`-only tracks;
   track-level #16 before that track's clips; clips by the B3.1 sort key
@@ -176,5 +180,6 @@ the M2 report instead of being decided here):
   (default include pattern covers it).
 - **CI pins Node 20** (matches local Node v20.19.6) and takes pnpm's version
   from the `packageManager` field. Fuzz (step 4, TODO M4) and coverage +
-  gap-script (step 5, TODO) are commented placeholders in the locked T5 order;
-  benchmarks deliberately absent (T5 lock).
+  gap-script (step 5, TODO M7 CI-closure per I4 owner clarification) are
+  commented placeholders in the locked T5 order; benchmarks deliberately
+  absent (T5 lock).

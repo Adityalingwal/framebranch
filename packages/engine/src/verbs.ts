@@ -40,6 +40,7 @@ import type {
   SlipCommand,
   SplitCommand,
   TextClip,
+  TextFont,
   TextStyle,
   Timeline,
   TimeRange,
@@ -53,7 +54,11 @@ import type {
 // ---------------------------------------------------------------------------
 
 /** BC.5 — V1 font whitelist; default = first of the list. */
-export const TEXT_FONT_WHITELIST = ["Arial", "Georgia", "Courier New"] as const;
+export const TEXT_FONT_WHITELIST = [
+  "Arial",
+  "Georgia",
+  "Courier New",
+] as const satisfies readonly TextFont[];
 
 /** BC.5 — text style defaults (size 48, white, Arial). */
 export const TEXT_STYLE_DEFAULTS: TextStyle = {

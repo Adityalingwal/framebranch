@@ -54,6 +54,7 @@ export type {
   SplitCommand,
   TextClip,
   TextClipProperties,
+  TextFont,
   TextStyle,
   Timeline,
   TimeRange,

@@ -71,8 +71,11 @@ export type Clip = {
   lineage: Lineage;
 };
 
+/** BC.5 exact V1 whitelist; untrusted JSON still receives runtime validation. */
+export type TextFont = "Arial" | "Georgia" | "Courier New";
+
 export type TextStyle = {
-  font: string; // BC.5 whitelist: "Arial" | "Georgia" | "Courier New"
+  font: TextFont;
   size: number; // int 8-200, default 48
   color: string; // always lowercase 6-digit #rrggbb
 };

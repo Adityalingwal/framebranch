@@ -465,6 +465,18 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     expect(rules(d)).toEqual([15, 7]);
   });
 
+  it("B1.1: split + piece slip → #15 + #6 with the piece's truthful source window", () => {
+    const a = baseTimeline();
+    let b = apply(a, { op: "split", clipId: "A", at: t(15) });
+    b = apply(b, { op: "slip", clipId: "A@5", delta: t(3) });
+    const d = computeDiff(a, b);
+    expect(d.sentences).toEqual([
+      "Clip A split into two at 5",
+      "Clip A@5 slipped: source window moved from 10 to 13",
+    ]);
+    expect(rules(d)).toEqual([15, 6]);
+  });
+
   it("B1.1: split + piece end-trim → #15 + #4 attributed to the trailing piece", () => {
     const a = baseTimeline();
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
@@ -475,6 +487,18 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
       "Clip A@5 shortened by 2 frames at the end",
     ]);
     expect(rules(d)).toEqual([15, 4]);
+  });
+
+  it("B1.1: split + trailing-piece end-extension → #15 + #5 on that piece", () => {
+    const a = baseTimeline();
+    let b = apply(a, { op: "split", clipId: "A", at: t(15) });
+    b = apply(b, { op: "trim", clipId: "A@5", edge: "end", delta: t(3) });
+    const d = computeDiff(a, b);
+    expect(d.sentences).toEqual([
+      "Clip A split into two at 5",
+      "Clip A@5 extended by 3 frames at the end",
+    ]);
+    expect(rules(d)).toEqual([15, 5]);
   });
 
   it("B1.1: split + LEFT piece deleted → #14 (base id content gone) + #15, survivor matched", () => {

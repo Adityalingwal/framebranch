@@ -398,12 +398,15 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   invariants.ts (EK list) + verbs.ts (8 verbs full contracts) + index
   (sirf applyCommand). 145 tests green (BC.3 4-equations, split
   formula-ID, N1 6×4 matrix, har error-code, har inverse round-trip).
-  13 trivial assumptions NOTES mein. **3 OPEN QUESTIONS pending Aditya
-  discussion (baad mein ek saath):** (1) text-addClip par rate-check
-  rakha (F4 list mein nahi tha — literal chahiye to hatana); (2) image
-  ke durationInSource ka matlab (M5 OTIO par asli rule chahiye);
-  (3) BC.4 violation → E_INVALID_RANGE reuse (alag code chahiye to C4
-  amend). Aditya ne commit kiya (feat/engine).
+  13 trivial assumptions NOTES mein. M2 ke 3 open questions ka triage
+  (2026-08-03): **(1) RESOLVED — text-addClip rate-check KEEP** (F4 list
+  ka oversight tha, docs/11 amend ho gaya); **(2) PARKED FOR M5 —
+  image ka durationInSource semantics: M5 (OTIO import) brief banate
+  waqt PEHLA discuss-item — import hi ye value likhta hai, wahin OTIO
+  ki reality ke saath decide hoga** (abhi engine-level kuch atka nahi);
+  **(3) RESOLVED — BC.4 violation → E_INVALID_RANGE KEEP** (naya code
+  nahi, detail message mein; docs/11 BC.4 note). Teeno M2-questions
+  CLOSED 2026-08-03. Aditya ne commit kiya (feat/engine).
 - **M3 Diff engine ✅ DONE (2026-08-03):** diff.ts — MATCH (ID +
   khandaan-walk) → CLASSIFY (15 rules, content-anchored atoms) → RENDER
   (1:1 entries↔sentences) + #16 catch-all (escape-proof net). index mein
