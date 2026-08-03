@@ -410,14 +410,17 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
 - **M3 Diff engine ✅ DONE (2026-08-03):** diff.ts — MATCH (ID +
   khandaan-walk) → CLASSIFY (15 rules, content-anchored atoms) → RENDER
   (1:1 entries↔sentences) + #16 catch-all (escape-proof net). index mein
-  computeDiff (API 2/7). 38 naye tests — 16/16 rules, diff(A,A)=∅,
-  ripple #14+N×#1, khandaan goldens, double-run deterministic. Total
-  183/183 green (M2 untouched). 10 trivial assumptions NOTES mein, 0
-  open questions. **NEXT: M2+M3 commit → Codex review checkpoint #1
-  (feat/engine ka poora diff) + 3 open questions resolve → merge main →
-  M4 (merge engine, feat/merge-otio branch).** AB: 9-milestone build order confirm
-(upar PROPOSED table) → CODE → Part 9: demo video + Vercel deploy +
-docs-consolidation + application (email + Twitter/LinkedIn post).
+  computeDiff (API 2/7). Original 38 + review-follow-up ke 2 split-family
+  goldens = 40 M3 tests — 16/16 rules, diff(A,A)=∅, ripple #14+N×#1,
+  khandaan goldens, double-run deterministic. `TextFont` exact literal-union
+  bhi review follow-up mein lock ke barabar hua; production diff behavior
+  change nahi hua. Total 185/185 green; typecheck + lint green. Codex checkpoint
+  #1 `docs/15` = MERGE-READY; follow-up commit `c3b001b`; PR #1 merge commit
+  `6582232` se `main` par merged (2026-08-04). **NEXT: M4 merge engine on fresh
+  `feat/merge-otio` branch.** M4 implementation ke baad, final M4 commit se
+  pehle docs/15 I1 ka targeted merge edge-case/break-test matrix chalega;
+  reachable proof par hi lineage-duration check add hoga. M5 start se pehle
+  parked image `durationInSource` semantics discuss/lock hogi.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

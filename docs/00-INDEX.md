@@ -2,13 +2,13 @@
 
 > For every agent (Claude Code, Codex, or human) working on this repo.
 > Read THIS file first. It tells you what to read, what to skip, and which
-> document wins when two seem to disagree. Last updated: 2026-08-03
-> (post final-review triage, pre-code).
+> document wins when two seem to disagree. Last updated: 2026-08-04
+> (M1-M3 implemented, reviewed, and merged; next = M4).
 
 ## The 10-second version
 
-- Design is 100% LOCKED and review-proof. Code has not started yet.
-- CANONICAL SET (read these): 07 → 11 → 12 → 09 → 13.
+- Design is 100% LOCKED. M1-M3 are merged on `main`; M4 is next.
+- CANONICAL SET (read these): 07 → 11 → 12 → 09 → 13 → 15.
 - Everything else is background or superseded — do NOT treat as authority.
 - Locked decisions are FINAL. If implementation seems to need something a
   doc doesn't answer, do NOT invent — report back (no improvised guesses).
@@ -22,6 +22,7 @@
 | 11-lld-checklist.md | LLD: THE implementation spec — types, 8 verb contracts, diff/merge rules, DB columns, API shapes, demo script | Writing any code. This is the main spec. |
 | 12-test-benchmark-plan.md | Test plan: 44 goldens + G-group server tests, fuzz recipe, benchmarks, CI | Writing any test; CI setup |
 | 13-codex-final-review.md | Final review: 14 findings + 3 questions, ALL RESOLVED (top section) | Understanding why an amendment exists |
+| 15-codex-code-review-m2-m3.md | M2/M3 implementation review + owner triage; I1 deferred to M4 and I4 to M7 | Starting M4/M7 or auditing why M2/M3 code was accepted |
 
 ## Precedence rules (when texts seem to conflict)
 
