@@ -240,6 +240,52 @@ describe("O4/H2: transition does not move the cursor", () => {
     expect(clips[1].timelineRange.start.value).toBe(10);
     expect(codes(warnings)).toEqual(["skipped-unsupported"]);
   });
+
+  // Regression (2026-08-05 review, F1): real serializers write
+  // `"source_range": null` on an untrimmed Item. That is "no range of its
+  // own", not "a range that failed to parse" — treating it as present made
+  // the whole import abort on exactly the nested Stack O7(b) says to skip.
+  it("O4/H2: a skipped item with source_range null is skipped, not fatal", () => {
+    const withNullRange = otioTimeline({
+      tracks: [
+        otioTrack({
+          kind: "Video",
+          children: [
+            otioClip({
+              sourceStart: 0,
+              duration: 10,
+              rate: 24,
+              targetUrl: "file://a.mov",
+              available: { start: 0, duration: 100, rate: 24 },
+            }),
+            {
+              OTIO_SCHEMA: "Stack.1",
+              name: "compound",
+              source_range: null,
+              children: [],
+              effects: [],
+              markers: [],
+              metadata: {},
+            },
+            otioClip({
+              sourceStart: 0,
+              duration: 8,
+              rate: 24,
+              targetUrl: "file://b.mov",
+              available: { start: 0, duration: 100, rate: 24 },
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const { timeline, warnings } = expectImported(importOtio(withNullRange));
+    const clips = clipsOf(timeline, 0);
+    expect(clips.length).toBe(2);
+    // No range of its own => nothing to advance by, same as a Transition.
+    expect(clips[1].timelineRange.start.value).toBe(10);
+    expect(codes(warnings)).toEqual(["skipped-unsupported"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -365,6 +411,179 @@ describe("O2/H5: video without available_range", () => {
     expect(codes(warnings)).toEqual(["skipped-media-length-missing"]);
     // No MediaRef is invented for a file we could not use.
     expect(timeline.mediaRefs.map((m) => m.url)).toEqual(["file://good.mov"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// A2.1 amendment (2026-08-05 review, F2) — media whose own range does not
+// start at 0 (embedded timecode). Engine coordinates always start at 0, so
+// the door subtracts the file's start and puts it back on export.
+// ---------------------------------------------------------------------------
+
+describe("A2.1/H5: available_range with a non-zero start", () => {
+  const withOffset = (sourceStart: number) =>
+    otioTimeline({
+      tracks: [
+        otioTrack({
+          kind: "Video",
+          children: [
+            otioClip({
+              sourceStart,
+              duration: 20,
+              rate: 24,
+              targetUrl: "file://tc.mov",
+              // the file holds frames 90..289
+              available: { start: 90, duration: 200, rate: 24 },
+            }),
+          ],
+        }),
+      ],
+    });
+
+  it("A2.1/H5: a window inside [90,290) imports, normalized to 0-based", () => {
+    const { timeline, warnings } = expectImported(importOtio(withOffset(250)));
+    expect(warnings).toEqual([]);
+    const clip = clipsOf(timeline, 0)[0] as Clip;
+    // 250 - 90 = 160, and the file is 200 long, so this is comfortably inside
+    // — the old code read it as 250 inside a 200-long file and aborted.
+    expect(clip.sourceRange.start.value).toBe(160);
+    expect(clip.sourceRange.duration.value).toBe(20);
+    const media = timeline.mediaRefs[0];
+    expect(media.durationInSource?.value).toBe(200);
+    expect(media.sourceStartInFile?.value).toBe(90);
+  });
+
+  it("A2.1/H5: a window the file does not contain is refused", () => {
+    // frame 5 does not exist in a file that starts at 90; this used to import
+    // silently because the start was dropped.
+    const result = importOtio(withOffset(5));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error.code).toBe("E_INVALID_OTIO");
+  });
+
+  it("A2.1/H5: export puts the file's own start back", () => {
+    const { timeline } = expectImported(importOtio(withOffset(250)));
+    const out = exportOtio(timeline) as Json;
+    const clip = (
+      (((out.tracks as Json).children as Json[])[0] as Json).children as Json[]
+    )[0] as Json;
+    const range = clip.source_range as Json;
+    expect((range.start_time as Json).value).toBe(250);
+    const available = (clip.media_reference as Json).available_range as Json;
+    expect((available.start_time as Json).value).toBe(90);
+    expect((available.duration as Json).value).toBe(200);
+  });
+
+  it("A3.6/H5: a property the media kind cannot carry skips the clip", () => {
+    // N1 matrix: an image has no volume (a photo makes no sound). Importing
+    // one would mint a state no verb can produce — applyCommand would answer
+    // E_PROPERTY_NOT_APPLICABLE — while diff/merge kept comparing it.
+    // [F3, 2026-08-05 review.]
+    const doc = otioTimeline({
+      tracks: [
+        otioTrack({
+          kind: "Video",
+          children: [
+            {
+              ...(otioClip({
+                sourceStart: 0,
+                duration: 5,
+                rate: 24,
+                targetUrl: "file://logo.png",
+              }) as Json),
+              metadata: { framebranch: { properties: { volume: 50 } } },
+            },
+          ],
+        }),
+      ],
+    });
+
+    const { timeline, warnings } = expectImported(importOtio(doc));
+    expect(clipsOf(timeline, 0).length).toBe(0);
+    expect(codes(warnings)).toEqual(["skipped-unknown-clip"]);
+  });
+
+  it("A3.6/H5: image media on an audio track is skipped, not coerced", () => {
+    // N1 track mapping: an image is visual, so it belongs on a video lane.
+    // addClip refuses this placement outright (E_TRACK_KIND_MISMATCH); import
+    // used to accept it silently. [F4, 2026-08-05 review.]
+    const doc = otioTimeline({
+      tracks: [
+        otioTrack({
+          kind: "Audio",
+          children: [
+            otioClip({
+              sourceStart: 0,
+              duration: 5,
+              rate: 24,
+              targetUrl: "file://cover.png",
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const { timeline, warnings } = expectImported(importOtio(doc));
+    expect(clipsOf(timeline, 0).length).toBe(0);
+    expect(timeline.mediaRefs).toEqual([]);
+    expect(codes(warnings)).toEqual(["skipped-unknown-clip"]);
+  });
+
+  it("O6/H7: the project rate ignores clips inside a skipped nested Stack", () => {
+    // The rate must come from content we KEEP. A nested Stack is skipped
+    // (O7b), so its 30fps clip must not decide the rate that the surviving
+    // 24fps track then gets converted into. [F6, 2026-08-05 review.]
+    const doc = otioTimeline({
+      tracks: [
+        {
+          OTIO_SCHEMA: "Stack.1",
+          name: "compound",
+          children: [
+            otioClip({
+              sourceStart: 0,
+              duration: 10,
+              rate: 30,
+              targetUrl: "file://inner.mov",
+              available: { start: 0, duration: 100, rate: 30 },
+            }),
+          ],
+          effects: [],
+          markers: [],
+          metadata: {},
+        },
+        otioTrack({
+          kind: "Video",
+          children: [
+            otioClip({
+              sourceStart: 0,
+              duration: 10,
+              rate: 24,
+              targetUrl: "file://kept.mov",
+              available: { start: 0, duration: 100, rate: 24 },
+            }),
+          ],
+        }),
+      ],
+    });
+
+    const { timeline } = expectImported(importOtio(doc));
+    expect(timeline.projectRate).toBe(24);
+    const clip = clipsOf(timeline, 0)[0] as Clip;
+    expect(clip.sourceRange.duration.value).toBe(10);
+  });
+
+  it("A2.1/H5: round-trip keeps the offset media identical", () => {
+    const { timeline: before } = expectImported(importOtio(withOffset(250)));
+    const { timeline: after } = expectImported(importOtio(exportOtio(before)));
+    expect(clipsOf(after, 0)[0].timelineRange).toEqual(
+      clipsOf(before, 0)[0].timelineRange,
+    );
+    expect((clipsOf(after, 0)[0] as Clip).sourceRange).toEqual(
+      (clipsOf(before, 0)[0] as Clip).sourceRange,
+    );
+    expect(after.mediaRefs[0].sourceStartInFile).toEqual(
+      before.mediaRefs[0].sourceStartInFile,
+    );
   });
 });
 

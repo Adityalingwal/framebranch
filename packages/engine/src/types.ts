@@ -43,6 +43,14 @@ export type MediaRef = {
   hash: string;
   sourceRate: number;
   durationInSource: RationalTime | null;
+  /**
+   * A2.1 [AMENDED 2026-08-05] — the frame number the FILE's own usable range
+   * starts at, in the file's coordinates. Engine coordinates always start at
+   * 0, so the OTIO boundary subtracts this on import and adds it back on
+   * export; nothing between those two doors ever reads it. Absent = 0, which
+   * is what almost every file says (embedded-timecode media is the exception).
+   */
+  sourceStartInFile?: RationalTime;
 };
 
 // ---------------------------------------------------------------------------
