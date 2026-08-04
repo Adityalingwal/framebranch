@@ -88,6 +88,13 @@ const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
   "webp",
 ]);
 
+/** N1 (A3.6) — which track kind each media kind belongs on. Mirrors verbs.ts. */
+const TRACK_KIND_FOR_MEDIA: Readonly<Record<MediaKind, TrackKind>> = {
+  video: "video",
+  audio: "audio",
+  image: "video", // visual → video lane; audio/text lanes refuse it
+};
+
 /** O6 edge — empty file with no `global_start_time` → 24 + warning. */
 const FALLBACK_RATE = 24;
 
@@ -281,6 +288,14 @@ function warn(ctx: ImportCtx, code: ImportWarningCode, detail: string): void {
 function firstClipRate(trackNodes: readonly unknown[]): number | null {
   for (const trackNode of trackNodes) {
     if (!isObject(trackNode)) continue;
+    // Only real Tracks: a nested Stack at this level is skipped by the walk
+    // (O7b), so taking the project rate from a clip inside it would let a
+    // discarded clip decide the rate every KEPT value then converts into.
+    // [F6, 2026-08-05 review.]
+    const trackSchema = trackNode.OTIO_SCHEMA;
+    if (typeof trackSchema !== "string" || !trackSchema.startsWith("Track.")) {
+      continue;
+    }
     const children = trackNode.children;
     if (!Array.isArray(children)) continue;
     for (const child of children) {
@@ -412,9 +427,22 @@ function parseProperties(
   return out;
 }
 
-/** Only the keys the shape actually carries (A2.2 / BC.1). */
-const MEDIA_PROPERTY_KEYS = ["volume", "opacity", "scale", "position"] as const;
-const TEXT_PROPERTY_KEYS = ["opacity", "position"] as const;
+/**
+ * Which properties each kind may carry — the N1 6x4 applicability matrix
+ * (A3.6), the same table `verbs.ts` enforces. Import must not mint a state
+ * no verb could produce: an image with a volume would fail
+ * E_PROPERTY_NOT_APPLICABLE from applyCommand, yet diff/merge would go on
+ * comparing it as a real field. [F3, 2026-08-05 review.]
+ */
+const PROPERTY_KEYS_BY_KIND = {
+  video: ["volume", "opacity", "scale", "position"],
+  audio: ["volume"],
+  image: ["opacity", "scale", "position"],
+  text: ["opacity", "position"],
+} as const satisfies Record<
+  MediaKind | "text",
+  readonly ("volume" | "opacity" | "scale" | "position")[]
+>;
 
 // ---------------------------------------------------------------------------
 // importOtio (public 6/7)
@@ -562,7 +590,11 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
       // its span; not advancing there pulled every later clip left.
       // One rule covers both: "advance by whatever span the item declares".
       warn(ctx, "skipped-unsupported", childSchema.raw);
-      if (child.source_range !== undefined) {
+      // `source_range: null` is what real serializers write for an untrimmed
+      // Item — it means "no range of its own", exactly like the field being
+      // absent. Treating null as present aborted the whole import on the very
+      // shape O7(b) says to skip past.
+      if (child.source_range !== undefined && child.source_range !== null) {
         const skippedRange = convertTimeRange(
           parseTimeRange(child.source_range, `${childSchema.raw} source_range`),
           ctx.rate,
@@ -673,7 +705,7 @@ function importTextClip(
     warn(ctx, "skipped-unknown-clip", "text clip with invalid textStyle");
     return null;
   }
-  const properties = parseProperties(fb.properties, TEXT_PROPERTY_KEYS);
+  const properties = parseProperties(fb.properties, PROPERTY_KEYS_BY_KIND.text);
   if (properties === null) {
     warn(ctx, "skipped-unknown-clip", "text clip with invalid properties");
     return null;
@@ -709,7 +741,21 @@ function importMediaClip(
 
   const kind = mediaKindFromUrl(url, trackKind);
 
-  const properties = parseProperties(fb?.properties, MEDIA_PROPERTY_KEYS);
+  // N1 track mapping (A3.6): an image is visual, so it lives on a VIDEO
+  // track — never on an audio or text lane. `addClip` refuses that placement
+  // with E_TRACK_KIND_MISMATCH, and the invariant sweep does not cover
+  // track-kind, so without this check import could mint a timeline no verb
+  // could build. Same non-coercion rule already used for text/media
+  // mismatches: skip the clip, never guess the track. [F4, 2026-08-05.]
+  if (TRACK_KIND_FOR_MEDIA[kind] !== trackKind) {
+    warn(ctx, "skipped-unknown-clip", `${kind} media on a ${trackKind} track`);
+    return null;
+  }
+
+  const properties = parseProperties(
+    fb?.properties,
+    PROPERTY_KEYS_BY_KIND[kind],
+  );
   if (properties === null) {
     warn(ctx, "skipped-unknown-clip", "clip with invalid properties");
     return null;
@@ -732,6 +778,23 @@ function importMediaClip(
     durationInSource = convertRate(rawAvailable.duration, ctx.rate);
   }
 
+  // A2.1 amendment (2026-08-05) — OTIO source coordinates live inside the
+  // media's OWN range, which need not start at 0 (embedded timecode). Engine
+  // coordinates always start at 0, so the door normalizes: subtract the
+  // file's start here, add it back on export. Ignoring it rejected valid
+  // files (a window at 250 inside [90,290) looked out of a 200-long file)
+  // AND silently accepted invalid ones (frame 5, which that file lacks).
+  const fileStart =
+    rawAvailable === null ? null : convertRate(rawAvailable.start, ctx.rate);
+  const offset = fileStart?.value ?? 0;
+  const localSourceRange: TimeRange =
+    offset === 0
+      ? sourceRange
+      : {
+          start: rt(sourceRange.start.value - offset, ctx.rate),
+          duration: sourceRange.duration,
+        };
+
   let mediaRef = ctx.mediaByUrl.get(url);
   if (!mediaRef) {
     mediaRef = {
@@ -745,6 +808,10 @@ function importMediaClip(
       // otherwise the rate the clip's source window was written in.
       sourceRate: (rawAvailable ?? rawRange).start.rate,
       durationInSource,
+      // Only carried when it is not the boring 0 — plain files stay plain.
+      ...(fileStart && fileStart.value !== 0
+        ? { sourceStartInFile: fileStart }
+        : {}),
     };
     ctx.mediaByUrl.set(url, mediaRef);
     ctx.mediaRefs.push(mediaRef);
@@ -754,7 +821,7 @@ function importMediaClip(
   return {
     id,
     mediaRefId: mediaRef.id,
-    sourceRange,
+    sourceRange: localSourceRange,
     timelineRange,
     properties,
     lineage: {
@@ -882,10 +949,22 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
   }
 
   const media = timeline.mediaRefs.find((m) => m.id === clip.mediaRefId);
+  // A2.1 amendment — put the file's own start back on, so a file with
+  // embedded timecode comes out exactly as it went in.
+  const fileStart = media?.sourceStartInFile;
+  const outSourceRange: TimeRange = fileStart
+    ? {
+        start: rt(
+          clip.sourceRange.start.value + fileStart.value,
+          clip.sourceRange.start.rate,
+        ),
+        duration: clip.sourceRange.duration,
+      }
+    : clip.sourceRange;
   return {
     OTIO_SCHEMA: "Clip.1",
     name: "",
-    source_range: timeRangeJson(clip.sourceRange),
+    source_range: timeRangeJson(outSourceRange),
     media_reference: media
       ? {
           OTIO_SCHEMA: "ExternalReference.1",
@@ -895,7 +974,7 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
             media.durationInSource === null
               ? null
               : timeRangeJson({
-                  start: rt(0, media.durationInSource.rate),
+                  start: fileStart ?? rt(0, media.durationInSource.rate),
                   duration: media.durationInSource,
                 }),
           metadata: {},

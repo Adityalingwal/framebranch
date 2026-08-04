@@ -114,6 +114,24 @@
   mile to clip banti hi nahi (O2). Invariant asar: A2.3 ki
   source-range-in-file check `null` par SKIP (ek `if`), baaki sab waisa hi.
   Dekho M5 section O1/O2.]
+  [AMENDED 2026-08-05, M5 review F2 — naya optional field
+  `sourceStartInFile?: RationalTime`: file ka apna maal kis frame-number se
+  shuru hota hai. OTIO ka `available_range` ek KHIDKI hai (`start` +
+  `duration`), aur uska `start` hamesha 0 nahi hota — embedded timecode wali
+  media 90, 3600 kuch bhi ho sakti hai; clip ke source coordinates USI khidki
+  mein likhe hote hain. Purana code sirf `duration` uthata tha aur `start`
+  phenk deta tha, jisse DO ulti galtiyan ek saath hoti thi: (a) SAHI file
+  reject — khidki [90,290) mein clip 250→270 bilkul valid hai, par humne file
+  ko "0 se 200" samajh ke `E_INVALID_OTIO` de diya; (b) GALAT file chup-chaap
+  accept — usi khidki mein clip 5→25 (frame 5 file mein hai hi nahi) bina
+  warning import ho gayi, aur invariant numerically pass karta raha jabki
+  matlab jhootha tha. Ab OTIO ka darwaza NORMALIZE karta hai: import par har
+  source coordinate se `available_range.start` ghata do (engine ki duniya
+  hamesha 0 se shuru), aur us start ko `sourceStartInFile` mein yaad rakh lo;
+  export par wapas jod do (round-trip lossless). Koi hardcoded number nahi —
+  jo file khud kehti hai wahi ghatta/judta hai. ENGINE ko haath NAHI lagta:
+  invariants/verbs/diff/merge sab waise ke waise, ye field sirf OTIO ke
+  darwaze par padha jaata hai. Absent = 0 (lagbhag har file).]
 - **A2.2 (2026-08-02) LOCKED — Clip + TextClip types:**
   `Clip = { id (stable — diff/merge ki jaan), mediaRefId, sourceRange (KYA
   dikhana), timelineRange (KAB dikhana), properties: { volume? 0-100,
@@ -1114,7 +1132,15 @@
   skip + `skipped-unknown-clip` (assumption 11 wali soch). Jis clip ki
   properties defaults par hain wo kuch likhta hi nahi — saaf files saaf
   rehti hain. H10 fixture mein ab non-default properties hain, warna test
-  jhootha green de sakta tha (mutation-check se verify kiya gaya).]
+  jhootha green de sakta tha (mutation-check se verify kiya gaya).
+  [AMENDED 2026-08-05, M5 review F3 — "propertyChange jaise hi" mein
+  APPLICABILITY bhi shaamil hai, sirf value-range nahi: allowed keys ab media
+  ke kind se aate hain (N1 6x4 matrix, A3.6) — image par `volume` ❌ (photo ki
+  awaaz nahi), audio par sirf `volume`, text par `opacity`/`position`.
+  Warna import aisi clip bana deta jo koi verb bana hi nahi sakta
+  (`applyCommand` wahi property `E_PROPERTY_NOT_APPLICABLE` se mana karta),
+  aur wo jhoothi value diff/merge mein asli field ki tarah compare hoti
+  rehti. Galat key mile → clip skip + `skipped-unknown-clip` (repair nahi).]
 - **O6 LOCKED — projectRate 3 seedhi seedhi.** (1) `global_start_time`
   maujood → uski `rate` (uski VALUE use nahi hoti — hamari timeline hamesha
   0 se shuru hoti hai; broadcast ka 01:00:00:00 rivaj hamare model mein
@@ -1126,6 +1152,11 @@
   value convert hoti (7@30 = 0.2333s → 6@24 = 0.2500s, har cut 0.0167s
   khisak jaata) jabki uski apni rate rakhne par ZERO conversion hoti hai.
   Conversion sirf tab lagti hai jab EK file ke andar kai rates hon.
+  [AMENDED 2026-08-05, M5 review F6 — rule (2) ki "pehli clip" sirf un clips
+  mein se hai jo SACH MEIN import hongi: seedhe `Track` ke andar wali. Nested
+  `Stack` ke andar ki clip (jo O7b se skip ho jaayegi) rate decide nahi
+  karti — warna phenki hui clip ke hisaab se rate tay hoti aur rakhi hui har
+  value bekaar mein convert hoti.]
   EDGE — khaali file (koi clip nahi + `global_start_time` bhi nahi):
   rate 24 + warning (`rate-fallback-empty-timeline`), import FAIL NAHI
   (khaali timeline PRD mein valid hai, aur jab koi clip hi nahi to rate se
@@ -1162,6 +1193,16 @@
   REJECTED "lambai nahi hai to image hogi": video ki lambai bhi missing ho
   sakti hai (O2 ka poora case), to wo video ko chup-chaap image maan leta.
   Ye ek documented ASSUMPTION hai (README/limitations mein jayegi).
+  [AMENDED 2026-08-05, M5 review F4 — kind tay hone ke BAAD track-mapping
+  check bhi lagta hai (N1, A3.6): image sirf VIDEO lane par; audio ya text
+  lane par mile to clip skip + `skipped-unknown-clip`, coerce kabhi nahi.
+  `addClip` ye placement `E_TRACK_KIND_MISMATCH` se mana karta hai aur
+  invariant sweep track-kind cover nahi karti, isliye bina is check ke import
+  aisi timeline bana sakta tha jo verbs se banti hi nahi (aur `.png` maan
+  lene ki wajah se O2 ka lambai-check bhi bypass ho jaata). Saaf rakhne ke
+  liye: ye "image aur music ek saath nahi" NAHI kehta — image video lane par
+  aur music audio lane par ek hi waqt bilkul chalte hain; ye sirf lane tay
+  karta hai.]
 - **O10 LOCKED — round-trip ka exact matlab.** Test =
   `hamari timeline → exportOtio → importOtio → wahi timeline`
   (docs/09 #10/#11: structural equality, IDs ignore, sirf CI test — koi

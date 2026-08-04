@@ -591,6 +591,24 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   purana ho jaata); PRNG duplicate benchmark side par chhoda. Verification:
   typecheck/lint green, **279/279 tests**, 500 + 10,000 fuzz green (seed
   1295277908 unchanged). Branch `feat/otio`.
+- **M5 independent review + fix pass ✅ DONE (2026-08-05):** review ek doosre
+  model (Fable-5) se, read-only, har finding ka runtime witness — Codex ka
+  quota khatam hone ke baad ka naya in-house review flow. 6 findings, ek-ek
+  Aditya ke saath triage: **F1 (HIGH, meri hi 2026-08-05 cursor-fix ki
+  regression)** — `source_range: null` (asli serializers ka default roop) par
+  poora import abort ho raha tha jabki O7b skip kehta hai; **F2 (HIGH)** —
+  `available_range.start` phenka ja raha tha, jisse sahi files reject aur
+  galat source-windows chup-chaap accept (dono witness ke saath), fix =
+  darwaze par normalize + naya `MediaRef.sourceStartInFile` (docs/11 A2.1
+  amendment); **F3** — N1 applicability import par lagti hi nahi thi (image
+  par `volume` aa jaata); **F4** — `.png` audio track par import ho jaati
+  thi (N1 track-mapping); **F6** — projectRate skip-hone-wali nested Stack ki
+  clip se aa sakti thi. **F5 (LOW) owner ne JAAN-BOOJH ke chhoda** — negative
+  duration kisi asli exporter se aati hi nahi, clamp ka bojh nahi lena.
+  docs/11 mein 4 amendments (A2.1 F2, O5 F3, O9 F4, O6 F6). Verification:
+  typecheck/lint green, **287/287 tests** (245 → 279 → 287), 500 + 10,000
+  fuzz green seed 1295277908. Har fix ke saath uska regression test, aur
+  F1/F2 ke fixes mutation-check se load-bearing saabit kiye gaye.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

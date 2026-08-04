@@ -451,3 +451,40 @@ evidence seed for no real coverage gain). Four fixes were applied:
   says that is the only value import can produce for an image, so the shared
   fixture no longer models an impossible state. No test depended on the old
   made-up 1000 (all 279 stayed green).
+
+### 2026-08-05 — M5 independent review triage (6 findings)
+
+An independent review (different model, read-only, runtime witnesses for every
+finding) raised 6. Five fixed, one deliberately left:
+
+- **F1 (HIGH, regression from the 2026-08-05 cursor fix):** the guard read
+  `child.source_range !== undefined`, but real serializers write
+  `"source_range": null` on an untrimmed Item — the *default* form of the very
+  nested-Stack case that fix was written for. `null` fell through to the range
+  parser and aborted the whole import (`E_INVALID_OTIO`) instead of skipping
+  per O7(b). Guard now checks both; regression test added under H2.
+- **F2 (HIGH):** `available_range.start` was dropped. Fixed by normalizing at
+  the door — see the docs/11 A2.1 amendment (2026-08-05) and the new optional
+  `MediaRef.sourceStartInFile`. Four tests added (valid non-zero-start window
+  imports normalized; a window the file does not contain is refused; export
+  restores the offset; round-trip identical).
+- **F3 (MEDIUM):** property applicability (N1 matrix) was not enforced on
+  import — an image could arrive carrying `volume`, a state no verb can
+  produce. Allowed keys now come from the resolved kind.
+- **F4 (MEDIUM):** media/track-kind mapping was not enforced — a `.png` on an
+  Audio track imported cleanly. Now skipped with `skipped-unknown-clip`.
+- **F5 (LOW) — deliberately NOT fixed (owner call):** a skipped item with a
+  negative `source_range.duration` pulls the cursor backwards. Unreachable
+  from any real exporter (durations are never negative); the owner judged the
+  clamp not worth carrying. Recorded here so it is a decision, not an
+  oversight.
+- **F6 (LOW):** `firstClipRate` could take the project rate from a clip inside
+  a nested Stack that the walk then skips. It now only considers real
+  `Track` children.
+
+Also confirmed by the review and worth keeping visible: an extension-less URL
+on an Audio track resolves to `"audio"` (the track decides), which reads
+against O9's literal "treat as video" sentence but is the self-consistent
+behaviour — a video-kind media on an audio lane is exactly what N1 forbids.
+Goes in the README limitations note alongside the extension-sniffing
+assumption and the NTSC (23.976/29.97) rate limitation.
