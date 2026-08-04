@@ -147,3 +147,55 @@
 
 **🏁 PART 8 COMPLETE (T1-T5, 2026-08-03). NEXT: CODE (Part 8.5 build), phir
 Part 9 (demo video + deploy + docs-consolidation + application).**
+
+## M5 (OTIO) test additions — [AMENDED 2026-08-04, owner-locked]
+
+T2 ke groups A-G mein OTIO ke apne goldens naam se nahi the (sirf D-group
+ka "round-trip structural" aur F-group ka "import skip-warnings" ishaare
+the). M5 ke O1-O10 locks (docs/11) ke saath ab NAYA GROUP H — OTIO (11),
+`otio.test.ts` mein (C7 mirror rule):
+
+- **H1 (O4 gap import+export):** `[Clip 10s, Gap 5s, Clip 8s]` → clips
+  0-10 aur 15-23; wapas export → beech mein `Gap.1` duration 5 phir se
+  likha jaaye (Gap na likhna = clip chup-chaap 5s khisak jaana).
+- **H2 (O4 transition cursor):** track mein clips ke beech `Transition.1`
+  → skip + warning, aur baad wali clip ki position BILKUL na badle
+  (transition track ka time khaata hi nahi).
+- **H3 (O1+O9 image):** `logo.png` wali media → `kind: "image"`,
+  `durationInSource: null`; us clip par trim-extend (kisi bhi hadd tak)
+  SUCCESS — koi `E_SOURCE_OUT_OF_BOUNDS` nahi.
+- **H4 (O3):** image clip par `slip` → `E_NOT_APPLICABLE` (TextClip wale
+  case ke bilkul samaanaantar).
+- **H5 (O2):** video clip jiska `available_range: null` → clip banti hi
+  nahi + warning code `skipped-media-length-missing`; baaki clips normal
+  import hoti hain (poora import fail NAHI).
+- **H6 (O5 text round-trip):** TextClip export → `MissingReference` +
+  `metadata.framebranch.kind === "text"`; re-import → wahi TextClip
+  (content + style), text track wapas `kind: "text"`.
+- **H7 (O6 rate):** (a) mixed-rate file (clip A 240@24, clip B 300@30) →
+  `projectRate` 24 aur B ki value 240@24; (b) khaali file bina
+  `global_start_time` → rate 24 + warning `rate-fallback-empty-timeline`,
+  import SUCCESS; (c) `global_start_time.rate = 30` wali file → rate 30
+  (uski value ignore hoti hai).
+- **H8 (O7 version):** `Clip.2` → poora import fail
+  `E_UNSUPPORTED_OTIO_VERSION` (message mein label ka naam); whitelist ke
+  9 labels wali file → success.
+- **H9 (O8 warning shape):** warnings `{ code, detail, count }` shape mein
+  hon; assert CODE par ho, angrezi jumle par NAHI (bhurbhure test se
+  bachne ke liye — T1 ka "missing test" pehredaar isi soch ka hissa hai).
+- **H10 (O10 round-trip):** fixture jisme **gap + text clip + image
+  teeno** hon → export → import → structural equality (IDs ignore, media
+  URL se match, defaults materialize karke). Fixture ki ye shart lock hai
+  — inme se koi bhi cheez fixture mein na ho to test jhootha green dega.
+- **H11 (invalid input):** kachra JSON / jo Timeline hai hi nahi →
+  `E_INVALID_OTIO` (PRD 5.1 ka "invalid OTIO import → clean error").
+
+GINTI: D-group ka "round-trip structural" ab H10 ke roop mein aur F-group
+ka "import skip-warnings" H5/H9 ke roop mein implement hota hai — wahi
+test, duplicate nahi. Isliye named goldens ab **44 + 11 − 2 = 53**
+(+ G-group ke 5 server tests, jo M7 par).
+
+FUZZ (T3) par asar: NAHI. M5 pure-core adapter hai; T3 ka merge-universe
+waisa hi rehta hai (seed 1295277908, 500 local / 10,000 CI). Round-trip ko
+fuzz mein ghusaane ki koi zaroorat nahi mili — H10 ka fixture teeno naye
+raaste (gap/text/image) cover kar deta hai. [Aditya lock 2026-08-04.]

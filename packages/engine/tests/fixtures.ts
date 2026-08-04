@@ -3,7 +3,7 @@
  * is rate-agnostic, A1.3 clarification).
  *
  * Standard timeline:
- *   mediaRefs: mV video (100 frames), mA audio (200), mI image (1000)
+ *   mediaRefs: mV video (100 frames), mA audio (200), mI image (no length — O1)
  *   v1 (video): A  tl [10,20) src [5,15)  volume 80   ← BC.3 example clip
  *               B  tl [30,35) src [93,98) (near end of mV file)
  *               IM tl [50,55) src [0,5)   image clip
@@ -102,7 +102,10 @@ export const MEDIA_REFS: MediaRef[] = [
     url: "mem://i.png",
     hash: "hI",
     sourceRate: 24,
-    durationInSource: t(1000),
+    // O1 (M5) — an image has no length at all. `null` is the only value
+    // import can ever produce for kind "image", so the shared fixture models
+    // that instead of a made-up 1000.
+    durationInSource: null,
   },
 ];
 

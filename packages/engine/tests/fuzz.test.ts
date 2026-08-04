@@ -248,7 +248,7 @@ function makeBaseTimeline(rng: Rng, index: number): Timeline {
         track.kind === "audio"
           ? MEDIA_REFS[1]
           : rng.pick([MEDIA_REFS[0], MEDIA_REFS[2]]);
-      const sourceStart = rng.int(0, media.durationInSource.value - duration);
+      const sourceStart = rng.int(0, sourceLength(media) - duration);
       clip = {
         id,
         mediaRefId: media.id,
@@ -277,6 +277,18 @@ function mediaFor(timeline: Timeline, clip: Clip): MediaRef {
   const media = timeline.mediaRefs.find((item) => item.id === clip.mediaRefId);
   if (!media) throw new Error(`media ${clip.mediaRefId} not found`);
   return media;
+}
+
+/**
+ * O1 made `durationInSource` nullable (null = an image is unbounded). The
+ * fuzz universe deliberately keeps every generated media bounded, so a null
+ * here would be a harness bug, not a case outcome.
+ */
+function sourceLength(media: MediaRef): number {
+  if (media.durationInSource === null) {
+    throw new Error(`media ${media.id} has no source length`);
+  }
+  return media.durationInSource.value;
 }
 
 function trackFor(timeline: Timeline, clipId: string): Track {
@@ -341,7 +353,7 @@ function trimExtensionRoom(
   const headroom =
     edge === "start"
       ? source.start.value
-      : media.durationInSource.value -
+      : sourceLength(media) -
         (source.start.value + source.duration.value);
   return Math.min(room, headroom);
 }
@@ -494,7 +506,7 @@ function makeAwareCommand(
     const media = mediaFor(timeline, clip);
     const minimum = -clip.sourceRange.start.value;
     const maximum =
-      media.durationInSource.value -
+      sourceLength(media) -
       clip.sourceRange.start.value -
       clip.sourceRange.duration.value;
     return {
