@@ -403,7 +403,10 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   ka oversight tha, docs/11 amend ho gaya); **(2) PARKED FOR M5 —
   image ka durationInSource semantics: M5 (OTIO import) brief banate
   waqt PEHLA discuss-item — import hi ye value likhta hai, wahin OTIO
-  ki reality ke saath decide hoga** (abhi engine-level kuch atka nahi);
+  ki reality ke saath decide hoga** (abhi engine-level kuch atka nahi)
+  [RESOLVED 2026-08-04 — docs/11 M5 section O1/O2: image →
+  `durationInSource: null` (aseem); video/audio bina `available_range` →
+  clip skip + warning];
   **(3) RESOLVED — BC.4 violation → E_INVALID_RANGE KEEP** (naya code
   nahi, detail message mein; docs/11 BC.4 note). Teeno M2-questions
   CLOSED 2026-08-03. Aditya ne commit kiya (feat/engine).
@@ -491,6 +494,121 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   the 5-shard count is a starting estimate — GitHub runner core count
   could not be measured locally, so Aditya will tune shard count after the
   first real GitHub Actions run.
+  **First-push fixes (2026-08-04, same day):** (a) `matrix.shard *
+  cases_per_shard` ne poori workflow file invalid kar di — GitHub Actions
+  expressions mein arithmetic operators hote hi nahi; ab `plan` job seedhe
+  offsets emit karta hai (`[0,2000,4000,6000,8000]`, `matrix.offset`).
+  (b) Phir saare 5 shards `[vitest-worker]: Timeout calling "onTaskUpdate"`
+  par gire jabki har fuzz case PASS tha — ek chunk apne cases ek hi `it()`
+  ke andar synchronously chalata hai, to chunk ka wall-clock hi wo waqt hai
+  jab worker RPC ka jawab nahi de paata; 60s paar = Vitest use maar deta
+  hai. 500 ka size Mac ke sequential run (18.5s) par naapa gaya tha; GitHub
+  ke dheeme runner par concurrent chalte hue wo 66.01s nikla. Chunk size ab
+  **250** (~33s) aur `FRAMEBRANCH_FUZZ_CHUNK` se tunable. Case/seed/coverage
+  mein koi badlav nahi. **Open (owner ka call, Part 9 ke aas-paas):** CI se
+  fuzz hata ke sirf local rakhne ka vichaar aaya tha — abhi ke liye REHNE
+  DIYA (application/README ke "10,000 fuzz cases in CI" claim ka verifiable
+  hona bhaari pada); aakhir mein dobara dekha jayega.
+- **M5 (OTIO) pre-implementation locks ✅ DONE (2026-08-04):** brief se pehle
+  ka parked sawaal (M2 open-Q2, image ka `durationInSource`) RESOLVED, aur
+  uske saath M5 ki poori design-surface ek-ek karke discuss+lock hui —
+  **docs/11 ka naya "M5 — OTIO import/export locks (O1-O10)" section
+  canonical hai**, docs/12 mein naya **group H (11 OTIO goldens)**
+  (named goldens 44 → 53). Ek line summary: O1 image `durationInSource =
+  null` (aseem; sentinel-jhooth aur clamp dono rejected); O2 video/audio
+  bina `available_range` → clip skip + warning (`null` ka doosra matlab
+  jaan-boojh ke nahi banaya); O3 image par slip = `E_NOT_APPLICABLE`;
+  O4 gaps = naap (import cursor, export wapas `Gap`, transition cursor nahi
+  badhata); O5 TextClip `metadata.framebranch` mein (round-trip ke liye,
+  dusre tools ke liye nahi); O6 projectRate = `global_start_time` → pehli
+  clip → khaali file par 24+warning ("hamesha 24" rejected); O7 buniyadi
+  schema ka anjaan version = import rok, unsupported cheez = skip+warning;
+  O8 warnings structured `{code, detail, count}`; O9 image ki pehchan file
+  extension se (documented assumption); O10 round-trip ka exact compare-rule
+  + fixture shart (gap+text+image teeno). OTIO ke saare facts asli
+  `multitrack.otio` sample se verify kiye gaye, anumaan se nahi.
+  **NEXT:** M5 implementation brief → background agent (**Opus 5**) →
+  summary file → phir review ek doosre background agent se (Codex ka quota
+  khatam hai, isliye review bhi in-house Claude agent se hoga; roles ab bhi
+  swap — jo implement kare wo review na kare). Git: na main-agent na
+  sub-agent koi commit/push karega — Aditya ko sirf ek-line commit message
+  milega.
+- **M5 OTIO import/export ✅ DONE (2026-08-04):** naya `packages/engine/src/
+  otio.ts` — `importOtio`/`exportOtio` (API 6-7/7, ab poora 7-function
+  public darwaza band). Locked O1-O10 jaisa hai waisa utara: O1 image ka
+  `durationInSource: RationalTime | null` (types.ts) + bounds-invariant us
+  par skip (invariants.ts ek `if`); O2 video/audio bina `available_range` →
+  clip skip + `skipped-media-length-missing` (cursor phir bhi aage badhta
+  hai, warna baaki track khisak jaati); O3 image par slip =
+  `E_NOT_APPLICABLE` (verbs.ts, TextClip wali line ke bilkul saath); O4
+  import cursor + export par `Gap.1` (leading gap samet), Transition cursor
+  NAHI badhata; O5 TextClip/text-track `metadata.framebranch` se; O6 rate =
+  `global_start_time` → pehli clip → khaali file par 24 + warning; O7
+  buniyadi schema ka anjaan version (`Clip.2`/`Track.5`) → poora import ruke
+  (`E_UNSUPPORTED_OTIO_VERSION`), unsupported cheez → skip + warning; O8
+  warnings `{code, detail, count}` (code) par grouped; O9 image ki pehchan
+  extension se, extension-less = video (documented assumption); O10
+  round-trip golden gap+text+image fixture par. `E_INVALID_OTIO` aur
+  `E_UNSUPPORTED_OTIO_VERSION` ErrorCode union mein aa gaye (C4 ki official
+  list mein pehle se the — naye code NAHI). `importOtio` kachra input par
+  kabhi throw nahi karta, hamesha `{ok:false,error}`; `exportOtio` kabhi
+  fail nahi karta aur internal ID kabhi nahi likhta. Evidence: typecheck +
+  lint green; tests **245 → 279** (group H, 11 goldens = 34 `it()` cases,
+  `otio.test.ts` + hand-written `otio-fixtures.ts`); 500-case fuzz green
+  (10.1s) aur poora **10,000-case fuzz green** (2 min 15.5s, seed
+  1295277908) regression-gate ke taur par (types/invariants/verbs chhue
+  the); `diff.ts`/`merge.ts` bilkul untouched; export JSON haath se
+  eyeball kiya gaya (Gap.1 "Filler", `metadata.framebranch`,
+  `available_range: null` image par — asli sample jaisa). O3 ki wajah se do
+  purane tests badle (image slip ab reject: `diff.test.ts` ka #6 sentence ab
+  audio clip par; `fuzz.test.ts` mein nullable-narrowing helper). Do
+  under-specified cheezein report mein flag ki gayi hain (media/text clip ki
+  `properties` locked export shape mein jaati hi nahi, aur zero-duration
+  skip ke liye O8 mein koi apna code nahi hai) — code kuch invent nahi
+  karta, jaisa likha tha waisa hi hai.
+- **M5 post-review triage + fixes ✅ DONE (2026-08-05):** report ki 6 flagged
+  cheezein Aditya ke saath ek-ek discuss hui. CHAAR fix hui (inline, bina
+  background agent): (1) clip `properties` ab `metadata.framebranch.properties`
+  se round-trip karti hain — docs/11 O5 amendment; bina iske export→re-import
+  har volume/opacity/scale/position ko default par le aata (C8 demo mein hi
+  dikhta: step 3 `A.volume=80` → step 9 export); (2) H10 fixture mein ab
+  non-default properties hain, aur mutation-check se saabit kiya ki test
+  sach mein pakadta hai (export side todi → H10 red, wapas → green);
+  (3) cursor ka niyam poora hua — docs/11 O4 amendment: skip ki hui cheez ka
+  apna `source_range` ho to cursor utna badhega (Transition ke paas hota hi
+  nahi, isliye wo pehle jaisa; nested `Stack` ke baad ki clips pehle jaldi
+  baith rahi thi); (4) `otio.ts` se NUL byte hataya — warning-key
+  `` `${code}\0${detail}` `` thi, aur git pehle 8000 bytes mein NUL dekh ke
+  file ko BINARY maan leta hai (`Bin 0 -> 26498 bytes`, "0 insertions") →
+  GitHub par poori 838-line file "Binary file not shown" dikhti, review
+  namumkin; ab `JSON.stringify([code, detail])`. Plus `tests/fixtures.ts` ka
+  image `durationInSource` ab `null` (O1 ke mutabik; koi test us purane 1000
+  par nirbhar nahi tha). CHAAR "aise hi rehne do" owner-calls: NTSC
+  (23.976/29.97) files import nahi hongi — README limitations mein likhenge;
+  zero-duration skip `skipped-unsupported` + detail se hi chalega (paanchwa
+  code nahi); fuzz ki slip-density thodi kam rahegi (image par slip
+  applicable hi nahi, aur 10k case-universe badalne se M4 ka seed-evidence
+  purana ho jaata); PRNG duplicate benchmark side par chhoda. Verification:
+  typecheck/lint green, **279/279 tests**, 500 + 10,000 fuzz green (seed
+  1295277908 unchanged). Branch `feat/otio`.
+- **M5 independent review + fix pass ✅ DONE (2026-08-05):** review ek doosre
+  model (Fable-5) se, read-only, har finding ka runtime witness — Codex ka
+  quota khatam hone ke baad ka naya in-house review flow. 6 findings, ek-ek
+  Aditya ke saath triage: **F1 (HIGH, meri hi 2026-08-05 cursor-fix ki
+  regression)** — `source_range: null` (asli serializers ka default roop) par
+  poora import abort ho raha tha jabki O7b skip kehta hai; **F2 (HIGH)** —
+  `available_range.start` phenka ja raha tha, jisse sahi files reject aur
+  galat source-windows chup-chaap accept (dono witness ke saath), fix =
+  darwaze par normalize + naya `MediaRef.sourceStartInFile` (docs/11 A2.1
+  amendment); **F3** — N1 applicability import par lagti hi nahi thi (image
+  par `volume` aa jaata); **F4** — `.png` audio track par import ho jaati
+  thi (N1 track-mapping); **F6** — projectRate skip-hone-wali nested Stack ki
+  clip se aa sakti thi. **F5 (LOW) owner ne JAAN-BOOJH ke chhoda** — negative
+  duration kisi asli exporter se aati hi nahi, clamp ka bojh nahi lena.
+  docs/11 mein 4 amendments (A2.1 F2, O5 F3, O9 F4, O6 F6). Verification:
+  typecheck/lint green, **287/287 tests** (245 → 279 → 287), 500 + 10,000
+  fuzz green seed 1295277908. Har fix ke saath uska regression test, aur
+  F1/F2 ke fixes mutation-check se load-bearing saabit kiye gaye.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

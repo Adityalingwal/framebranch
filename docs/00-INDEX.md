@@ -30,6 +30,11 @@ Current milestone handoff (derived, not higher authority):
 I1 closure gate into implementation order. Read it after the canonical set; an
 amended canonical lock always wins if wording ever drifts.
 
+Current milestone (2026-08-04): **M4 merged; M5 = OTIO import/export.**
+M5's locks live in canonical docs, not a separate brief file: docs/11's
+"M5 — OTIO import/export locks (O1-O10)" section (semantics + public API
+shapes) and docs/12's "M5 (OTIO) test additions" (group H, 11 goldens).
+
 ## Precedence rules (when texts seem to conflict)
 
 1. A block tagged `[AMENDED ...]`, `[ADDED ...]`, or `[Qx clarification ...]`

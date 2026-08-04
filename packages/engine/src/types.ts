@@ -27,6 +27,14 @@ export type MediaKind = "video" | "audio" | "image"; // F3: image is a valid kin
  * rate (A1.2: conversion happens once at the import door; inside the
  * engine everything is single-rate so the source-range-in-file invariant
  * can compare exact integers). sourceRate records the file's native fps.
+ *
+ * O1 (2026-08-04): durationInSource is NULLABLE, and `null` has exactly
+ * ONE meaning — "this media has no length at all (unbounded)" — which
+ * applies only to `kind === "image"`. Video/audio are still required to
+ * carry a real length; an OTIO file that does not state one simply does
+ * not produce a clip (O2). The second possible meaning ("it is a video
+ * but we don't know its length") was deliberately NOT created: one value
+ * with two meanings makes every call site ask "which null is this?".
  */
 export type MediaRef = {
   id: string;
@@ -34,7 +42,15 @@ export type MediaRef = {
   url: string;
   hash: string;
   sourceRate: number;
-  durationInSource: RationalTime;
+  durationInSource: RationalTime | null;
+  /**
+   * A2.1 [AMENDED 2026-08-05] — the frame number the FILE's own usable range
+   * starts at, in the file's coordinates. Engine coordinates always start at
+   * 0, so the OTIO boundary subtracts this on import and adds it back on
+   * export; nothing between those two doors ever reads it. Absent = 0, which
+   * is what almost every file says (embedded-timecode media is the exception).
+   */
+  sourceStartInFile?: RationalTime;
 };
 
 // ---------------------------------------------------------------------------
@@ -116,6 +132,10 @@ export type Timeline = {
 // ---------------------------------------------------------------------------
 // C4 point (5) — engine subset of the official error-code list.
 // (No E_ID_COLLISION — removed by F8; unreachable by design.)
+//
+// M5: E_INVALID_OTIO and E_UNSUPPORTED_OTIO_VERSION were already in the
+// locked C4 list; they join the union now only because the OTIO adapter
+// (the code that raises them) arrives in M5. Not new error codes.
 // ---------------------------------------------------------------------------
 
 export type ErrorCode =
@@ -132,7 +152,9 @@ export type ErrorCode =
   | "E_INVALID_VALUE"
   | "E_NOT_APPLICABLE"
   | "E_SPLIT_AT_BOUNDARY"
-  | "E_SPLIT_OUT_OF_RANGE";
+  | "E_SPLIT_OUT_OF_RANGE"
+  | "E_INVALID_OTIO"
+  | "E_UNSUPPORTED_OTIO_VERSION";
 
 export type EngineError = {
   code: ErrorCode;

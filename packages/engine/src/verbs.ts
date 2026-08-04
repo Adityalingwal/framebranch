@@ -631,6 +631,17 @@ function applySlip(tl: Timeline, cmd: SlipCommand): ApplyResult {
     );
   }
 
+  // O3 — same idea, one row down the same table: slip moves the window
+  // INSIDE the file, and an image has no window (whatever you slide to,
+  // the same picture shows). Allowing it would change data with zero
+  // visual effect — and that lie travels: diff would say "clip changed"
+  // and two branches slipping differently would raise a Bucket-1 conflict
+  // over nothing.
+  const slipMedia = getMedia(tl, loc.clip.mediaRefId);
+  if (slipMedia?.kind === "image") {
+    return err("E_NOT_APPLICABLE", "slip is not applicable to image clips");
+  }
+
   const rateErr = rateMismatch(tl.projectRate, [cmd.delta]);
   if (rateErr) return rateErr;
 

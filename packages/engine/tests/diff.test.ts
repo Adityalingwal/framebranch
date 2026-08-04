@@ -613,7 +613,9 @@ describe("C1: machine form ↔ sentences", () => {
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "move", clipId: "A@5", newStart: t(60) });
     b = apply(b, { op: "deleteClip", clipId: "B" });
-    b = apply(b, { op: "slip", clipId: "IM", delta: t(2) });
+    // O3 (2026-08-04): slip is not applicable to an image, so the #6
+    // sentence is taken on the audio clip instead of the image clip IM.
+    b = apply(b, { op: "slip", clipId: "AU", delta: t(2) });
     const d = computeDiff(a, b);
     expect(d.sentences.length).toBe(d.entries.length);
     d.entries.forEach((entry, i) => {
