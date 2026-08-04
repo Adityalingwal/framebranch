@@ -122,6 +122,17 @@
   project-wide — union types chahiye (Track.kind, command discriminated
   union) + interface ka declaration-merging (silent reopen) nahi chahiye;
   ek keyword = consistency.
+  [M4 I1 RECONCILIATION 2026-08-04: `duration>0 (har TimeRange)` domain rule
+  unchanged hai. Existing runtime invariant sweep materialized timeline/source
+  ranges check karta hai; lineage positivity public add/trim/split transitions
+  aur M4 common-refinement ki construction se maintained hai. Lawful
+  opposite-edge collapse/crossing M4 mein nonpositive lineage `TimeRange`
+  banne se PEHLE same-clip B1 hota hai. 34 M4 T2 goldens + seed 1295277908 ke
+  500 local/10,000 CI-mode T3 cases ne har accepted edit, draft replay, aur
+  final merge par direct `lineage.span.duration.value > 0` traverse kiya.
+  Koi reachable counterexample ya necessary merge-boundary safeguard nahi
+  mila; isliye redundant runtime lineage check add nahi hua aur docs/15 I1
+  proof-by-construction se VERIFIED-CLOSED hai.]
 - **A3 contract format (2026-08-02) LOCKED — har verb = 5 sawaal:** command
   shape / preconditions (typed errors ke saath) / exact transition / inverse
   (undo) / error cases. Preconditions = invariants ka darwaza — invariant
@@ -290,7 +301,17 @@
   converge, zero conflict (random IDs hote to unification rule chahiye hota).
   Advisor-caught bug fixed: naive segmentId(rootId, cut) total nahi tha
   (split→delete→extend→re-split same number = collision) — parent-chained
-  naam se mathematically impossible; ab named regression test. Tombstone
+  naam se mathematically impossible; ab named regression test.
+  [AMENDED 2026-08-04, M4 fix-pass N5: parent-chained formula bhi ek narrow
+  case mein total nahi — trims ek healed cut ko wapas kholte hain jab
+  original descendant shifted span par zinda ho (4-command witness: split@1
+  → sibling start-shrink → parent end-extend → re-split@1 → formula `A@1`
+  already live). Fix locked: split verb formula-ID ko deterministically
+  extend karta hai jab tak live-clip set mein unique na ho (`A@1` taken →
+  `A@1@1`) — same state dono branches par same naam mint karta hai, isliye
+  same-cut merge auto-converge intact. Naya verbs.test.ts regression. Baaki
+  B1.1 (left-survives, root-local coordinates, reserved namespace)
+  unchanged.] Tombstone
   rejected ("deleted = ID absent" locked semantics A3.2). Naam ki lambai split-
   depth ke saath badhti hai — demo scale non-issue, documented. Edge-case
   matrix (18 cases: split-vs-har-verb, nested, collision, reuse, moved-clip
@@ -786,6 +807,143 @@
   call, LLD lock nahi. Quality/DRY/simplicity design mein baked (ek
   invariant list, 7-func API, catch-all) + standing principal-engineer
   standard code par lagega. [Aditya lock 2026-08-03.]
+  [AMENDED 2026-08-04, M4 pre-implementation contract closure — C7 ke
+  teen merge functions ka exact pure-core boundary ab locked hai. Yeh HTTP/
+  DB merge-attempt contract nahi; M7 usse alag wrap karega.
+
+  Public boundary types (ye `index.ts` se export honge):
+
+  ```ts
+  type ValueChoice = "ours" | "theirs" | "base";
+  type DeleteChoice = "delete" | "clip" | "base";
+  type OverlapChoice = "shift-a" | "shift-b" | "base";
+  type MergeChoice = ValueChoice | DeleteChoice | OverlapChoice;
+  type MergeChoices = Readonly<Record<string, MergeChoice>>;
+
+  type MergeField =
+    | "timeline-offset"
+    | "coverage-start"
+    | "coverage-end"
+    | "source-offset"
+    | "volume"
+    | "opacity"
+    | "scale"
+    | "position"
+    | "text-content"
+    | "text-style"
+    | "source-bounds"
+    | "negative-start"
+    | "nonpositive-duration";
+
+  type ValueParticipants = {
+    kind: "value";
+    trackId: string;
+    rootId: string;
+    clipIds: readonly string[];
+    field: MergeField;
+  };
+  type DeleteParticipants = {
+    kind: "delete";
+    trackId: string;
+    rootId: string;
+    clipIds: readonly string[];
+  };
+  type OverlapParticipants = {
+    kind: "overlap";
+    trackId: string;
+    clipIds: readonly [string, string];
+  };
+  type MergeParticipants =
+    | ValueParticipants
+    | DeleteParticipants
+    | OverlapParticipants;
+
+  type MergeConflict = {
+    conflictId: string;
+    bucket: 1 | 2 | 3;
+    participants: MergeParticipants;
+    explanation: string;
+    choices: readonly MergeChoice[];
+  };
+  type MergeCounts = {
+    total: number;
+    resolved: number;
+    remaining: number;
+  };
+  type MergeSuccess = {
+    ok: true;
+    status: "ready" | "needs-resolution";
+    timeline: Timeline;
+    conflicts: readonly MergeConflict[];
+    choices: MergeChoices;
+    counts: MergeCounts;
+  };
+  type MergeFailure = {
+    ok: false;
+    error: { code: "E_MERGE_PRECONDITION"; message: string };
+  };
+  type MergeResult = MergeSuccess | MergeFailure;
+  type FinalizeResult =
+    | { ok: true; timeline: Timeline }
+    | MergeFailure;
+  ```
+
+  Exact functions:
+
+  ```ts
+  startMerge(input: {
+    base: Timeline;
+    ours: Timeline;
+    theirs: Timeline;
+  }): MergeResult;
+
+  applyChoice(input: {
+    base: Timeline;
+    ours: Timeline;
+    theirs: Timeline;
+    choices: MergeChoices;
+    conflictId: string;
+    choice: MergeChoice;
+  }): MergeResult;
+
+  finalizeCheck(input: {
+    base: Timeline;
+    ours: Timeline;
+    theirs: Timeline;
+    choices: MergeChoices;
+  }): FinalizeResult;
+  ```
+
+  `startMerge` aur `applyChoice` SAME success packet dete hain. `timeline`
+  current safe materialized draft hai; unanswered conflict ke participants
+  usmein nahi. `conflicts` sirf current unanswered list; `choices` permanent
+  saved answers. `resolved = choices` ki entry-count, `remaining = conflicts`
+  ki count, `total = resolved + remaining`. `status:"ready"` sirf tab jab
+  remaining zero aur invariant sweep clean; warna `needs-resolution`.
+
+  Choice mapping fixed: B1 `ours/theirs/base`; B2 `delete/clip/base`; B3
+  `shift-a/shift-b/base`, jahan B3 `base` = “Remove both — back to
+  original”. `applyChoice` har call par base/ours/theirs se fresh recompute +
+  saved-choice replay karega. Same conflict par same saved choice retry normal
+  success/no-change hai; different replacement permanent-answer rule todta hai
+  aur `E_MERGE_PRECONDITION` hai.
+
+  `E_MERGE_PRECONDITION` sirf real boundary misuse par: conflictId current
+  unanswered conflict nahi (same-choice retry exception); bucket ke liye choice
+  invalid; permanent saved answer ko different choice se replace karna; ya
+  `finalizeCheck` jab conflicts remain/invariant-clean final state available
+  nahi. Koi throw/crash nahi. Pure M4 input valid committed timelines maana
+  jayega; manually corrupted JSON, impossible/future IDs, ya unsupported future
+  state ke extra checks M4 mein invent nahi honge. `finalizeCheck` fresh
+  recompute karta hai aur sirf clean timeline deta hai; DB commit M7 ka kaam.
+
+  Conflict participants full clip copies nahi, upar ke lightweight refs hain.
+  `conflictId` hash payload = participant kind/class + trackId + stable involved
+  clip/family IDs + B1 field; B3 pair ki deterministic A/B ordering fixed hogi.
+  Whole timeline, explanation text, counts, ya resolution state hash mein nahi.
+  Exact hash primitive private implementation detail hai. Coverage ke start aur
+  end ALAG atoms hain: opposite-edge trims positive remainder par compose;
+  combined duration <= 0 ho to B2.3 ke amended rule se B1.]
 - **C8 (2026-08-03) LOCKED — Demo choreography (9-step exact + fixtures):**
   FIXTURES (Vercel static): demo.otio (24fps, 3 tracks video/audio/text,
   5 clips: A interview / B b-roll / C logo / music / caption "Welcome") +

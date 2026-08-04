@@ -37,6 +37,11 @@
   B. Khaane compose-conflict (8): move⊕trim compose, opposite trims,
   move-vs-move B1, prop same/diff, slip⊕extend→B1-escalation,
   negative-start, duration≤0, add+move→B3.
+  [AMENDED 2026-08-04, M4 contract closure — "opposite trims" ka exact
+  answer-key: start-edge aur end-edge ALAG coverage atoms hain. Combined
+  remainder positive ho to auto-compose; exactly zero ya negative ho to B2.3
+  ka same-clip Bucket 1. Same edge par same final value converge, different
+  final values Bucket 1.]
   C. Merge machinery (7): spurious-B3 counterexample (advisor), click-order
   swap, dynamic naya conflict, cascade termination, delete-vs-ripple auto,
   delete² converge, resurrect-only-explicit.
@@ -78,6 +83,14 @@
   seed print karta hai → same seed = exactly same case reproduce (bina
   iske fuzz-fail undebuggable). Ginti: 10,000 CI par (PRD 5.5 locked) +
   500 quick-mode local. [Aditya lock 2026-08-03.]
+  [AMENDED 2026-08-04, M4 contract closure — T3 ka
+  `apply(diff(A,B),A)=B` public semantic `computeDiff` ko patch banane ka
+  order NAHI. M4 ek private lossless internal `MergeDelta` (ya equivalent
+  private representation) derive/apply karega aur fuzz exact property
+  `applyDelta(A, makeDelta(A,B))` byte-equals `B` prove karega. `computeDiff`
+  ka current public/UI contract unchanged; public `applyDiff` ya eighth
+  function add nahi hoga. `makeDelta`/`applyDelta` naam aur helper split
+  private implementation details hain; lossless round-trip property lock hai.]
 - **T4 (2026-08-03) LOCKED — Benchmark format:** naapa jayega (4): diff
   @1k/10k · merge @1k/10k (conflict fixtures + SPLIT-HEAVY variant —
   refinement ka wazan) · single-verb apply · restore (snapshot+replay,

@@ -49,6 +49,14 @@ M2/M3 fixes.
   and break-tests. Add the invariant only if a reachable post-merge state or
   necessary merge safety boundary is demonstrated; otherwise reconcile the
   old “every TimeRange” wording and close it.
+- **M4 closure (2026-08-04): VERIFIED-CLOSED by proof-by-construction.** The
+  section-10 lawful matrix in `docs/16` is covered by the 34 M4 T2 goldens;
+  opposite-edge zero/negative composition becomes B1 before materialization.
+  T3 independently traverses every surviving lineage after accepted edits,
+  each draft replay, and finalization. Seed `1295277908` passed 500 local and
+  10,000 CI-mode generated cases. No reachable nonpositive lineage and no
+  necessary merge-boundary safeguard appeared, so no runtime check was added.
+  The canonical “every TimeRange” reconciliation is recorded in docs/11 A2.3.
 
 ### I2 — reviewer treated test shorthand as a lawful production ID
 
@@ -127,6 +135,12 @@ post-merge state or a necessary M4 safety boundary; if proof-by-construction
 shows it is unreachable, close I1 without adding a redundant runtime check and
 formally reconcile the locked “every TimeRange” wording at the M4 gate. Until
 that decision, I1 is deferred, not `VERIFIED-CLOSED`.
+
+**M4 closure (2026-08-04): VERIFIED-CLOSED.** The paragraph above records the
+original checkpoint state. M4's reachable matrix, direct-lineage T3 property,
+and 500/10,000-case runs found no supported path that creates a nonpositive
+lineage span. docs/11 A2.3 now formally records the proof-by-construction
+boundary; `invariants.ts` is deliberately unchanged.
 
 **What:** `Lineage.span` is a `TimeRange`, but the single invariant checker only
 tests `timelineRange.duration` and (for media) `sourceRange.duration`. A zero or

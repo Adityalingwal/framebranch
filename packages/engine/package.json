@@ -8,7 +8,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --exclude tests/fuzz.test.ts",
+    "fuzz": "node tests/run-fuzz.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",

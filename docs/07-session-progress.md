@@ -410,14 +410,56 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
 - **M3 Diff engine ✅ DONE (2026-08-03):** diff.ts — MATCH (ID +
   khandaan-walk) → CLASSIFY (15 rules, content-anchored atoms) → RENDER
   (1:1 entries↔sentences) + #16 catch-all (escape-proof net). index mein
-  computeDiff (API 2/7). 38 naye tests — 16/16 rules, diff(A,A)=∅,
-  ripple #14+N×#1, khandaan goldens, double-run deterministic. Total
-  183/183 green (M2 untouched). 10 trivial assumptions NOTES mein, 0
-  open questions. **NEXT: M2+M3 commit → Codex review checkpoint #1
-  (feat/engine ka poora diff) + 3 open questions resolve → merge main →
-  M4 (merge engine, feat/merge-otio branch).** AB: 9-milestone build order confirm
-(upar PROPOSED table) → CODE → Part 9: demo video + Vercel deploy +
-docs-consolidation + application (email + Twitter/LinkedIn post).
+  computeDiff (API 2/7). Original 38 + review-follow-up ke 2 split-family
+  goldens = 40 M3 tests — 16/16 rules, diff(A,A)=∅, ripple #14+N×#1,
+  khandaan goldens, double-run deterministic. `TextFont` exact literal-union
+  bhi review follow-up mein lock ke barabar hua; production diff behavior
+  change nahi hua. Total 185/185 green; typecheck + lint green. Codex checkpoint
+  #1 `docs/15` = MERGE-READY; follow-up commit `c3b001b`; PR #1 merge commit
+  `6582232` se `main` par merged (2026-08-04). **NEXT: M4 merge engine on fresh
+  `feat/merge-otio` branch.** M4 implementation ke baad, final M4 commit se
+  pehle docs/15 I1 ka targeted merge edge-case/break-test matrix chalega;
+  reachable proof par hi lineage-duration check add hoga. M5 start se pehle
+  parked image `durationInSource` semantics discuss/lock hogi.
+- **M4 pre-implementation brief ✅ DONE (2026-08-04):** `docs/16` mein exact
+  M4 scope, 34 applicable goldens, fuzz properties, public pure-core boundary,
+  implementation order, aur I1 reachable-scenario closure matrix ek jagah.
+  Owner discussion se U1 pure merge API aur U2 private lossless `MergeDelta`
+  interpretation lock ho gaye; canonical details docs/11 C7 aur docs/12 T2/T3
+  amendments mein hain. **NEXT: M4 implementation.** I1 runtime lineage check
+  abhi decision nahi: implementation break-tests/fuzz evidence ke baad hi add
+  ya proof-by-construction se close hoga. Is prep phase mein M4 code nahi likha.
+- **M4 merge engine — implementation + validation ✅ DONE (2026-08-04):** pure
+  `startMerge`/`applyChoice`/`finalizeCheck` (API 3–5/7), lineage-family common
+  refinement, B1/B2/B3, permanent parchi replay, dynamic conflicts, base-revert,
+  aur deterministic nearest-free Shift implemented. Exact 34 T2 merge goldens
+  + 6 C7 API/error tests green; T3 direct P1–P9/I1-P10 harness mein seed
+  `1295277908` ke 500 local + 10,000 CI-mode generated cases green. Fuzz ne
+  reachable recurring-B3 replay regression pakdi; state-aware fixed-point
+  replay fix aur permanent case-617 regression dono green. I1 lawful matrix ne
+  nonpositive lineage ka koi reachable path nahi dikhaya, isliye docs/11 A2.3
+  reconciliation ke saath proof-by-construction se VERIFIED-CLOSED; redundant
+  runtime invariant add nahi hua. CI T5 step 4 active, M7 step 5 abhi TODO.
+  Final implementation checks: typecheck green, lint green, normal suite
+  226/226 green.
+- **M4 dual review + fix pass ✅ DONE (2026-08-04):** Codex review =
+  `docs/17` (8 findings: C1 Critical + I1-I5 + M1-M2; har finding ke neeche
+  owner-locked "Fix spec" block). Claude independent review = `docs/18`
+  (N1 Critical refinement-ID bug + N2 piece-scoped B2 [Q2=Option A] + N3
+  fuzz-extension gap + N4 NOTES overclaim; phir N5 split-verb healed-cut
+  duplicate-ID bug + Q1 defensive-fallbacks resolution + N1 deviation
+  sign-off). SAB 14 findings owner-locked FIX APPROVED aur fix commit
+  `d9a9430` mein closed — har original witness re-run green. Evidence:
+  typecheck/lint green, **245/245 tests**, 500 local + **10,000 CI fuzz**
+  green (seed 1295277908, ab extension-paths + choice-aware resurrection +
+  per-draft invariant checks ke saath sakht). docs/11 amendments: B1.1 N5
+  (formula-ID deterministic extension), A2.3 I1 reconciliation. docs/15 I1
+  ab poore evidence ke saath VERIFIED-CLOSED (I5 goldens); docs/15 I4 M7
+  CI-closure par pending (bug nahi). Aditya ne commit+push kiya.
+  **NEXT:** committed `d9a9430` par final fresh read-only merge-readiness
+  review (background agent) → clean nikla to Aditya PR merge karega → M5
+  (OTIO) — brief se PEHLE parked question: image ka `durationInSource`
+  semantics (M2 open-Q2, PARKED FOR M5).
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
