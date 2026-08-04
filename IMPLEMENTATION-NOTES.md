@@ -313,3 +313,13 @@ source touched; no test contract changed:
   else (script logic, determinism, YAML validity, local fuzz timings) was
   run and verified locally — see docs/07 2026-08-04 entry and the verification
   report for the actual commands/output.
+- **Fuzz matrix carries OFFSETS, not shard indexes** (fix on first real push,
+  2026-08-04): the first pushed version computed the shard start as
+  `${{ matrix.shard * needs.plan.outputs.fuzz_cases_per_shard }}`, which
+  GitHub rejected outright — *"Invalid workflow file (Line 180): Unexpected
+  symbol: '*'"*. GitHub Actions expressions have **no arithmetic operators**
+  at all (only comparison/logical operators and functions), so the run
+  produced zero jobs. The `plan` job now emits the offsets directly
+  (`fuzz_offsets=[0,2000,4000,6000,8000]`) and the matrix variable is
+  `matrix.offset`, keeping all arithmetic in bash. Shard count and windows
+  are unchanged.
