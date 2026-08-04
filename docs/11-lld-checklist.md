@@ -97,6 +97,23 @@
   track-kind-match check (E_TRACK_KIND_MISMATCH) bina media-type ke chal
   nahi sakta tha; image bhi valid kind hai (PRD whitelist: opacity =
   video/image/text).]
+  [AMENDED 2026-08-04, M5 lock O1 — `durationInSource` ab NULLABLE:
+  `durationInSource: RationalTime | null`. `null` ka EXACTLY EK matlab hai:
+  **"is media ki koi lambai hai hi nahi — aseem"**, aur wo sirf
+  `kind === "image"` par lagta hai. Kaaran: image ki natural duration hoti
+  hi nahi (logo.png 5s dikhao ya 5min — dono valid), par "source range file
+  ke andar" invariant har clip se ye number maangta tha. Do vikalp
+  REJECTED: (a) jhootha bada sentinel (24h) — wo export mein bhi likha
+  jaata, yaani hum interchange format mein jhooth likhte; (b)
+  durationInSource = jitna use ho raha hai — tab image kabhi extend hi
+  nahi hoti (E_SOURCE_OUT_OF_BOUNDS), ek bilkul normal editing action band.
+  `null` ka doosra matlab ("video hai par lambai pata nahi") JAAN-BOOJH KE
+  nahi banaya — wo ek value ke do matlab ban jaate aur har call-site ko
+  "ye kaunsa null hai" poochhna padta (bug-farm). Video/audio ke liye
+  `durationInSource` ab bhi REQUIRED non-null hai; import par lambai na
+  mile to clip banti hi nahi (O2). Invariant asar: A2.3 ki
+  source-range-in-file check `null` par SKIP (ek `if`), baaki sab waisa hi.
+  Dekho M5 section O1/O2.]
 - **A2.2 (2026-08-02) LOCKED — Clip + TextClip types:**
   `Clip = { id (stable — diff/merge ki jaan), mediaRefId, sourceRange (KYA
   dikhana), timelineRange (KAB dikhana), properties: { volume? 0-100,
@@ -117,7 +134,9 @@
   snapshots ka timeline-JSON ab mediaRefs samet save hota hai. Field order
   cosmetic. Koi naya type/table nahi.]. Invariants inhi types par:
   no-overlap-same-track (Track.clips), source-range-in-file (Clip vs
-  MediaRef.durationInSource), duration>0 (har TimeRange). A2 COMPLETE —
+  MediaRef.durationInSource) [AMENDED 2026-08-04, M5 O1: ye check tab hi
+  chalta hai jab `durationInSource !== null`; image (null = aseem) par skip],
+  duration>0 (har TimeRange). A2 COMPLETE —
   domain model = 6-type parivaar. Style note: `type` (not `interface`)
   project-wide — union types chahiye (Track.kind, command discriminated
   union) + interface ka declaration-merging (silent reopen) nahi chahiye;
@@ -204,7 +223,16 @@
 - **A3.5 slip (2026-08-02) LOCKED:** Command: `{ op:"slip", clipId, delta }`.
   Preconditions (3): clip exists (timeline pe wo ID hai? — stale-ID/deleted
   case) / nayi source-khidki POORI file ke andar dono kinare
-  (durationInSource se — E_SOURCE_OUT_OF_BOUNDS) / rate match. Overlap/
+  (durationInSource se — E_SOURCE_OUT_OF_BOUNDS) / rate match.
+  [AMENDED 2026-08-04, M5 lock O3 — IMAGE par slip = `E_NOT_APPLICABLE`,
+  bilkul TextClip wali line ke saath (`isTextClip` check ke padoas mein
+  `media.kind === "image"`). Kaaran: slip ka kaam hai file ke ANDAR khidki
+  khiskana; image mein khidki hai hi nahi — jo bhi khiskao, screen par
+  wahi tasveer. Allow karte to data badalta par dikhta kuch nahi, aur wo
+  jhooth aage tak jaata: diff "clip badli" bolta, aur do branches alag-alag
+  slip karein to Bucket-1 conflict banta — ek aisi cheez par jiska koi
+  visual asar hi nahi (jhoothi conflict). Naya error code NAHI (locked
+  C4/F8 list se `E_NOT_APPLICABLE` reuse), naya pattern NAHI.] Overlap/
   negative-time/duration checks CHAHIYE HI NAHI (timeline untouched — slip
   ki khoobsurti). Transition: sirf sourceRange.start += delta. Inverse:
   slip(-delta) — khidki wapas. TextClip → E_NOT_APPLICABLE (#16). delta=0 →
@@ -990,3 +1018,183 @@
   9. Export OTIO → otioJson milta hai; re-import → structural round-trip
      pass.] [Aditya lock 2026-08-03; F12 amendment lock 2026-08-03.]
   **🏁 PHASE C COMPLETE (C1-C8) — PART 7 LLD POORA COMPLETE! 🏁**
+
+## M5 — OTIO import/export locks (O1-O10, 2026-08-04)
+
+> Ye section M5 (`otio.ts`, public API 6-7/7) ka canonical spec hai. Saare
+> locks Aditya ke saath ek-ek discuss karke tay hue (2026-08-04). Jo OTIO
+> facts yahan likhe hain wo ANUMAAN nahi — AcademySoftwareFoundation ke
+> `tests/sample_data/multitrack.otio` se seedhe verify kiye gaye hain
+> (schema strings, `available_range: null`, `Gap.1`, `kind: "Video"`,
+> `global_start_time` ka gair-maujood hona).
+
+### Model ka farak (kyun M5 mein itne locks lage)
+
+| Cheez | OTIO | Hamara model |
+|---|---|---|
+| clip ki jagah | IMPLICIT — pehle wali cheezon ki lambai ka jod | EXPLICIT `timelineRange` |
+| khaali jagah | ek CHEEZ (`Gap.1`) | koi cheez nahi — bas khaali |
+| rate | har time-value apni rate leke chalta hai | EK `projectRate` poori timeline ki |
+| media ki lambai | `available_range` — OPTIONAL, `null` ho sakta hai | `durationInSource` |
+| text clip | hota hi nahi (track kind sirf Video/Audio) | `TextClip` + `text` track |
+| media type | koi field nahi | `MediaRef.kind` |
+
+- **O1 LOCKED — image ka `durationInSource` = `null`.** Detail + rejected
+  alternatives A2.1 ke 2026-08-04 amendment mein. Saar: `null` = "aseem",
+  sirf `kind === "image"`; bounds-invariant us par skip.
+- **O2 LOCKED — video/audio jiski lambai OTIO mein nahi hai → clip SKIP +
+  warning.** "Lambai missing" ≠ "media missing" (media missing ka jawab
+  alag aur pehle se locked hai: "Media unavailable" placeholder, kaam
+  rukta nahi). Yahan file bilkul theek hai, bas exporting tool ne
+  `available_range` likha hi nahi. Engine media kholta hi nahi (URL-only
+  pointer model, HLD #12/#13), to lambai khud naap bhi nahi sakta.
+  REJECTED (a): clip le lo par uspe trim-extend/slip block kar do — isse
+  `null` ke DO matlab ban jaate (image=aseem vs video=anjaan) aur har
+  call-site ko kind poochhna padta; ek value ke do matlab = bug-farm, aur
+  naye preconditions = naya test-family. REJECTED (b): clip le lo bina
+  kisi rok ke — tab us clip par "file ke andar raho" check chup-chaap
+  hatta, yaani chhupi hui kamzori (philosophy lock: chhupao mat).
+  Ab skip ka poora kharch = `otio.ts` mein 1 branch, aur warning-machinery
+  (#17) pehle se maujood — engine mein ZERO naya code.
+- **O3 LOCKED — image par `slip` = `E_NOT_APPLICABLE`.** Detail A3.5 ke
+  2026-08-04 amendment mein.
+- **O4 LOCKED — Gaps = naap, cheez nahi.**
+  IMPORT: track ke children par chalo aur ek cursor rakho —
+  `Clip` → hamari clip, `timelineRange.start` = cursor, phir cursor +=
+  duration; `Gap` → KOI object mat banao, sirf cursor += duration;
+  `Transition` → skip + warning aur **cursor mat badhao** (OTIO mein
+  transition track ka time khaata nahi, wo padosi clips ke upar baithta
+  hai — cursor badhaya to poori timeline khisak jayegi).
+  [AMENDED 2026-08-05, M5 implementation review — cursor ka POORA niyam:
+  **"skip ki hui cheez ka apna `source_range` ho to cursor utna aage
+  badhao."** Transition ke paas `source_range` hota hi nahi, isliye wo
+  pehle jaisa hi chhoot jaata hai (upar wala lock unchanged). Par nested
+  `Stack` (compound clip) timeline par jagah GHERTA hai — purani wording
+  sirf transition ki baat karti thi, jiske chalte implementation nested
+  Stack par cursor nahi badhata tha aur uske baad ki saari clips utni hi
+  jaldi baith jaati thi (asli data-corruption). Skip ki hui CLIP par cursor
+  pehle se hi badhta tha (O2/O7b) — ab teeno case ek hi vaakya se cover.]
+  EXPORT: clips ko `timelineRange.start` se sort karo aur har khaali jagah
+  par `Gap.1` likho — `gap.duration = agli clip ka start − pichhli clip ka
+  end`; agar pehli clip 0 se shuru nahi hoti to shuruaat mein bhi gap.
+  Ye "content bharna" NAHI hai — OTIO mein clip ki jagah likhi hi nahi
+  jaati, wo jod se nikalti hai; Gap na likhein to har baad wali clip
+  chup-chaap aage khisak jayegi (asli data-corruption). Hisaab mein koi
+  andaaza nahi, sirf ghatana — isliye hamesha exact.
+  WARNING NAHI: gap "skip" nahi ho raha, wo poori tarah bacha hai (bas
+  hamari bhasha mein). Uspe warning likhna jhoothi chinta hogi; warnings
+  sirf un cheezon ke liye jo sach mein kho rahi hain.
+- **O5 LOCKED — TextClip OTIO metadata mein.** OTIO mein text clip ka koi
+  concept nahi (Track.kind sirf `"Video"`/`"Audio"`), aur `metadata: {}`
+  hi unka official extension darwaza hai. EXPORT: text clip →
+  `Clip.1` + `media_reference: MissingReference.1` +
+  `metadata.framebranch = { kind: "text", textContent, textStyle }`;
+  text track → OTIO Track `kind: "Video"` + `metadata.framebranch =
+  { kind: "text" }`. IMPORT: `metadata.framebranch.kind === "text"` mila →
+  TextClip/text-track banao; nahi mila aur media bhi nahi (koi aur tool ka
+  `MissingReference`) → skip + warning.
+  Kyun likhte hain jab dusre tools ise samjhenge hi nahi: kyunki ye unke
+  liye nahi, HAMARE locked round-trip test ke liye hai — demo fixture mein
+  3 tracks hain (video/audio/text, C8), aur bina metadata ke export→
+  re-import se text track gayab ho jata = round-trip RED (PRD 5.5 A).
+  Dusre tools ko isse nuksaan nahi (unknown metadata ignore hota hai), aur
+  README mein khulke likha jayega ki wo khaali clip dekhenge.
+  [AMENDED 2026-08-05, M5 implementation review — clip ki `properties`
+  (volume/opacity/scale/position) BHI isi darwaze se jaati hain:
+  `metadata.framebranch.properties = { ... }`, media clips par bhi aur text
+  clips par bhi. Kyun: O10 "properties compare karo" bolta hai, par purani
+  export-shape mein properties ka koi ghar hi nahi tha, jisse
+  export→re-import har property ko default par le aata (volume 80 → 100).
+  Ye asli data-loss thi aur demo mein hi dikhti (C8 step 3 "A.volume=80",
+  step 9 "Export OTIO"). Wahi tark jo text clips ke liye tha: OTIO core
+  mein in fields ka koi ghar hai hi nahi, to dusre tools ko waise bhi nahi
+  milta — ye HAMARE round-trip ke liye hai. Values ke range-checks
+  verbs.ts ke propertyChange jaise hi (volume/opacity int 0-100, scale
+  0.1-10, position finite {x,y}); GALAT payload REPAIR nahi hoti — clip
+  skip + `skipped-unknown-clip` (assumption 11 wali soch). Jis clip ki
+  properties defaults par hain wo kuch likhta hi nahi — saaf files saaf
+  rehti hain. H10 fixture mein ab non-default properties hain, warna test
+  jhootha green de sakta tha (mutation-check se verify kiya gaya).]
+- **O6 LOCKED — projectRate 3 seedhi seedhi.** (1) `global_start_time`
+  maujood → uski `rate` (uski VALUE use nahi hoti — hamari timeline hamesha
+  0 se shuru hoti hai; broadcast ka 01:00:00:00 rivaj hamare model mein
+  hai hi nahi); (2) warna → document order mein PEHLI clip ki rate;
+  (3) baaki sab values A1.2 ke formula se convert (round-nearest-ties-floor,
+  max error aadha frame). Deterministic — wahi file, wahi rate, hamesha.
+  REJECTED "hamesha 24 par le aao": A1.2 mein 24 pehle se REJECTED hai
+  ("24fps engine ka rule NAHI"), aur nuksaan asli hai — 30fps file ki HAR
+  value convert hoti (7@30 = 0.2333s → 6@24 = 0.2500s, har cut 0.0167s
+  khisak jaata) jabki uski apni rate rakhne par ZERO conversion hoti hai.
+  Conversion sirf tab lagti hai jab EK file ke andar kai rates hon.
+  EDGE — khaali file (koi clip nahi + `global_start_time` bhi nahi):
+  rate 24 + warning (`rate-fallback-empty-timeline`), import FAIL NAHI
+  (khaali timeline PRD mein valid hai, aur jab koi clip hi nahi to rate se
+  kisi ka kuch bigadta nahi).
+- **O7 LOCKED — version whitelist ka bartav.** Har OTIO object apne upar
+  `"OTIO_SCHEMA": "<naam>.<version>"` label lagata hai. Whitelist = wahi
+  labels jo humne khud fixture se test kiye:
+  `Timeline.1, Stack.1, Track.1, Clip.1, Gap.1, TimeRange.1,
+  RationalTime.1, ExternalReference.1, MissingReference.1`.
+  (a) BUNIYADI cheez ka anjaan version (`Clip.2`, `Track.5`) → POORA import
+  ruke, `E_UNSUPPORTED_OTIO_VERSION`, message mein wo label naam se ho.
+  Kyun: ye timeline ki reedh hai; naye version mein fields khisak sakte
+  hain, andaaza lagakar padha to CHUP-CHAAP galat timeline banegi.
+  (b) Jo cheez hum support karte hi nahi (`Transition.1`, effects, kisi
+  track ke andar nested `Stack`, `ImageSequenceReference`) → skip +
+  warning, import chalta rahe (#17 lock).
+  Ek line: reedh samajh na aaye to ruk jao; extra saaman samajh na aaye to
+  chhod ke bata do.
+- **O8 LOCKED — warnings structured, plain angrezi jumle NAHI.**
+  `ImportWarning = { code, detail, count }`; `code` chhota union:
+  `"skipped-unsupported" | "skipped-media-length-missing" |
+  "skipped-unknown-clip" | "rate-fallback-empty-timeline"`.
+  Kyun structured: (1) tests `code` par assert karenge, angrezi shabdon par
+  nahi — warna "Skipped"→"Dropped" likhne se test bina kisi asli bug ke red
+  ho jaata (bhurbhure tests); (2) ginti/grouping ("2 transitions") UI ka
+  kaam hai, engine ka nahi. F7 ka `commits.import_warnings` bhi yahi
+  structured shape store karega.
+- **O9 LOCKED — image ki pehchan = file extension.** OTIO mein media-type
+  ka koi field hai hi nahi, sirf `target_url`. Rule: `.png .jpg .jpeg
+  .webp` (case-insensitive) → `kind: "image"`; warna track ke hisaab se
+  `"video"`/`"audio"`. Jo pehchan mein na aaye (extension-less URL) → VIDEO
+  maano — safe taraf, kyunki tab bounds-check LAGTA hai (hatta nahi), aur
+  lambai na hone par O2 ka skip+warning saaf dikh jayega.
+  REJECTED "lambai nahi hai to image hogi": video ki lambai bhi missing ho
+  sakti hai (O2 ka poora case), to wo video ko chup-chaap image maan leta.
+  Ye ek documented ASSUMPTION hai (README/limitations mein jayegi).
+- **O10 LOCKED — round-trip ka exact matlab.** Test =
+  `hamari timeline → exportOtio → importOtio → wahi timeline`
+  (docs/09 #10/#11: structural equality, IDs ignore, sirf CI test — koi
+  runtime check nahi).
+  IGNORE: clip ids, mediaRef ids, naam/metadata jaisi cosmetic cheezein.
+  COMPARE: track kram + har track ki kind; har clip ka `timelineRange` aur
+  `sourceRange`; clip kis media par baithi hai — **ID se nahi, URL se**
+  (import hamesha naye IDs banata hai, to ID dono taraf alag hoga hi);
+  properties defaults-materialize karke (B3.1); text clips ka content +
+  style; `projectRate`.
+  FIXTURE SHART: round-trip golden ka fixture mein **gap + text clip +
+  image teeno** honi chahiye — warna O4/O5/O1 mein se koi bhi test hi nahi
+  hoga aur test jhootha green dega.
+
+### Public API shapes (C7 ka pure-core boundary — DB/HTTP se alag)
+
+```ts
+type OtioJson = Record<string, unknown>;
+type ImportWarning = { code: ImportWarningCode; detail: string; count: number };
+type ImportResult =
+  | { ok: true; timeline: Timeline; warnings: ImportWarning[] }
+  | { ok: false; error: EngineError };       // E_INVALID_OTIO / E_UNSUPPORTED_OTIO_VERSION
+
+function importOtio(otioJson: unknown): ImportResult;   // unknown = kachra bhi aa sakta hai
+function exportOtio(timeline: Timeline): OtioJson;
+```
+
+NOTE — error codes: `E_INVALID_OTIO` aur `E_UNSUPPORTED_OTIO_VERSION` C4 ki
+official list mein PEHLE SE hain (docs/11 C4 point 5); M2 ka `ErrorCode`
+union sirf "engine subset" tha, isliye inhe us union mein add karna NAYA
+error code banana NAHI hai — locked list ka hi hissa engine tak lana hai.
+
+Import HAMESHA fresh start deta hai — IDs samet sab naya (docs/09 #10).
+Export V1 internal IDs likhta hi nahi (docs/09 #11) — sirf O5 wala
+`metadata.framebranch` likha jaata hai. `exportOtio` kabhi fail nahi karta
+(OTIO = pointers; bytes kabhi nahi jaate — HLD #12/#13).

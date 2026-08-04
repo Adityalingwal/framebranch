@@ -335,3 +335,119 @@ source touched; no test contract changed:
   `FRAMEBRANCH_FUZZ_CHUNK`. This is a harness-timing constraint only — no
   case, seed, or coverage change (case seed is still `f(seed, global index)`,
   and the 0-9999 universe is unchanged).
+
+## 2026-08-04 — Milestone 5 (OTIO adapter)
+
+Trivial code-level choices made while implementing the locked O1-O10 spec.
+No new error code, verb, public function, or product behaviour was added; every
+item below is a detail the locked docs do not name, where OTIO's own format
+left a hole that the adapter had to fill deterministically.
+
+- **Import mints deterministic ids** (`track-1`, `clip-1`, `media-1`, …)
+  instead of UUIDs. Import is a fresh start (docs/09 #10), so uniqueness only
+  has to hold inside the produced timeline; a counter also makes "same file in
+  → same timeline out" true, which the round-trip test relies on. The ids are
+  `@`-free, so the B1.1 split namespace stays reserved.
+- **`MediaRef.hash` is `""` on import.** OTIO carries no fingerprint and the
+  engine never opens the file (URL-only pointer model, HLD #12/#13). `hash` is
+  an integration-ready field no V1 flow reads (A2.1).
+- **`MediaRef.sourceRate`** = the rate of `available_range` when the file has
+  one, otherwise the rate the clip's own `source_range` was written in. OTIO
+  states no "native fps" anywhere else. Note this means `sourceRate` is not
+  part of the O10 round-trip comparison (it isn't in the locked compare list).
+- **A clip's own rate, for O6 rule (2),** is read from
+  `source_range.start_time.rate` of the first `Clip` in document order.
+- **Every parsed `RationalTime` must have an integer `value` and an integer
+  `rate > 0`;** anything else is `E_INVALID_OTIO`. A1.1 makes the engine an
+  integer-only world, so a 23.976 rate or a half-frame value cannot be
+  represented — and inventing a rounding for it at the door would be exactly
+  the silent lie the locks forbid. Real 23.976 NTSC files therefore do not
+  import; flagged to the owner rather than worked around.
+- **A `Clip` with no `source_range`** (legal in OTIO — it means "the whole
+  media") is `E_INVALID_OTIO`. Our model has no "whole media" position; the
+  brief's malformed list already treats a `source_range` that isn't a valid
+  `TimeRange` as invalid, and an absent one is the same hole.
+- **A skipped CLIP still advances the import cursor.** O4 only writes the
+  cursor rule down for `Transition` (which must NOT advance). A clip occupies
+  its own span in the OTIO file whether or not we can represent it, so the O2 /
+  O7b / A4 skips advance the cursor — otherwise every later clip on the track
+  would silently slide left. Unsupported NON-clip items (transition, nested
+  `Stack`, …) never advance the cursor, exactly as O4 states for transitions.
+- **Zero/negative-duration clip on import** (A4 rule 3 — reachable through
+  rate conversion, e.g. 1@60 → 0@24) is skipped with warning code
+  `skipped-unsupported`, detail `"zero-duration clip"`. A4 locks the skip and
+  the itemized warning but predates the O8 code union, which has no code that
+  names this case; `skipped-unsupported` is the closest honest fit. Reported to
+  the owner as under-specified.
+- **Clip/track kind mismatches are skipped, not coerced:** a framebranch text
+  clip on a non-text track, or a media clip on a text track, becomes
+  `skipped-unknown-clip`. Track arrays are homogeneous by type (`Clip[] |
+  TextClip[]`), and guessing the track's real kind from its contents would be
+  shape-matching (rejected project-wide, B3.1).
+- **A track whose kind is neither `"Video"` nor `"Audio"` nor framebranch-text**
+  is skipped with `skipped-unsupported` (O7b's "we don't support it → skip and
+  say so"), rather than aborting the import.
+- **A present-but-invalid `textStyle`/`textContent` inside
+  `metadata.framebranch` skips the clip** (`skipped-unknown-clip`); only
+  MISSING style fields materialize BC.5 defaults. We never silently repair a
+  value we were handed.
+- **Post-import invariant sweep:** the imported timeline is run through
+  `checkInvariants` and a surviving violation returns `E_INVALID_OTIO`. Only an
+  internally inconsistent document can get there (e.g. a `source_range` outside
+  its own `available_range`) — that is malformed input, and dropping the clip
+  instead would be a skip rule nobody locked.
+- **Export writes `global_start_time` with value 0 and rate = `projectRate`.**
+  Nothing requires it, but it makes O6 rule (1) round-trip the project rate
+  exactly, including for an empty timeline. The value is always 0: our
+  timelines have no broadcast start offset.
+- **Export writes `"name": ""`** on tracks and clips (and the real sample's
+  `"Filler"` on gaps) — never an internal id (docs/09 #11). Each exported
+  `RationalTime` carries the rate of the value it came from.
+- **Export of a clip whose `MediaRef` is missing** emits a `MissingReference.1`
+  (with no framebranch metadata) rather than failing: `exportOtio` never fails
+  (docs/09 #12/#13).
+- **`fuzz.test.ts` touched only for the O1 nullable type** — a `sourceLength()`
+  helper narrows `durationInSource` and throws if the harness ever generates an
+  unbounded media (it does not). Note the side effect of O3: slip commands the
+  fuzz generates for image clips are now rejected, and `editBranch` already
+  ignores rejected commands, so those steps are no-ops. Case count, seed, and
+  every invariant/merge property are unchanged.
+- **`diff.test.ts` 1:1-machine-form golden** now slips the audio clip `AU`
+  instead of the image clip `IM` — O3 makes an image slip an error, and the
+  test only needs any valid `#6 slipped` sentence.
+
+### 2026-08-05 — M5 post-review fixes (owner-triaged, applied inline)
+
+The M5 implementation report flagged six under-specified points. Four were
+"leave as is" owner calls (non-integer NTSC rates stay `E_INVALID_OTIO` and go
+into the README limitations list; the zero-duration skip keeps
+`skipped-unsupported` + detail rather than a fifth warning code; the small
+fuzz slip-density dip stays, because slip on an image is genuinely
+inapplicable and reshuffling the 10k case universe would invalidate the M4
+evidence seed for no real coverage gain). Four fixes were applied:
+
+- **Clip `properties` now survive OTIO** (docs/11 O5 amendment 2026-08-05):
+  `metadata.framebranch.properties` on both media and text clips, validated
+  with the same ranges as `verbs.ts` propertyChange, invalid payload skips the
+  clip rather than being repaired. Without this, export → re-import silently
+  reset every volume/opacity/scale/position to its default — visible in the
+  C8 demo itself (step 3 sets `A.volume=80`, step 9 exports).
+- **The H10 round-trip fixture now carries non-default properties**
+  (`volume: 80, scale: 1.5` on the video clip; `opacity: 40, position` on the
+  image — the N1 matrix's image column). Verified load-bearing by mutation:
+  disabling the export side turns H10 red, restoring it turns it green.
+- **Cursor rule completed** (docs/11 O4 amendment 2026-08-05): a skipped item
+  advances the cursor by its own `source_range` duration when it has one.
+  Transition still does not (it has no `source_range`), but a nested `Stack`
+  does — previously everything after a nested Stack landed too early.
+- **NUL byte removed from `otio.ts`.** The warning-grouping key was
+  `` `${code}\0${detail}` ``. Git sniffs the first 8000 bytes for a NUL to
+  decide text-vs-binary, and this one sat at offset 7760 — so `git diff`
+  reported `Bin 0 -> 26498 bytes`, "0 insertions", and GitHub would have shown
+  "Binary file not shown" for the whole 838-line file. Key is now
+  `JSON.stringify([code, detail])`; identical behaviour, and git reports 838
+  insertions again.
+- **`tests/fixtures.ts`: `mI` image `durationInSource` is now `null`** — O1
+  says that is the only value import can produce for an image, so the shared
+  fixture no longer models an impossible state. No test depended on the old
+  made-up 1000 (all 279 stayed green).

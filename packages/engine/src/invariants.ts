@@ -9,7 +9,8 @@
  *
  * The list — exactly what the docs lock, nothing more:
  *  1. no-overlap-same-track            (A2.3)
- *  2. source-range-in-file             (A2.3, Clip vs MediaRef.durationInSource)
+ *  2. source-range-in-file             (A2.3, Clip vs MediaRef.durationInSource;
+ *     O1: skipped when durationInSource is null — an image is unbounded)
  *  3. duration > 0 for every TimeRange (A2.3)
  *  4. timeline start >= 0              (A3 preconditions)
  *  5. sourceRange.duration === timelineRange.duration for media clips (BC.4)
@@ -101,9 +102,10 @@ export function checkInvariants(timeline: Timeline): InvariantViolation[] {
           });
         }
 
-        // 2. source range inside the file
+        // 2. source range inside the file — O1: an image has no length
+        // (durationInSource === null = unbounded), so the check skips it.
         const media = mediaById.get(clip.mediaRefId);
-        if (media) {
+        if (media && media.durationInSource !== null) {
           const srcEnd = src.start.value + src.duration.value;
           if (src.start.value < 0 || srcEnd > media.durationInSource.value) {
             violations.push({ kind: "source-out-of-file", clipId: clip.id });
