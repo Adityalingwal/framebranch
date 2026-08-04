@@ -323,3 +323,15 @@ source touched; no test contract changed:
   (`fuzz_offsets=[0,2000,4000,6000,8000]`) and the matrix variable is
   `matrix.offset`, keeping all arithmetic in bash. Shard count and windows
   are unchanged.
+- **Chunk size 500 → 250** (second fix on the same first-push cycle,
+  2026-08-04): with the workflow finally valid, all five shards failed on
+  `[vitest-worker]: Timeout calling "onTaskUpdate"` while every fuzz case
+  itself passed (`Tests 2 passed`, CI run 30928377322). Cause: a chunk runs
+  its cases synchronously inside one `it()`, so chunk wall-clock = time the
+  worker spends unable to answer Vitest's RPC; past 60s Vitest kills it. The
+  500-case size was calibrated on the owner's Mac (18.5s sequential); on a
+  slower GitHub runner with chunks now running concurrently it measured
+  66.01s. 250 brings that to ~33s. Chunk size is now env-tunable via
+  `FRAMEBRANCH_FUZZ_CHUNK`. This is a harness-timing constraint only — no
+  case, seed, or coverage change (case seed is still `f(seed, global index)`,
+  and the 0-9999 universe is unchanged).

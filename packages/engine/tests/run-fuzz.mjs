@@ -39,9 +39,23 @@ const seed =
     0x4d345f54,
     0,
   ) >>> 0;
-// 500 keeps each worker comfortably inside Vitest's 60-second RPC window —
-// the strengthened N3/I4 harness pushed a 1,000-case chunk past it.
-const chunkSize = 500;
+// Each chunk runs its cases synchronously inside one `it()`, so the chunk's
+// wall-clock IS how long the Vitest worker goes without answering an RPC —
+// cross 60s and Vitest kills it with `Timeout calling "onTaskUpdate"`, even
+// though every case passed.
+//
+// [AMENDED 2026-08-04] 500 was sized against a sequential run on the owner's
+// Mac (18.5s/chunk). It failed on GitHub's slower runners once chunks began
+// running concurrently: a 500-case chunk measured 66.01s there (CI run
+// 30928377322) and every shard died on the RPC timeout. 250 halves that to
+// ~33s, keeping a real margin on the slowest machine we actually run on.
+// Override per-machine with FRAMEBRANCH_FUZZ_CHUNK if a future runner needs it.
+const chunkSize = parseInteger(
+  "FRAMEBRANCH_FUZZ_CHUNK",
+  environment.FRAMEBRANCH_FUZZ_CHUNK,
+  250,
+  1,
+);
 
 // Global universe size passed to children so replay/message numbering stays
 // global even when this process only owns a shard's slice of it.
