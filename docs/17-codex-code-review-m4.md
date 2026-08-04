@@ -54,6 +54,14 @@ common refinement is locked at `docs/11-lld-checklist.md:300-318`.
 Required closure: resolve base state by lineage family/refinement, not raw output
 clip ID, and add both split-right and split-left regressions.
 
+**Owner lock — 2026-08-04:** FIX APPROVED. B3 `base` must distinguish a
+genuinely base-absent add from a descendant of a base lineage family. A genuine
+new add is removed. A split descendant is not deleted as new content: the
+affected lineage family is restored to its exact merge-base state, including
+original placement and unsplit shape. Both right-piece and left-piece overlap
+regressions are required. This is an implementation correction to the existing
+locked contract, not a new merge behaviour.
+
 ### I1 — unanswered B3 participants leak into the returned safe draft
 
 **Severity: Important**
