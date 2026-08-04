@@ -266,3 +266,50 @@ the M2 report instead of being decided here):
   gap-script (step 5, TODO M7 CI-closure per I4 owner clarification) are
   commented placeholders in the locked T5 order; benchmarks deliberately
   absent (T5 lock).
+
+## 2026-08-04 — CI speed optimization
+
+Trivial tooling-level choices made while implementing the owner-locked
+7-decision CI speed brief (docs/12 T5 amendment, same date). No engine
+source touched; no test contract changed:
+
+- **Concurrency default formula lives only in `run-fuzz.mjs`,** not
+  duplicated anywhere else: `FRAMEBRANCH_FUZZ_CONCURRENCY` env if set, else
+  `CI === "true" ? cores : max(2, floor(cores/2))` using
+  `os.availableParallelism?.() ?? os.cpus().length`. This was explicitly
+  specified in the brief, not invented — recorded here only because it's the
+  kind of number someone will later ask "why this and not X" about.
+- **Progress-line format** for a successful chunk:
+  `chunk <n>/<total> ok (cases <start>-<end>)` — one line per chunk, in
+  completion order (not offset order), matching the brief's example
+  literally. Only failing chunks' full output is printed, and that IS
+  ordered by ascending offset (brief requirement, for determinism of the
+  failure report regardless of which shard/chunk finished first).
+- **`spawnSync` → `spawn` + `Promise`-based worker pool.** The old script
+  used a blocking loop; concurrency requires non-blocking children. Picked a
+  minimal manual pool (no new dependency) — `N` workers each pull the next
+  chunk off a shared index until either the queue is empty or a failure is
+  observed, matching the brief's "stop launching new chunks, let in-flight
+  finish" rule exactly.
+- **`gh pr list` fail-open implemented as `if ! gh ... ; then skip_all=false`**
+  in the `plan` job — any non-zero exit from the `gh` call (auth hiccup, API
+  outage, rate limit) is treated identically to "no open PR found", per the
+  brief's explicit fail-open instruction. Same fail-open pattern used for the
+  docs-only diff-base lookup (`before` all-zeros / not present in repo →
+  treated as not-docs-only, i.e. full pipeline runs).
+- **docs-only file-match regex:** `git diff --name-only` piped through
+  `grep -v -E '(^|/)[^/]+\.md$|^docs/'` — anything NOT matching "ends in
+  .md" or "starts with docs/" counts as non-docs; if that grep finds nothing,
+  the diff is docs-only. Chosen over a marketplace path-filter action per the
+  brief's "no marketplace path-filter actions" rule.
+- **`ci-success` reads `needs.plan.result` too** (not just gate/fuzz) so a
+  `plan` failure (e.g. its own script bug) fails the aggregate check instead
+  of silently reporting green — not explicitly required by the brief's wording
+  but consistent with its intent ("fails otherwise").
+- **GitHub-side behavior is NOT verified by this work** — the `gh pr list`
+  lookup, real matrix expansion (5 shards actually landing on 5 separate
+  runners), real GitHub Actions timings, and `concurrency.cancel-in-progress`
+  behavior can only be confirmed on Aditya's first real push/PR. Everything
+  else (script logic, determinism, YAML validity, local fuzz timings) was
+  run and verified locally — see docs/07 2026-08-04 entry and the verification
+  report for the actual commands/output.
