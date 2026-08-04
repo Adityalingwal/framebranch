@@ -442,8 +442,24 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   runtime invariant add nahi hua. CI T5 step 4 active, M7 step 5 abhi TODO.
   Final implementation checks: typecheck green, lint green, normal suite
   226/226 green.
-  **NEXT:** focused commit, phir committed diff par separate fresh read-only M4
-  review; uske baad hi push. PR Codex create nahi karega.
+- **M4 dual review + fix pass ✅ DONE (2026-08-04):** Codex review =
+  `docs/17` (8 findings: C1 Critical + I1-I5 + M1-M2; har finding ke neeche
+  owner-locked "Fix spec" block). Claude independent review = `docs/18`
+  (N1 Critical refinement-ID bug + N2 piece-scoped B2 [Q2=Option A] + N3
+  fuzz-extension gap + N4 NOTES overclaim; phir N5 split-verb healed-cut
+  duplicate-ID bug + Q1 defensive-fallbacks resolution + N1 deviation
+  sign-off). SAB 14 findings owner-locked FIX APPROVED aur fix commit
+  `d9a9430` mein closed — har original witness re-run green. Evidence:
+  typecheck/lint green, **245/245 tests**, 500 local + **10,000 CI fuzz**
+  green (seed 1295277908, ab extension-paths + choice-aware resurrection +
+  per-draft invariant checks ke saath sakht). docs/11 amendments: B1.1 N5
+  (formula-ID deterministic extension), A2.3 I1 reconciliation. docs/15 I1
+  ab poore evidence ke saath VERIFIED-CLOSED (I5 goldens); docs/15 I4 M7
+  CI-closure par pending (bug nahi). Aditya ne commit+push kiya.
+  **NEXT:** committed `d9a9430` par final fresh read-only merge-readiness
+  review (background agent) → clean nikla to Aditya PR merge karega → M5
+  (OTIO) — brief se PEHLE parked question: image ka `durationInSource`
+  semantics (M2 open-Q2, PARKED FOR M5).
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
