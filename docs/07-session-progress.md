@@ -460,6 +460,37 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   review (background agent) → clean nikla to Aditya PR merge karega → M5
   (OTIO) — brief se PEHLE parked question: image ka `durationInSource`
   semantics (M2 open-Q2, PARKED FOR M5).
+- **CI speed optimization ✅ DONE (2026-08-04):** `.github/workflows/ci.yml`
+  rewrite + `packages/engine/tests/run-fuzz.mjs` parallelization, 7
+  owner-locked decisions (docs/12 T5 amendment, same date): (1) 10,000 fuzz
+  cases stay 10,000 on PR/`main` — speed via sharding, not cutting cases;
+  (2) `gate` (typecheck+lint+245 tests) aur `fuzz` (matrix-sharded) parallel
+  jobs, `fuzz` NOT `needs: gate`; (3) auto-cancel stale runs sirf feature
+  branches par, `main` kabhi cancel nahi (har `main` commit ka poora 10k
+  record chahiye); (4) docs-only commits `fuzz` skip karte hain but `gate`
+  chalta rehta hai (empty check status branch-protection deadlock se bachne
+  ke liye); (5) cache/install unchanged, sirf `timeout-minutes` add hua
+  (safety); (6) local `run-fuzz.mjs` bhi ab parallel chunks (concurrency =
+  `FRAMEBRANCH_FUZZ_CONCURRENCY` env, else CI par sab cores, local par
+  `max(2, cores/2)`); (7) trigger ladder — feature-branch push bina open
+  PR ke = 500-case smoke/1 shard; open PR ho to us push ka pura run skip
+  (duplicate double-run fix); pull_request aur push-to-`main` = 10,000/5
+  shards × 2,000. Measured before/after (owner's Mac, 8 cores): 1,000 cases
+  sequential ≈ 35.9s vs parallel (default concurrency) ≈ 18.4s; full local
+  10k run ≈ 2 min 2.7s (20/20 chunks green) vs sequential baseline ≈6 min
+  estimate (not re-measured sequentially at 10k — 1,000-case sample above
+  extrapolates consistently).
+  Determinism proof RUN (not assumed): sequential vs parallel same-result,
+  4-way shard-equivalence (offsets 0/250/500/750, union = exact 0-999, no
+  gap/overlap), injected-failure test (scratch throw at case 550, reverted
+  + `git diff` verified empty after) — both sequential and parallel runs
+  reported the identical failing case index and identical
+  `FRAMEBRANCH_FUZZ_CASE=550` replay hint. `FRAMEBRANCH_FUZZ_CASE=617`
+  single-replay path unchanged. typecheck/lint/245-tests green;
+  `packages/engine/src/**` untouched (tooling-only change). **Open item:**
+  the 5-shard count is a starting estimate — GitHub runner core count
+  could not be measured locally, so Aditya will tune shard count after the
+  first real GitHub Actions run.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

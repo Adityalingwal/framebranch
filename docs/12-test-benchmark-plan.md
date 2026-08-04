@@ -114,6 +114,36 @@
   poora 1–5 order har push/PR par merge-blocking. Future locks ko missing bolne
   wali milestone-aware machinery abhi banana required nahi. [Aditya lock
   2026-08-03; activation timing clarified by owner 2026-08-04.]
+- **[AMENDED 2026-08-04, owner-locked — CI speed optimization]** Original T5
+  wording locked a **sequence** (1→5) run "har push/PR". Amended reading:
+  T5's five items are a **required SET** — all five must pass and stay
+  merge-blocking — but sequence was never the point, completeness was. Steps
+  1-3 now run as one `gate` job and step 4 (fuzz) runs as a separate `fuzz`
+  job **in parallel**, not `needs: gate` — a lint failure and a fuzz run can
+  both be in flight at once (public-repo Actions minutes are free; wasted
+  compute on a doomed run is an accepted trade for wall-clock speed). Step 5
+  stays TODO(M7), unaffected. Trigger ladder (which depth runs when):
+  | event | gate | fuzz |
+  |---|---|---|
+  | push, feature branch, no open PR | yes | 500-case smoke, 1 shard |
+  | push, feature branch, open PR exists | skip (PR run covers it) | skip |
+  | pull_request opened/synchronize/reopened | yes | 10,000, 5 shards × 2,000 |
+  | push to `main` | yes | 10,000, 5 shards × 2,000 |
+  | any of the above, docs-only diff | yes | skip |
+  The "skip when an open PR exists" branch exists because bare `on: push` +
+  `on: pull_request` made GitHub run the whole pipeline twice per PR-branch
+  commit — that duplication is removed. The docs-only exception to "har
+  push/PR": `gate` still runs (a check that never reports deadlocks branch
+  protection — "waiting for status"), only `fuzz` is skipped; a commit
+  touching docs AND code is not docs-only, fuzz runs. The **10,000-case CI
+  floor is unchanged** on PR and `main` — decision 1 stays locked, nothing
+  was cut. The 500-case pre-PR smoke is **additional**, never a replacement
+  for the 10k gate on PR/`main`. Local `run-fuzz.mjs` also runs its chunks
+  **concurrently** now (previously sequential `spawnSync`); determinism is
+  preserved by construction (`caseSeed(masterSeed, globalIndex)` is
+  independent of chunk/shard finish order) and was proven, not assumed —
+  see IMPLEMENTATION-NOTES.md and docs/07 2026-08-04 entry for the
+  verification record. [Aditya lock 2026-08-04.]
 
 **🏁 PART 8 COMPLETE (T1-T5, 2026-08-03). NEXT: CODE (Part 8.5 build), phir
 Part 9 (demo video + deploy + docs-consolidation + application).**
