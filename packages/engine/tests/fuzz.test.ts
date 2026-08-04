@@ -303,6 +303,49 @@ type GeneratedCommand = {
   mintedId?: string;
 };
 
+/**
+ * N3: maximum valid-by-construction trim EXTENSION for one edge — bounded
+ * by the same-track neighbor gap (frame 0 for start-extends) and, for media
+ * clips, by the remaining source material on that edge.
+ */
+function trimExtensionRoom(
+  timeline: Timeline,
+  clip: AnyClip,
+  edge: "start" | "end",
+): number {
+  const track = trackFor(timeline, clip.id);
+  const start = clip.timelineRange.start.value;
+  const end = start + clip.timelineRange.duration.value;
+  let room: number;
+  if (edge === "end") {
+    let nextStart = Infinity;
+    for (const other of track.clips as AnyClip[]) {
+      if (other.id === clip.id) continue;
+      const otherStart = other.timelineRange.start.value;
+      if (otherStart >= end && otherStart < nextStart) nextStart = otherStart;
+    }
+    room = nextStart === Infinity ? 12 : nextStart - end;
+  } else {
+    let previousEnd = 0;
+    for (const other of track.clips as AnyClip[]) {
+      if (other.id === clip.id) continue;
+      const otherEnd =
+        other.timelineRange.start.value + other.timelineRange.duration.value;
+      if (otherEnd <= start && otherEnd > previousEnd) previousEnd = otherEnd;
+    }
+    room = start - previousEnd;
+  }
+  if ("textContent" in clip) return room;
+  const media = mediaFor(timeline, clip);
+  const source = clip.sourceRange;
+  const headroom =
+    edge === "start"
+      ? source.start.value
+      : media.durationInSource.value -
+        (source.start.value + source.duration.value);
+  return Math.min(room, headroom);
+}
+
 function makeAddCommand(
   timeline: Timeline,
   rng: Rng,
@@ -419,15 +462,33 @@ function makeAwareCommand(
       },
     };
   }
-  if (operation === "trim" && clip.timelineRange.duration.value > 1) {
-    return {
-      command: {
-        op: "trim",
-        clipId: clip.id,
-        edge: rng.pick(["start", "end"] as const),
-        delta: time(-rng.int(1, clip.timelineRange.duration.value - 1)),
-      },
-    };
+  if (operation === "trim") {
+    // N3: both signs — shrink within duration, extend within the available
+    // source material AND the neighbor gap (start-extends respect frame 0
+    // because the gap below is bounded by the previous clip end or 0).
+    const edge = rng.pick(["start", "end"] as const);
+    const extendRoom = trimExtensionRoom(timeline, clip, edge);
+    const shrinkRoom = clip.timelineRange.duration.value - 1;
+    if (extendRoom > 0 && (shrinkRoom < 1 || rng.chance(0.45))) {
+      return {
+        command: {
+          op: "trim",
+          clipId: clip.id,
+          edge,
+          delta: time(rng.int(1, extendRoom)),
+        },
+      };
+    }
+    if (shrinkRoom >= 1) {
+      return {
+        command: {
+          op: "trim",
+          clipId: clip.id,
+          edge,
+          delta: time(-rng.int(1, shrinkRoom)),
+        },
+      };
+    }
   }
   if (operation === "slip" && !("textContent" in clip)) {
     const media = mediaFor(timeline, clip);
@@ -449,15 +510,8 @@ function makeAwareCommand(
   }
   if (operation === "split" && clip.timelineRange.duration.value > 1) {
     const start = clip.timelineRange.start.value;
-    return {
-      command: {
-        op: "split",
-        clipId: clip.id,
-        at: time(
-          rng.int(start + 1, start + clip.timelineRange.duration.value - 1),
-        ),
-      },
-    };
+    const at = rng.int(start + 1, start + clip.timelineRange.duration.value - 1);
+    return { command: { op: "split", clipId: clip.id, at: time(at) } };
   }
   if (operation === "ripple") {
     return { command: { op: "rippleDelete", clipId: clip.id } };
@@ -534,10 +588,68 @@ function assertInvariantClean(timeline: Timeline, label: string): void {
   }
 }
 
+/**
+ * N3: occasionally exercise the refinement/lineage bug class directly —
+ * split → delete the left piece → start-extend the survivor. Every step is
+ * valid by construction (the freed gap and the source headroom both cover
+ * the extension amount).
+ */
+function applySplitDeleteExtendChain(
+  timeline: Timeline,
+  rng: Rng,
+  label: string,
+): Timeline {
+  const candidates = clips(timeline).filter(
+    (clip) => clip.timelineRange.duration.value > 1,
+  );
+  if (candidates.length === 0) return timeline;
+  const clip = rng.pick(candidates);
+  const start = clip.timelineRange.start.value;
+  const offset = rng.int(1, clip.timelineRange.duration.value - 1);
+  // The survivor's ID comes from the split RESULT, not the bare formula —
+  // the verb extends the name deterministically when a healed cut would
+  // collide with a surviving sibling.
+  const before = new Set(clips(timeline).map((existing) => existing.id));
+  let survivorId = "";
+  const commands: (() => Command)[] = [
+    () => ({ op: "split", clipId: clip.id, at: time(start + offset) }),
+    () => ({ op: "deleteClip", clipId: clip.id }),
+    () => ({
+      op: "trim",
+      clipId: survivorId,
+      edge: "start",
+      delta: time(rng.int(1, offset)),
+    }),
+  ];
+  let current = timeline;
+  for (const make of commands) {
+    const command = make();
+    const result = applyCommand(current, command);
+    if (!result.ok) {
+      throw new Error(
+        `${label} chain: ${command.op} rejected: ${result.error.code}`,
+      );
+    }
+    current = result.timeline;
+    if (command.op === "split") {
+      const minted = clips(current).find((piece) => !before.has(piece.id));
+      if (!minted) throw new Error(`${label} chain: split minted no clip`);
+      survivorId = minted.id;
+    }
+    assertInvariantClean(current, `${label} chain ${command.op}`);
+    assertLineageAndUniqueIds(current, `${label} chain ${command.op}`);
+  }
+  return current;
+}
+
 function editBranch(base: Timeline, rng: Rng, branch: string): Timeline {
   let timeline = base;
   const steps = rng.int(5, 50);
   for (let step = 0; step < steps; step++) {
+    if (rng.chance(0.05)) {
+      timeline = applySplitDeleteExtendChain(timeline, rng, `${branch} ${step}`);
+      continue;
+    }
     const generated = rng.chance(0.15)
       ? makeBlindCommand(timeline, rng, branch, step)
       : makeAwareCommand(timeline, rng, branch, step);
@@ -614,6 +726,9 @@ function expectMergeSuccess(
     conflictIds.add(conflict.conflictId);
   }
   assertLineageAndUniqueIds(result.timeline, `${label} draft`);
+  // I1 hardening: EVERY returned draft is the safe materialized draft, so it
+  // must pass the single invariant list even mid-resolution.
+  assertInvariantClean(result.timeline, `${label} draft`);
   return result;
 }
 
@@ -621,22 +736,35 @@ function rootIds(timeline: Timeline): Set<string> {
   return new Set(clips(timeline).map((clip) => clip.lineage.rootId));
 }
 
+/**
+ * I4 (T3-P6): branch-change-aware and choice-aware. A root deleted on BOTH
+ * sides may never reappear; a root deleted on ONE side may appear only when
+ * the answered choices contain an explicit B2 `clip`/`base` answer for that
+ * family — anything else is silent resurrection.
+ */
 function assertNoSilentResurrection(
   base: Timeline,
   ours: Timeline,
   theirs: Timeline,
   merged: Timeline,
+  deleteAnswers: ReadonlyMap<string, MergeChoice>,
 ): void {
   const oursRoots = rootIds(ours);
   const theirsRoots = rootIds(theirs);
   const mergedRoots = rootIds(merged);
   for (const rootId of rootIds(base)) {
-    if (
-      !oursRoots.has(rootId) &&
-      !theirsRoots.has(rootId) &&
-      mergedRoots.has(rootId)
-    ) {
-      throw new Error(`root ${rootId} was silently resurrected`);
+    const deletedInOurs = !oursRoots.has(rootId);
+    const deletedInTheirs = !theirsRoots.has(rootId);
+    if (!deletedInOurs && !deletedInTheirs) continue;
+    if (!mergedRoots.has(rootId)) continue;
+    if (deletedInOurs && deletedInTheirs) {
+      throw new Error(`root ${rootId} deleted on both sides was resurrected`);
+    }
+    const answer = deleteAnswers.get(rootId);
+    if (answer !== "clip" && answer !== "base") {
+      throw new Error(
+        `root ${rootId} deleted on one side reappeared without an explicit B2 clip/base answer`,
+      );
     }
   }
 }
@@ -646,11 +774,19 @@ function resolveMerge(
   ours: Timeline,
   theirs: Timeline,
   rng: Rng,
-): { result: MergeSuccess; choices: Readonly<Record<string, MergeChoice>> } {
+): {
+  result: MergeSuccess;
+  choices: Readonly<Record<string, MergeChoice>>;
+  deleteAnswers: ReadonlyMap<string, MergeChoice>;
+} {
+  // I4: record which B2 (delete) families were answered and how, so the
+  // resurrection property can distinguish explicit restoration.
+  const deleteAnswers = new Map<string, MergeChoice>();
   const first = expectMergeSuccess(
     startMerge({ base, ours, theirs }),
     "initial merge",
   );
+  assertNoSilentResurrection(base, ours, theirs, first.timeline, deleteAnswers);
   const repeated = expectMergeSuccess(
     startMerge({ base, ours, theirs }),
     "repeated initial merge",
@@ -699,14 +835,24 @@ function resolveMerge(
       choice,
     });
     answered.add(conflict.conflictId);
+    if (conflict.participants.kind === "delete") {
+      deleteAnswers.set(conflict.participants.rootId, choice);
+    }
     current = expectMergeSuccess(next, `answer ${answered.size}`);
     choices = current.choices;
+    assertNoSilentResurrection(
+      base,
+      ours,
+      theirs,
+      current.timeline,
+      deleteAnswers,
+    );
   }
 
   if (current.status !== "ready") {
     throw new Error("conflict-free merge did not become ready");
   }
-  return { result: current, choices };
+  return { result: current, choices, deleteAnswers };
 }
 
 function runCase(index: number, rootSeed = masterSeed): void {
@@ -770,7 +916,13 @@ function runCase(index: number, rootSeed = masterSeed): void {
   );
   assertInvariantClean(finalized.timeline, "final merge");
   assertLineageAndUniqueIds(finalized.timeline, "final merge");
-  assertNoSilentResurrection(base, ours, theirs, finalized.timeline);
+  assertNoSilentResurrection(
+    base,
+    ours,
+    theirs,
+    finalized.timeline,
+    resolved.deleteAnswers,
+  );
 }
 
 function replayCommand(index: number): string {

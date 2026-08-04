@@ -23,7 +23,9 @@ const seed =
     0x4d345f54,
     0,
   ) >>> 0;
-const chunkSize = 1_000;
+// 500 keeps each worker comfortably inside Vitest's 60-second RPC window —
+// the strengthened N3/I4 harness pushed a 1,000-case chunk past it.
+const chunkSize = 500;
 
 function parseInteger(name, raw, fallback, minimum) {
   if (raw === undefined) return fallback;

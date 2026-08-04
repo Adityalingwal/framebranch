@@ -1101,6 +1101,51 @@ describe("A3.8: split", () => {
     expect(new Set(videoTrack?.clips.map((clip) => clip.id)).size).toBe(2);
   });
 
+  it("B1.1: re-splitting a healed cut cannot duplicate a surviving sibling id", () => {
+    const seeded = baseTimeline();
+    const tl: Timeline = {
+      ...seeded,
+      tracks: seeded.tracks.map((track) =>
+        track.id === "v1"
+          ? { ...track, clips: [mediaClip("A", "mV", 0, 0, 3)] }
+          : track,
+      ),
+    };
+
+    // split@1 → A [0,1) + A@1 [1,3); shrink A@1's start; extend A's end
+    // back across the healed cut; re-split A at the same coordinate.
+    const first = expectOk(split(tl, "A", 1));
+    const shrunk = expectOk(
+      applyCommand(first.timeline, {
+        op: "trim",
+        clipId: "A@1",
+        edge: "start",
+        delta: t(-1),
+      }),
+    );
+    const extended = expectOk(
+      applyCommand(shrunk.timeline, {
+        op: "trim",
+        clipId: "A",
+        edge: "end",
+        delta: t(1),
+      }),
+    );
+    const resplit = expectOk(split(extended.timeline, "A", 1));
+
+    const videoTrack = resplit.timeline.tracks.find(
+      (track) => track.id === "v1",
+    );
+    const ids = videoTrack?.clips.map((clip) => clip.id) ?? [];
+    expect(ids).toEqual(["A", "A@1@1", "A@1"]);
+    expect(new Set(ids).size).toBe(3);
+
+    const minted = clipById(resplit.timeline, "A@1@1") as Clip;
+    expect(minted.lineage).toEqual({ rootId: "A", span: range(1, 1) });
+    const sibling = clipById(resplit.timeline, "A@1") as Clip;
+    expect(sibling.lineage).toEqual({ rootId: "A", span: range(2, 1) });
+  });
+
   it("B1.1: the cut name is root-local, NOT a timeline number — a moved clip splits to the same name", () => {
     const moved = expectOk(
       applyCommand(baseTimeline(), {

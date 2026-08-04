@@ -503,10 +503,15 @@ remain unsupported non-bugs (`docs/15-codex-code-review-m2-m3.md:53-78`).
 
 ## 12. Validation commands
 
-Focused development convenience:
+Focused development convenience (M2 fix 2026-08-04 — the earlier
+`pnpm --filter @framebranch/engine test -- merge.test.ts` spelling ran the
+full 226-test suite because the package test script's own arguments consume
+the appended selector; the form below is verified to select only the merge
+file, and `pnpm --filter @framebranch/engine exec vitest run tests/merge.test.ts`
+is an equivalent workspace-root spelling):
 
 ```bash
-pnpm --filter @framebranch/engine test -- merge.test.ts
+cd packages/engine && npx vitest run tests/merge.test.ts
 ```
 
 Required final sequence:

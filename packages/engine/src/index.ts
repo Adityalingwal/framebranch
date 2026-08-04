@@ -28,10 +28,8 @@ export type {
 
 export type { RationalTime } from "./time";
 export type {
-  ApplyChoiceInput,
   DeleteChoice,
   DeleteParticipants,
-  FinalizeCheckInput,
   FinalizeResult,
   MergeChoice,
   MergeChoices,
@@ -44,7 +42,6 @@ export type {
   MergeSuccess,
   OverlapChoice,
   OverlapParticipants,
-  StartMergeInput,
   ValueChoice,
   ValueParticipants,
 } from "./merge";

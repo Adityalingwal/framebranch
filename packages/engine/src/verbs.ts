@@ -912,7 +912,17 @@ function applySplit(tl: Timeline, cmd: SplitCommand): ApplyResult {
   const offset = at - start; // frames into the clip
   const span = clip.lineage.span;
   const cutLocal = span.start.value + offset; // root-local coordinate (B1.1)
-  const rightId = `${clip.id}@${cutLocal}`; // parent-chained formula name
+  // Parent-chained formula name (B1.1). Trims can "heal" a previously cut
+  // root-local coordinate while the original descendant still survives on a
+  // shifted span, so the bare formula is not collision-proof: extend it
+  // deterministically until unique among live clips. Same state mints the
+  // same name on both branches, so same-cut merge convergence is preserved.
+  const liveIds = new Set<string>();
+  for (const track of tl.tracks) {
+    for (const existing of track.clips) liveIds.add(existing.id);
+  }
+  let rightId = `${clip.id}@${cutLocal}`;
+  while (liveIds.has(rightId)) rightId = `${rightId}@${cutLocal}`;
 
   const leftTimeline: TimeRange = {
     start: clip.timelineRange.start,

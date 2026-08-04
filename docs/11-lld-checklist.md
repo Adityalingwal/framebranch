@@ -301,7 +301,17 @@
   converge, zero conflict (random IDs hote to unification rule chahiye hota).
   Advisor-caught bug fixed: naive segmentId(rootId, cut) total nahi tha
   (split→delete→extend→re-split same number = collision) — parent-chained
-  naam se mathematically impossible; ab named regression test. Tombstone
+  naam se mathematically impossible; ab named regression test.
+  [AMENDED 2026-08-04, M4 fix-pass N5: parent-chained formula bhi ek narrow
+  case mein total nahi — trims ek healed cut ko wapas kholte hain jab
+  original descendant shifted span par zinda ho (4-command witness: split@1
+  → sibling start-shrink → parent end-extend → re-split@1 → formula `A@1`
+  already live). Fix locked: split verb formula-ID ko deterministically
+  extend karta hai jab tak live-clip set mein unique na ho (`A@1` taken →
+  `A@1@1`) — same state dono branches par same naam mint karta hai, isliye
+  same-cut merge auto-converge intact. Naya verbs.test.ts regression. Baaki
+  B1.1 (left-survives, root-local coordinates, reserved namespace)
+  unchanged.] Tombstone
   rejected ("deleted = ID absent" locked semantics A3.2). Naam ki lambai split-
   depth ke saath badhti hai — demo scale non-issue, documented. Edge-case
   matrix (18 cases: split-vs-har-verb, nested, collision, reuse, moved-clip

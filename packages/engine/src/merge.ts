@@ -96,19 +96,24 @@ export type MergeFailure = {
 export type MergeResult = MergeSuccess | MergeFailure;
 export type FinalizeResult = { ok: true; timeline: Timeline } | MergeFailure;
 
-export type StartMergeInput = {
+/**
+ * M1: private call-shape aliases — the three functions' parameter shapes are
+ * public through their signatures (C7); the aliases themselves are not part
+ * of the locked exported boundary-type list.
+ */
+type StartMergeInput = {
   base: Timeline;
   ours: Timeline;
   theirs: Timeline;
 };
 
-export type ApplyChoiceInput = StartMergeInput & {
+type ApplyChoiceInput = StartMergeInput & {
   choices: MergeChoices;
   conflictId: string;
   choice: MergeChoice;
 };
 
-export type FinalizeCheckInput = StartMergeInput & {
+type FinalizeCheckInput = StartMergeInput & {
   choices: MergeChoices;
 };
 
@@ -195,7 +200,28 @@ const FIELD_ORDER: readonly MergeField[] = [
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
-const fingerprint = (value: unknown): string => JSON.stringify(value);
+/**
+ * I2: canonical serialization — objects with the same fields in a different
+ * insertion order (e.g. position `{x,y}` vs `{y,x}`) must fingerprint equal,
+ * matching the verb engine's field-by-field equality. Arrays keep order.
+ */
+const canonicalize = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [
+          key,
+          canonicalize((value as Record<string, unknown>)[key]),
+        ]),
+    );
+  }
+  return value;
+};
+
+const fingerprint = (value: unknown): string =>
+  JSON.stringify(canonicalize(value));
 
 /** T3 private lossless delta constructor. */
 export function makeDelta(base: Timeline, target: Timeline): MergeDelta {
@@ -406,29 +432,17 @@ function projectedOuterCover(
     : undefined;
 }
 
-function splitCuts(family: Family | undefined): number[] {
-  if (!family) return [];
-  const cuts: number[] = [];
-  for (let i = 1; i < family.pieces.length; i++) {
-    if (family.pieces[i - 1].spanEnd === family.pieces[i].spanStart) {
-      cuts.push(family.pieces[i].spanStart);
-    }
-  }
-  return cuts;
-}
-
-function lineageIdCuts(family: Family | undefined): number[] {
-  if (!family) return [];
-  const cuts: number[] = [];
-  for (const piece of family.pieces) {
-    const suffix = piece.clip.id.slice(piece.clip.lineage.rootId.length);
-    for (const token of suffix.split("@")) {
-      if (token.length === 0) continue;
-      const value = Number(token);
-      if (Number.isSafeInteger(value)) cuts.push(value);
-    }
-  }
-  return cuts;
+/**
+ * N1: refinement cut points come ONLY from actual piece boundaries carried
+ * in a family's state lineage spans — interior boundaries between pieces,
+ * never the family's outer bounds and never numbers parsed out of ID strings.
+ */
+function familyCuts(family: Family | undefined): number[] {
+  if (!family || family.pieces.length < 2) return [];
+  const [outerStart, outerEnd] = familyBounds(family);
+  return family.pieces
+    .flatMap((piece) => [piece.spanStart, piece.spanEnd])
+    .filter((point) => point > outerStart && point < outerEnd);
 }
 
 const uniqueSorted = (values: number[]): number[] =>
@@ -734,27 +748,85 @@ function toClip(
   };
 }
 
-function canonicalPieceId(
-  rootId: string,
+/**
+ * N1: a refined segment whose span exactly matches a surviving branch piece
+ * keeps that piece's ACTUAL ID. Only a genuinely refined piece (created by
+ * unioning different cuts) gets an ID, and it is exactly the ID the split
+ * verb itself would have minted for that cut: the covering piece's ID for a
+ * left remainder, `<coveringId>@<cut>` for a right piece (B1.1 formula).
+ * The formula + reserved `@` namespace make collisions impossible, so no
+ * merge-time collision handling exists.
+ */
+function refinedIdCandidates(
   start: number,
-  baseFamily: Family | undefined,
-  unionCuts: number[],
-): string {
-  if (!baseFamily) return rootId;
-  const exactBase = baseFamily.pieces.find((p) => p.spanStart === start);
-  if (exactBase) return exactBase.clip.id;
-  const basePiece =
-    baseFamily.pieces.find((p) => p.spanStart < start && p.spanEnd > start) ??
-    (start <= baseFamily.pieces[0].spanStart
-      ? baseFamily.pieces[0]
-      : baseFamily.pieces[baseFamily.pieces.length - 1]);
-  let id = basePiece.clip.id;
-  for (const cut of unionCuts) {
-    if (cut > basePiece.spanStart && cut <= start && !id.endsWith(`@${cut}`)) {
-      id = `${id}@${cut}`;
+  end: number,
+  families: ReadonlyArray<Family | undefined>,
+): string[] {
+  const present = families.filter(
+    (family): family is Family => family !== undefined,
+  );
+  const candidates: string[] = [];
+  for (const family of present) {
+    const exact = family.pieces.find(
+      (piece) => piece.spanStart === start && piece.spanEnd === end,
+    );
+    if (exact) candidates.push(exact.clip.id);
+  }
+  for (const family of present) {
+    const cover = family.pieces.find(
+      (piece) => piece.spanStart <= start && piece.spanEnd > start,
+    );
+    if (cover) {
+      candidates.push(
+        cover.spanStart === start ? cover.clip.id : `${cover.clip.id}@${start}`,
+      );
     }
   }
-  return id;
+  if (candidates.length === 0) {
+    // Outer-extension fallback: content beyond every actual piece projects
+    // from the nearest edge piece, so its ID chains from that piece.
+    const edge = edgeReference(present[0], start);
+    candidates.push(
+      edge.spanStart === start ? edge.clip.id : `${edge.clip.id}@${start}`,
+    );
+  }
+  return candidates;
+}
+
+function refinedPieceId(
+  start: number,
+  end: number,
+  families: ReadonlyArray<Family | undefined>,
+): string {
+  return refinedIdCandidates(start, end, families)[0];
+}
+
+/**
+ * N1: final piece IDs, assigned left to right. A refined segment keeps the
+ * exact-span surviving branch piece ID when one exists; a genuinely refined
+ * piece gets exactly the split-verb formula from its covering piece. The
+ * same birth ID can carry DIFFERENT spans on the two branches (trims moved
+ * it), so assignment is uniqueness-aware in span order — the parent ID
+ * belongs to the leftmost surviving content (B1.1 left-survives) and a
+ * later stale exact-match falls through to that segment's next lawful
+ * candidate (fuzz witness: seed 1295277908 case 157).
+ */
+function assignRefinedIds(
+  segments: readonly Segment[],
+  families: ReadonlyArray<Family | undefined>,
+): string[] {
+  const used = new Set<string>();
+  return segments.map((segment) => {
+    const candidates = refinedIdCandidates(segment.start, segment.end, families);
+    let id = candidates.find((candidate) => !used.has(candidate));
+    if (id === undefined) {
+      // Defensive only — all lawful candidates consumed (no observed path).
+      id = candidates[0];
+      while (used.has(id)) id = `${id}@${segment.start}`;
+    }
+    used.add(id);
+    return id;
+  });
 }
 
 function mergeSegments(segments: Segment[], cuts: Set<number>): Segment[] {
@@ -895,38 +967,56 @@ function mergeFamily(
     );
   }
 
-  // B1.2: a trim that erases a region edited on the other branch is B2.
-  // This must run before outer coverage composition would hide that region.
-  const eraseBoundaries = uniqueSorted([
-    ...baseFamily.pieces.flatMap((piece) => [piece.spanStart, piece.spanEnd]),
-    ...oursFamily.pieces.flatMap((piece) => [piece.spanStart, piece.spanEnd]),
-    ...theirsFamily.pieces.flatMap((piece) => [piece.spanStart, piece.spanEnd]),
-  ]);
-  for (let index = 0; index < eraseBoundaries.length - 1; index++) {
-    const start = eraseBoundaries[index];
-    const end = eraseBoundaries[index + 1];
-    const baseLoc = findCover(baseFamily, start, end);
-    if (!baseLoc) continue;
-    const oursLoc = findCover(oursFamily, start, end);
-    const theirsLoc = findCover(theirsFamily, start, end);
-    if ((oursLoc === undefined) === (theirsLoc === undefined)) continue;
-    const changedFamily = oursLoc ? oursFamily : theirsFamily;
-    if (changedFamily.pieces.length < 2) continue;
-    const presentLoc = oursLoc ?? theirsLoc!;
-    if (normalizedEqual(normalize(presentLoc), normalize(baseLoc))) continue;
-    const choice = deleteConflict(ctx, {
-      trackId,
-      trackIndex,
-      rootId,
-      clipIds: stableClipIds(baseLoc, oursLoc, theirsLoc),
-      timelineStart: timelineStart(baseLoc.clip),
-    });
-    if (choice === undefined) return [];
-    if (choice === "base") return cloneFamily(baseFamily);
-    if (choice === "clip") {
-      return cloneFamily(oursLoc ? oursFamily : theirsFamily);
+  // B1.2(5), N2 Option A: a trim that FULLY erases a split piece edited on
+  // the other branch is a PIECE-scoped B2 — only the erased+edited piece is
+  // governed by it; every other family piece composes normally. Detection
+  // runs before outer coverage composition would hide the erased region.
+  const eraseOverrides: Array<{
+    start: number;
+    end: number;
+    mode: "clip" | "base";
+  }> = [];
+  for (const [editedFamily, erasingFamily] of [
+    [oursFamily, theirsFamily],
+    [theirsFamily, oursFamily],
+  ] as const) {
+    if (editedFamily.pieces.length < 2) continue;
+    const [erasingStart, erasingEnd] = familyBounds(erasingFamily);
+    for (const piece of editedFamily.pieces) {
+      // Only pieces fully outside the erasing side's outer coverage are
+      // edge-erased here; interior deletions flow to the segment loop.
+      if (piece.spanStart < erasingEnd && piece.spanEnd > erasingStart) {
+        continue;
+      }
+      const baseLoc = baseFamily.pieces.find(
+        (candidate) =>
+          candidate.spanStart < piece.spanEnd &&
+          candidate.spanEnd > piece.spanStart,
+      );
+      if (!baseLoc) continue;
+      if (normalizedEqual(normalize(piece), normalize(baseLoc))) continue;
+      const choice = deleteConflict(ctx, {
+        trackId,
+        trackIndex,
+        rootId,
+        clipIds: stableClipIds(piece),
+        timelineStart: timelineStart(piece.clip),
+      });
+      // Unanswered/delete: the region stays erased by normal coverage
+      // composition (the trim side wins there); nothing to override.
+      if (choice === undefined || choice === "delete") continue;
+      eraseOverrides.push({
+        start:
+          choice === "base"
+            ? Math.max(piece.spanStart, baseLoc.spanStart)
+            : piece.spanStart,
+        end:
+          choice === "base"
+            ? Math.min(piece.spanEnd, baseLoc.spanEnd)
+            : piece.spanEnd,
+        mode: choice,
+      });
     }
-    return cloneFamily(oursLoc ? theirsFamily : oursFamily);
   }
 
   const [baseStart, baseEnd] = familyBounds(baseFamily);
@@ -977,23 +1067,28 @@ function mergeFamily(
     return chooseFamily(choice, baseFamily, oursFamily, theirsFamily);
   }
 
+  // An answered clip/base erase-B2 keeps its piece's region in the result
+  // even though the erasing side's coverage bound excludes it.
+  let coverStart = mergedStart;
+  let coverEnd = mergedEnd;
+  for (const override of eraseOverrides) {
+    coverStart = Math.min(coverStart, override.start);
+    coverEnd = Math.max(coverEnd, override.end);
+  }
   const unionCuts = uniqueSorted([
-    ...splitCuts(baseFamily),
-    ...splitCuts(oursFamily),
-    ...splitCuts(theirsFamily),
-    ...lineageIdCuts(baseFamily),
-    ...lineageIdCuts(oursFamily),
-    ...lineageIdCuts(theirsFamily),
-  ]).filter((cut) => cut > mergedStart && cut < mergedEnd);
+    ...familyCuts(baseFamily),
+    ...familyCuts(oursFamily),
+    ...familyCuts(theirsFamily),
+  ]).filter((cut) => cut > coverStart && cut < coverEnd);
   const cutSet = new Set(unionCuts);
   const boundaries = uniqueSorted([
-    mergedStart,
-    mergedEnd,
+    coverStart,
+    coverEnd,
     ...unionCuts,
     ...baseFamily.pieces.flatMap((p) => [p.spanStart, p.spanEnd]),
     ...oursFamily.pieces.flatMap((p) => [p.spanStart, p.spanEnd]),
     ...theirsFamily.pieces.flatMap((p) => [p.spanStart, p.spanEnd]),
-  ]).filter((point) => point >= mergedStart && point <= mergedEnd);
+  ]).filter((point) => point >= coverStart && point <= coverEnd);
 
   const segments: Segment[] = [];
   for (let index = 0; index < boundaries.length - 1; index++) {
@@ -1001,7 +1096,21 @@ function mergeFamily(
     const end = boundaries[index + 1];
     if (end <= start) continue;
 
+    const override = eraseOverrides.find(
+      (candidate) => start >= candidate.start && end <= candidate.end,
+    );
+    // Regions outside the merged coverage exist only for answered
+    // clip/base erase overrides; everything else stays erased.
+    if ((start < mergedStart || end > mergedEnd) && !override) continue;
+
     const baseLoc = findCover(baseFamily, start, end);
+    if (override?.mode === "base") {
+      // The erased piece's region returns to its exact base state.
+      if (baseLoc) {
+        segments.push({ start, end, normalized: projectNormalized(baseLoc) });
+      }
+      continue;
+    }
     const oursActual = findCover(oursFamily, start, end);
     const theirsActual = findCover(theirsFamily, start, end);
     const oursLoc = projectedOuterCover(oursFamily, start, end);
@@ -1018,7 +1127,7 @@ function mergeFamily(
       theirsLoc,
     );
     const logicalClipIds = [
-      canonicalPieceId(rootId, start, baseFamily, unionCuts),
+      refinedPieceId(start, end, [oursFamily, theirsFamily, baseFamily]),
     ];
     const tlHint = Math.min(
       ...[baseLoc, oursLoc, theirsLoc]
@@ -1067,19 +1176,20 @@ function mergeFamily(
   }
 
   const coalesced = mergeSegments(segments, cutSet);
-  const usedIds = new Set<string>();
-  const clips = coalesced.map((segment) => {
-    let id = canonicalPieceId(rootId, segment.start, baseFamily, unionCuts);
-    while (usedIds.has(id)) id = `${id}@${segment.start}`;
-    usedIds.add(id);
-    return toClip(
+  const refinedIds = assignRefinedIds(coalesced, [
+    oursFamily,
+    theirsFamily,
+    baseFamily,
+  ]);
+  const clips = coalesced.map((segment, index) =>
+    toClip(
       segment.normalized,
-      id,
+      refinedIds[index],
       segment.start,
       segment.end,
       ctx.base.projectRate,
-    );
-  });
+    ),
+  );
 
   if (clips.length === 0) {
     if (ctx.conflicts.size > conflictsBefore) return [];
@@ -1160,13 +1270,15 @@ function composeTimeline(ctx: MergeContext): Timeline {
     if (list) list.push(...familyClips);
     else byTrack.set(family.trackId, familyClips);
   }
+  // Key order matches the Timeline construction order used by the verbs so
+  // a no-change merge is byte-identical to its input (N1 W1).
   return {
     projectRate: ctx.base.projectRate,
-    mediaRefs: clone(ctx.base.mediaRefs),
     tracks: ctx.base.tracks.map((track) => ({
       ...clone(track),
       clips: sortedClips(byTrack.get(track.id) ?? []) as Track["clips"],
     })),
+    mediaRefs: clone(ctx.base.mediaRefs),
   };
 }
 
@@ -1344,6 +1456,46 @@ function shiftClip(timeline: Timeline, clipId: string): Timeline {
   return replaceClip(timeline, clipId, shifted, loc.track.id);
 }
 
+/**
+ * C1: B3 `base` resolves each participant by lineage family, not raw clip
+ * ID. A family present in the base is restored WHOLE to its exact base
+ * state (all draft clips of that rootId removed first — idempotent); only a
+ * genuinely base-absent add is removed as new content.
+ */
+function revertParticipantToBase(
+  timeline: Timeline,
+  base: Timeline,
+  clipId: string,
+): Timeline {
+  const draftLoc = locate(timeline, clipId);
+  const rootId =
+    draftLoc?.clip.lineage.rootId ?? locate(base, clipId)?.clip.lineage.rootId;
+  if (rootId === undefined) return timeline;
+  let baseTrackId: string | undefined;
+  const baseFamily: AnyClip[] = [];
+  for (const track of base.tracks) {
+    for (const clip of track.clips as readonly AnyClip[]) {
+      if (clip.lineage.rootId === rootId) {
+        baseTrackId = track.id;
+        baseFamily.push(clip);
+      }
+    }
+  }
+  if (baseFamily.length === 0 || baseTrackId === undefined) {
+    return replaceClip(timeline, clipId, null);
+  }
+  const track = timeline.tracks.find((item) => item.id === baseTrackId);
+  const kept = track
+    ? (track.clips as readonly AnyClip[]).filter(
+        (clip) => clip.lineage.rootId !== rootId,
+      )
+    : [];
+  return replaceTrackClips(timeline, baseTrackId, [
+    ...kept,
+    ...baseFamily.map((clip) => clone(clip)),
+  ]);
+}
+
 function revertPairToBase(
   timeline: Timeline,
   base: Timeline,
@@ -1351,13 +1503,7 @@ function revertPairToBase(
 ): Timeline {
   let next = timeline;
   for (const id of ids) {
-    const baseLoc = locate(base, id);
-    next = replaceClip(
-      next,
-      id,
-      baseLoc ? baseLoc.clip : null,
-      baseLoc?.track.id,
-    );
+    next = revertParticipantToBase(next, base, id);
   }
   return next;
 }
@@ -1417,6 +1563,10 @@ function processOverlaps(ctx: MergeContext, input: Timeline): Timeline {
         !appliedStates.has(`${conflict.public.conflictId}\u0000${state}`),
     );
     if (!answered) {
+      // I1: every still-unanswered overlap participant is withheld from the
+      // returned safe draft on EVERY recompute, regardless of how many
+      // unrelated permanent answers already exist.
+      const pendingIds = new Set<string>();
       for (const conflict of overlaps) {
         const saved = ctx.choices[conflict.public.conflictId];
         if (saved !== undefined && !conflict.public.choices.includes(saved)) {
@@ -1424,18 +1574,16 @@ function processOverlaps(ctx: MergeContext, input: Timeline): Timeline {
         } else if (saved !== undefined) {
           ctx.invalidChoice =
             "saved overlap choices did not reach a clean fixed point";
-        } else if (saved === undefined) {
+        } else {
           ctx.conflicts.set(conflict.public.conflictId, conflict);
+          for (const id of (
+            conflict.public.participants as OverlapParticipants
+          ).clipIds) {
+            pendingIds.add(id);
+          }
         }
       }
-      if (Object.keys(ctx.choices).length === 0 && overlaps.length > 0) {
-        const pendingIds = new Set(
-          overlaps.flatMap((conflict) => [
-            ...(conflict.public.participants as OverlapParticipants).clipIds,
-          ]),
-        );
-        for (const id of pendingIds) timeline = replaceClip(timeline, id, null);
-      }
+      for (const id of pendingIds) timeline = replaceClip(timeline, id, null);
       return timeline;
     }
     const choice = ctx.choices[answered.public.conflictId] as OverlapChoice;

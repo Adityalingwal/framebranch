@@ -18,12 +18,33 @@ code was added:
   plus lossless top-level replacements. It is not re-exported from `index.ts`;
   public semantic `computeDiff` remains unchanged and no public `applyDiff` was
   added.
-- **Common-refinement IDs:** the unsplit left piece keeps the root/base ID.
-  Root-local union cuts are processed in ascending order and use the existing
-  parent-chained `@cut` rule. If refinement would otherwise reuse an ID already
-  present in the materialized timeline, the segment's root-local start cut is
-  appended deterministically until the ID is unique. This preserves B1.1
-  ancestry while making different-cut output stable and collision-free.
+- **Common-refinement IDs (rewritten 2026-08-04, N1 fix pass):** refinement
+  cut points come only from actual piece boundaries carried in the three
+  input families' state lineage spans — nothing is parsed out of ID strings,
+  and a family whose pieces are identical across all three inputs refines to
+  a byte-identical no-op. A refined segment whose span exactly matches a
+  surviving branch piece keeps that piece's actual ID; only a genuinely
+  refined piece (created by unioning different cuts) gets an ID, and it is
+  exactly the parent-chained `@cut` formula the split verb itself would mint
+  for that cut. Merge never invents novel IDs; the old merge-time
+  collision-suffix loop is gone. One reality the fix pass surfaced (fuzz
+  seed 1295277908 case 157): the SAME birth ID can carry different spans on
+  the two branches (trims move spans), so per-segment exact matching alone
+  can pick the stale side. Final IDs are therefore assigned left-to-right,
+  uniqueness-aware over lawful candidates only (exact surviving-piece IDs,
+  then covering-piece split-formula mints) — consistent with B1.1
+  left-survives: the parent ID belongs to the leftmost surviving content. A
+  last-resort deterministic `@start` suffix sits behind that selection as a
+  defensive-only guard with no observed reachable path (same status as the
+  Q1 fallbacks below).
+- **Defensive `E_MERGE_PRECONDITION` fallbacks (Q1 owner resolution,
+  2026-08-04):** the messages "merge resolution did not terminate", "saved
+  overlap choices did not reach a clean fixed point", "unsupported merge
+  invariant", and "final merge timeline is invalid" are defensive-only
+  guards with no known reachable public-command path; they exist so an
+  unforeseen state degrades to a typed error instead of a crash. If one
+  ever becomes reachable, that is a bug to triage against the C7 locked
+  4-case `E_MERGE_PRECONDITION` boundary.
 - **Conflict IDs:** collision-safe content addressing uses the literal `m4:`
   prefix plus URI-encoded canonical JSON of the locked payload (class,
   participant IDs/track, and B1 field). The docs leave the hash primitive
@@ -45,16 +66,29 @@ code was added:
   `FRAMEBRANCH_FUZZ_SEED` overrides the seed, and
   `FRAMEBRANCH_FUZZ_CASE=<index>` replays one printed case. Normal `pnpm test`
   excludes this deliberately long harness; the package `fuzz` script is its
-  only execution door. The runner executes at most 1,000 generated cases per
-  Vitest process because Vitest 3's worker RPC times out after 60 seconds even
-  when a longer test timeout is configured; offsets preserve the single
-  0–9,999 case universe and each chunk exits cleanly.
+  only execution door. The runner executes at most 500 generated cases per
+  Vitest process (1,000 until 2026-08-04; the strengthened N3/I4 fix-pass
+  harness pushed a 1,000-case chunk past the window) because Vitest 3's
+  worker RPC times out after 60 seconds even when a longer test timeout is
+  configured; offsets preserve the single 0–9,999 case universe and each
+  chunk exits cleanly.
 - **I1 proof shape:** merge never constructs a zero/negative refined segment.
   Opposite-edge collapse/crossing is classified as same-clip B1 before a
   nonpositive `TimeRange` is materialized. T2 exercises the lawful matrix and
   T3 directly checks every surviving `lineage.span.duration.value > 0` after
   accepted edits and merge replay; this is independent of the current runtime
   invariant checker.
+- **N5 split-ID uniqueness (2026-08-04, owner-locked in docs/18):** the
+  strengthened fuzz proved the bare B1.1 formula is not collision-proof when
+  trims heal a previously cut coordinate while the original descendant
+  survives on a shifted span (seed 1295277908 case 329). The split verb now
+  extends the formula deterministically until unique among live clips
+  (`A@1` taken → `A@1@1`); same state mints the same name on both branches,
+  so same-cut merge convergence is preserved. The fuzz generator's temporary
+  avoid-guard was removed (the path is fuzzed again), and the
+  split→delete→extend chain reads the survivor ID from the split result
+  instead of precomputing the formula. docs/11 B1.1 carries the dated
+  amendment.
 
 ## 2026-08-03 — Milestone 3 (diff engine)
 

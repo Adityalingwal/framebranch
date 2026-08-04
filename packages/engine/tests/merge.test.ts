@@ -516,9 +516,267 @@ describe("T2-A: split-family merge goldens", () => {
     expect(maybeClip(ours, "A@40")).toBeDefined();
     expect(maybeClip(ours, "A@40@40")).toBeDefined();
     const result = ready(startMerge({ base, ours, theirs: base }));
-    expect(new Set(family(result.timeline, "A").map((c) => c.id)).size).toBe(
-      family(result.timeline, "A").length,
+    // I3: the merged RESULT must carry the exact surviving IDs and spans —
+    // a silently dropped child must fail, not just ID-set uniqueness.
+    expect(family(result.timeline, "A").map((c) => c.id)).toEqual([
+      "A@40",
+      "A@40@40",
+    ]);
+    expect(starts(result.timeline, "A")).toEqual([30, 40]);
+    expect(spans(result.timeline, "A")).toEqual([
+      [30, 10],
+      [40, 60],
+    ]);
+    expect(maybeClip(result.timeline, "A")).toBeUndefined();
+    assertCleanAndPositive(result.timeline);
+  });
+
+  /** N1 witness state: A=[0,100) → split@40 → delete A → start-extend A@40. */
+  function extendedDescendantState(): Timeline {
+    const base = videoTimeline([mediaClip("A", "mV", 0, 0, 100)]);
+    let state = edit(base, { op: "split", clipId: "A", at: t(40) });
+    state = edit(state, { op: "deleteClip", clipId: "A" });
+    state = edit(state, {
+      op: "trim",
+      clipId: "A@40",
+      edge: "start",
+      delta: t(10),
+    });
+    return state;
+  }
+
+  it("B1.1/B2.1/N1-W1: no-change merge of an extended-descendant state returns a byte-identical timeline", () => {
+    const committed = extendedDescendantState();
+    const result = ready(
+      startMerge({ base: committed, ours: committed, theirs: committed }),
     );
+    expect(result.counts).toEqual({ resolved: 0, remaining: 0, total: 0 });
+    expect(JSON.stringify(result.timeline)).toBe(JSON.stringify(committed));
+  });
+
+  it("B2.1/N1-W5: one-sided property change on an extended descendant returns exactly one clip", () => {
+    const committed = extendedDescendantState();
+    const ours = edit(committed, {
+      op: "propertyChange",
+      clipId: "A@40",
+      property: "volume",
+      value: 55,
+    });
+    const result = ready(
+      startMerge({ base: committed, ours, theirs: committed }),
+    );
+    const pieces = family(result.timeline, "A");
+    expect(pieces.map((c) => c.id)).toEqual(["A@40"]);
+    expect((pieces[0] as Clip).properties.volume).toBe(55);
+    expect(pieces[0].timelineRange).toEqual(range(30, 70));
+    expect(pieces[0].lineage.span).toEqual(range(30, 70));
+  });
+
+  it("B1.1/N1-W2: one-sided nested resplit preserves branch IDs and never revives the deleted root ID", () => {
+    const committed = extendedDescendantState();
+    const ours = edit(committed, { op: "split", clipId: "A@40", at: t(40) });
+    const result = ready(
+      startMerge({ base: committed, ours, theirs: committed }),
+    );
+    expect(family(result.timeline, "A").map((c) => c.id)).toEqual([
+      "A@40",
+      "A@40@40",
+    ]);
+    expect(starts(result.timeline, "A")).toEqual([30, 40]);
+    expect(spans(result.timeline, "A")).toEqual([
+      [30, 10],
+      [40, 60],
+    ]);
+    expect(maybeClip(result.timeline, "A")).toBeUndefined();
+    expect(JSON.stringify(result.timeline)).toBe(JSON.stringify(ours));
+  });
+
+  it("B1.1/N1: a one-sided extend-then-split keeps the changed branch's IDs when the stale span match sits on the other side", () => {
+    // Fuzz witness (seed 1295277908 case 157): theirs start-extends A and
+    // then splits at root-local 0, so the OTHER branch's untouched A has an
+    // exact-span match for the right piece. The one-sided merge must still
+    // be byte-identical to theirs — left-survives assigns "A" to the
+    // leftmost content and the right piece keeps theirs' actual A@0.
+    const base = videoTimeline([mediaClip("A", "mV", 5, 5, 5)]);
+    let theirs = edit(base, {
+      op: "trim",
+      clipId: "A",
+      edge: "start",
+      delta: t(3),
+    });
+    theirs = edit(theirs, { op: "split", clipId: "A", at: t(5) });
+    expect(
+      family(theirs, "A").map((c) => [
+        c.id,
+        c.lineage.span.start.value,
+        c.lineage.span.duration.value,
+      ]),
+    ).toEqual([
+      ["A", -3, 3],
+      ["A@0", 0, 5],
+    ]);
+    const result = ready(startMerge({ base, ours: base, theirs }));
+    expect(JSON.stringify(result.timeline)).toBe(JSON.stringify(theirs));
+  });
+
+  it("B1.2/I5: adjacent concurrent cuts refine to an exact one-frame middle piece", () => {
+    const base = videoTimeline([mediaClip("A", "mV", 0, 0, 10)]);
+    const ours = edit(base, { op: "split", clipId: "A", at: t(4) });
+    const theirs = edit(base, { op: "split", clipId: "A", at: t(5) });
+    const result = ready(startMerge({ base, ours, theirs }));
+    expect(family(result.timeline, "A").map((c) => c.id)).toEqual([
+      "A",
+      "A@4",
+      "A@5",
+    ]);
+    expect(spans(result.timeline, "A")).toEqual([
+      [0, 4],
+      [4, 1],
+      [5, 5],
+    ]);
+    assertCleanAndPositive(result.timeline);
+    const repeat = ready(startMerge({ base, ours, theirs }));
+    expect(JSON.stringify(repeat)).toBe(JSON.stringify(result));
+  });
+
+  it("B1.1/I5: nested split from a ready merged output as the next merge base continues parent-chained IDs", () => {
+    const original = videoTimeline([mediaClip("A", "mV", 5, 10, 10)]);
+    const cutOnce = edit(original, { op: "split", clipId: "A", at: t(15) });
+    const nextBase = ready(
+      startMerge({ base: original, ours: cutOnce, theirs: cutOnce }),
+    ).timeline;
+    const ours = edit(nextBase, { op: "split", clipId: "A@5", at: t(17) });
+    const theirs = edit(nextBase, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "volume",
+      value: 60,
+    });
+    const result = ready(startMerge({ base: nextBase, ours, theirs }));
+    expect(family(result.timeline, "A").map((c) => c.id)).toEqual([
+      "A",
+      "A@5",
+      "A@5@7",
+    ]);
+    expect(spans(result.timeline, "A")).toEqual([
+      [0, 5],
+      [5, 2],
+      [7, 3],
+    ]);
+    expect(
+      (clipById(result.timeline, "A") as Clip).properties.volume,
+    ).toBe(60);
+    assertCleanAndPositive(result.timeline);
+    const repeat = ready(startMerge({ base: nextBase, ours, theirs }));
+    expect(JSON.stringify(repeat)).toBe(JSON.stringify(result));
+  });
+
+  /** N2 (Option A): piece-scoped trim-erase B2 witness state (W3/W4). */
+  function eraseScenario(input: {
+    leftVolume?: number;
+    rightVolume: number;
+    theirsVolume?: number;
+  }): Scenario {
+    const base = videoTimeline([
+      mediaClip("A", "mV", 10, 10, 10, { volume: 80 }),
+    ]);
+    let ours = edit(base, { op: "split", clipId: "A", at: t(15) });
+    if (input.leftVolume !== undefined) {
+      ours = edit(ours, {
+        op: "propertyChange",
+        clipId: "A",
+        property: "volume",
+        value: input.leftVolume,
+      });
+    }
+    ours = edit(ours, {
+      op: "propertyChange",
+      clipId: "A@5",
+      property: "volume",
+      value: input.rightVolume,
+    });
+    let theirs = edit(base, {
+      op: "trim",
+      clipId: "A",
+      edge: "end",
+      delta: t(-5),
+    });
+    if (input.theirsVolume !== undefined) {
+      theirs = edit(theirs, {
+        op: "propertyChange",
+        clipId: "A",
+        property: "volume",
+        value: input.theirsVolume,
+      });
+    }
+    return { base, ours, theirs };
+  }
+
+  function volumes(timeline: Timeline): Array<[string, number | undefined]> {
+    return family(timeline, "A").map((clip) => [
+      clip.id,
+      (clip as Clip).properties.volume,
+    ]);
+  }
+
+  it("B1.2/N2-W3: trim-erase B2 is piece-scoped — untouched pieces keep their independent edits", () => {
+    const scenario = eraseScenario({ leftVolume: 30, rightVolume: 40 });
+    const start = needs(startMerge(scenario));
+    const conflict = findConflict(start, 2);
+    expect(conflict.participants.clipIds).toEqual(["A@5"]);
+    // The unanswered draft composes the rest of the family normally.
+    expect(volumes(start.timeline)).toEqual([["A", 30]]);
+    assertCleanAndPositive(start.timeline);
+
+    const afterDelete = ready(choose(scenario, start, conflict, "delete"));
+    expect(volumes(afterDelete.timeline)).toEqual([["A", 30]]);
+    expect(spans(afterDelete.timeline, "A")).toEqual([[0, 5]]);
+
+    const afterClip = ready(choose(scenario, start, conflict, "clip"));
+    expect(volumes(afterClip.timeline)).toEqual([
+      ["A", 30],
+      ["A@5", 40],
+    ]);
+    expect(starts(afterClip.timeline, "A")).toEqual([10, 15]);
+
+    const afterBase = ready(choose(scenario, start, conflict, "base"));
+    expect(volumes(afterBase.timeline)).toEqual([
+      ["A", 30],
+      ["A@5", 80],
+    ]);
+    expect(spans(afterBase.timeline, "A")).toEqual([
+      [0, 5],
+      [5, 5],
+    ]);
+    assertCleanAndPositive(afterBase.timeline);
+  });
+
+  it("B1.2/B3.4/N2-W4: the erasing side's own edits survive and a real divergence on the erased piece becomes B1", () => {
+    const scenario = eraseScenario({ rightVolume: 40, theirsVolume: 50 });
+    const start = needs(startMerge(scenario));
+    const conflict = findConflict(start, 2);
+
+    const afterDelete = ready(choose(scenario, start, conflict, "delete"));
+    expect(volumes(afterDelete.timeline)).toEqual([["A", 50]]);
+
+    const afterBase = ready(choose(scenario, start, conflict, "base"));
+    expect(volumes(afterBase.timeline)).toEqual([
+      ["A", 50],
+      ["A@5", 80],
+    ]);
+
+    // `clip`: the surviving piece's 40-vs-50 divergence surfaces as a B1 —
+    // never silently picks a side (B3.4 honest dynamic discovery).
+    const afterClip = needs(choose(scenario, start, conflict, "clip"));
+    const divergence = findConflict(afterClip, 1, "volume");
+    expect(divergence.participants.clipIds).toEqual(["A@5"]);
+    expect(volumes(afterClip.timeline)).toEqual([["A", 50]]);
+    const resolved = ready(choose(scenario, afterClip, divergence, "ours"));
+    expect(volumes(resolved.timeline)).toEqual([
+      ["A", 50],
+      ["A@5", 40],
+    ]);
+    assertCleanAndPositive(resolved.timeline);
   });
 });
 
@@ -729,6 +987,106 @@ describe("T2-B: atom composition and conflict goldens", () => {
     expect(starts(reverted.timeline, "A")).toEqual([0]);
     expect(maybeClip(reverted.timeline, "D")).toBeUndefined();
   });
+
+  it("B2.1/B2.2/I3: same-edge trims converge on the same value and B1 on different values with all three exact outcomes", () => {
+    const base = videoTimeline([mediaClip("A", "mV", 10, 10, 10)]);
+    const shrinkThree = (timeline: Timeline) =>
+      edit(timeline, { op: "trim", clipId: "A", edge: "end", delta: t(-3) });
+
+    const converged = ready(
+      startMerge({ base, ours: shrinkThree(base), theirs: shrinkThree(base) }),
+    );
+    expect((clipById(converged.timeline, "A") as Clip).timelineRange).toEqual(
+      range(10, 7),
+    );
+    expect((clipById(converged.timeline, "A") as Clip).sourceRange).toEqual(
+      range(10, 7),
+    );
+
+    const scenario = {
+      base,
+      ours: shrinkThree(base),
+      theirs: edit(base, { op: "trim", clipId: "A", edge: "end", delta: t(-5) }),
+    };
+    const start = needs(startMerge(scenario));
+    expect(start.conflicts).toHaveLength(1);
+    const conflict = findConflict(start, 1, "coverage-end");
+    const expected = { ours: range(10, 7), theirs: range(10, 5), base: range(10, 10) };
+    for (const choice of ["ours", "theirs", "base"] as const) {
+      const done = ready(choose(scenario, start, conflict, choice));
+      expect(
+        (clipById(done.timeline, "A") as Clip).timelineRange,
+        choice,
+      ).toEqual(expected[choice]);
+      assertCleanAndPositive(done.timeline);
+    }
+  });
+
+  it("B2.1/I5: move plus trim composes exactly and a branch swap is byte-identical", () => {
+    const base = videoTimeline([mediaClip("A", "mV", 0, 0, 10)]);
+    const moved = edit(base, { op: "move", clipId: "A", newStart: t(30) });
+    const trimmed = edit(base, {
+      op: "trim",
+      clipId: "A",
+      edge: "end",
+      delta: t(-3),
+    });
+    const result = ready(startMerge({ base, ours: moved, theirs: trimmed }));
+    const merged = clipById(result.timeline, "A") as Clip;
+    expect(merged.timelineRange).toEqual(range(30, 7));
+    expect(merged.sourceRange).toEqual(range(0, 7));
+    expect(merged.lineage.span).toEqual(range(0, 7));
+    assertCleanAndPositive(result.timeline);
+    const swapped = ready(startMerge({ base, ours: trimmed, theirs: moved }));
+    expect(JSON.stringify(swapped.timeline)).toBe(
+      JSON.stringify(result.timeline),
+    );
+  });
+
+  it("B2.3/I5: exactly-zero and crossing-negative opposite-edge trims resolve with all three exact outcomes", () => {
+    const base = videoTimeline([mediaClip("A", "mV", 10, 10, 10)]);
+    for (const startCut of [5, 6]) {
+      const scenario = {
+        base,
+        ours: edit(base, {
+          op: "trim",
+          clipId: "A",
+          edge: "start",
+          delta: t(-startCut),
+        }),
+        theirs: edit(base, {
+          op: "trim",
+          clipId: "A",
+          edge: "end",
+          delta: t(-5),
+        }),
+      };
+      const start = needs(startMerge(scenario));
+      const conflict = findConflict(start, 1, "nonpositive-duration");
+      // No clamp and no silent fix: each choice is that side's exact state.
+      const expected = {
+        ours: range(10 + startCut, 10 - startCut),
+        theirs: range(10, 5),
+        base: range(10, 10),
+      };
+      const expectedSpan = {
+        ours: range(startCut, 10 - startCut),
+        theirs: range(0, 5),
+        base: range(0, 10),
+      };
+      for (const choice of ["ours", "theirs", "base"] as const) {
+        const done = ready(choose(scenario, start, conflict, choice));
+        const merged = clipById(done.timeline, "A") as Clip;
+        expect(merged.timelineRange, `${startCut}/${choice}`).toEqual(
+          expected[choice],
+        );
+        expect(merged.lineage.span, `${startCut}/${choice}`).toEqual(
+          expectedSpan[choice],
+        );
+        assertCleanAndPositive(done.timeline);
+      }
+    }
+  });
 });
 
 describe("T2-C: merge machinery goldens", () => {
@@ -751,6 +1109,111 @@ describe("T2-C: merge machinery goldens", () => {
     const dynamic = needs(choose(scenario, start, b1, "base"));
     expect(dynamic.conflicts.map((c) => c.bucket)).toEqual([3]);
     expect(dynamic.counts).toEqual({ resolved: 1, remaining: 1, total: 2 });
+  });
+
+  it("B3.3/I3: keep-ours and keep-theirs on the move-vs-move B1 complete overlap-free with exact placements", () => {
+    for (const [choice, expectedA] of [
+      ["ours", 10],
+      ["theirs", 30],
+    ] as const) {
+      const scenario = spuriousScenario();
+      const start = needs(startMerge(scenario));
+      const b1 = findConflict(start, 1, "timeline-offset");
+      const done = ready(choose(scenario, start, b1, choice));
+      expect(starts(done.timeline, "A"), choice).toEqual([expectedA]);
+      expect(starts(done.timeline, "C"), choice).toEqual([0]);
+      assertCleanAndPositive(done.timeline);
+    }
+  });
+
+  /** C1: base A=[0,10) + C=[20,30); one side splits A and moves a piece onto theirs' moved C. */
+  function splitFamilyOverlapScenario(movedPiece: "A" | "A@5"): Scenario {
+    const base = videoTimeline([
+      mediaClip("A", "mV", 0, 0, 10),
+      mediaClip("C", "mV", 20, 20, 10),
+    ]);
+    let ours = edit(base, { op: "split", clipId: "A", at: t(5) });
+    ours = edit(ours, { op: "move", clipId: movedPiece, newStart: t(40) });
+    const theirs = edit(base, { op: "move", clipId: "C", newStart: t(40) });
+    return { base, ours, theirs };
+  }
+
+  it("B2.2/B1.2/C1: B3 base on a split RIGHT piece restores the whole family to its exact base state", () => {
+    const scenario = splitFamilyOverlapScenario("A@5");
+    const start = needs(startMerge(scenario));
+    expect(start.conflicts.map((c) => c.bucket)).toEqual([3]);
+    const done = ready(choose(scenario, start, findConflict(start, 3), "base"));
+    expect(family(done.timeline, "A").map((c) => c.id)).toEqual(["A"]);
+    expect((clipById(done.timeline, "A") as Clip).timelineRange).toEqual(
+      range(0, 10),
+    );
+    expect((clipById(done.timeline, "A") as Clip).lineage.span).toEqual(
+      range(0, 10),
+    );
+    expect((clipById(done.timeline, "C") as Clip).timelineRange).toEqual(
+      range(20, 10),
+    );
+    assertCleanAndPositive(done.timeline);
+  });
+
+  it("B2.2/B1.2/C1: B3 base on a split LEFT piece leaves no A@5 remnant and no follow-up A-vs-A@5 overlap", () => {
+    const scenario = splitFamilyOverlapScenario("A");
+    const start = needs(startMerge(scenario));
+    const done = ready(choose(scenario, start, findConflict(start, 3), "base"));
+    expect(maybeClip(done.timeline, "A@5")).toBeUndefined();
+    expect(family(done.timeline, "A").map((c) => c.id)).toEqual(["A"]);
+    expect((clipById(done.timeline, "A") as Clip).timelineRange).toEqual(
+      range(0, 10),
+    );
+    expect((clipById(done.timeline, "C") as Clip).timelineRange).toEqual(
+      range(20, 10),
+    );
+    assertCleanAndPositive(done.timeline);
+  });
+
+  it("B3.3/I1: unanswered overlap participants stay withheld from the draft after an unrelated answer", () => {
+    const base = videoTimeline([
+      mediaClip("A", "mV", 0, 0, 10, { volume: 80 }),
+      mediaClip("B", "mV", 30, 30, 10),
+    ]);
+    let ours = edit(base, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "volume",
+      value: 40,
+    });
+    ours = edit(ours, { op: "move", clipId: "B", newStart: t(10) });
+    let theirs = edit(base, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "volume",
+      value: 60,
+    });
+    theirs = edit(
+      theirs,
+      {
+        op: "addClip",
+        trackId: "v1",
+        mediaRefId: "mV",
+        sourceRange: range(50, 10),
+        timelineRange: range(10, 10),
+      },
+      "D",
+    );
+    const scenario = { base, ours, theirs };
+    const start = needs(startMerge(scenario));
+    expect(start.conflicts.map((c) => c.bucket)).toEqual([1, 3]);
+    expect(maybeClip(start.timeline, "B")).toBeUndefined();
+    expect(maybeClip(start.timeline, "D")).toBeUndefined();
+
+    const b1 = findConflict(start, 1, "volume");
+    const after = needs(choose(scenario, start, b1, "ours"));
+    expect(after.conflicts.map((c) => c.bucket)).toEqual([3]);
+    expect(after.counts).toEqual({ resolved: 1, remaining: 1, total: 2 });
+    expect((clipById(after.timeline, "A") as Clip).properties.volume).toBe(40);
+    expect(maybeClip(after.timeline, "B")).toBeUndefined();
+    expect(maybeClip(after.timeline, "D")).toBeUndefined();
+    expect(checkInvariants(after.timeline)).toEqual([]);
   });
 
   it("B3.3/T2-C2: same choices in swapped click order produce byte-identical output", () => {
@@ -949,6 +1412,70 @@ describe("T2-D: identity and equality goldens", () => {
     expect(
       (clipById(result.timeline, "A") as Clip).properties.volume ?? 100,
     ).toBe(100);
+  });
+
+  it("B2.1/B3.1/I2: the same position value in a different key order converges without a false B1", () => {
+    const base = videoTimeline([mediaClip("A", "mV", 0, 0, 10)]);
+    const ours = edit(base, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "position",
+      value: { x: 10, y: 20 },
+    });
+    const theirs = edit(base, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "position",
+      // Same semantic atom, reversed key insertion order.
+      value: JSON.parse('{"y":20,"x":10}') as { x: number; y: number },
+    });
+    const result = ready(startMerge({ base, ours, theirs }));
+    expect(
+      (clipById(result.timeline, "A") as Clip).properties.position,
+    ).toEqual({ x: 10, y: 20 });
+  });
+
+  it("B2.1/B3.1/I2: the same textStyle value in a different key order converges without a false B1", () => {
+    const base = baseTimeline();
+    const ours = edit(base, {
+      op: "propertyChange",
+      clipId: "TX",
+      property: "textStyle",
+      value: { font: "Georgia", size: 60, color: "#00ff00" },
+    });
+    const theirs = edit(base, {
+      op: "propertyChange",
+      clipId: "TX",
+      property: "textStyle",
+      value: JSON.parse(
+        '{"color":"#00ff00","size":60,"font":"Georgia"}',
+      ) as TextClip["textStyle"],
+    });
+    const result = ready(startMerge({ base, ours, theirs }));
+    expect((clipById(result.timeline, "TX") as TextClip).textStyle).toEqual({
+      font: "Georgia",
+      size: 60,
+      color: "#00ff00",
+    });
+  });
+
+  it("B2.1/B2.2/I2: genuinely different position values still produce exactly one B1 on position", () => {
+    const base = videoTimeline([mediaClip("A", "mV", 0, 0, 10)]);
+    const ours = edit(base, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "position",
+      value: { x: 10, y: 20 },
+    });
+    const theirs = edit(base, {
+      op: "propertyChange",
+      clipId: "A",
+      property: "position",
+      value: { x: 11, y: 20 },
+    });
+    const state = needs(startMerge({ base, ours, theirs }));
+    expect(state.conflicts).toHaveLength(1);
+    expect(findConflict(state, 1, "position")).toBeDefined();
   });
 
   it("B3.2/T2-D4: identical merge repeats with byte-identical conflict order and IDs", () => {
