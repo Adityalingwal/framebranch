@@ -8,7 +8,12 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ApiClientError, postBranch, postCommit } from "../src/lib/api-client";
+import {
+  ApiClientError,
+  mutationErrorMessage,
+  postBranch,
+  postCommit,
+} from "../src/lib/api-client";
 import type { RetryHooks } from "../src/lib/api-client";
 
 function jsonResponse(body: unknown): Response {
@@ -77,6 +82,20 @@ describe("api-client — envelope + error mapping", () => {
     await expect(
       postCommit({ branch: "main" }, noopHooks()),
     ).rejects.toMatchObject({ message: "clips would overlap" });
+  });
+
+  it("mutationErrorMessage: an ApiClientError's already-friendly message passes through; anything else is generic", () => {
+    // M8a review finding: mutation onError handlers use this to show a
+    // toast — regression-guard the two cases it must handle.
+    expect(
+      mutationErrorMessage(new ApiClientError("E_BRANCH_EXISTS", "That name is taken.")),
+    ).toBe("That name is taken.");
+    expect(mutationErrorMessage(new Error("network exploded"))).toBe(
+      "Something went wrong.",
+    );
+    expect(mutationErrorMessage("not even an Error")).toBe(
+      "Something went wrong.",
+    );
   });
 });
 
