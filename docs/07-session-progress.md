@@ -609,6 +609,158 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   typecheck/lint green, **287/287 tests** (245 → 279 → 287), 500 + 10,000
   fuzz green seed 1295277908. Har fix ke saath uska regression test, aur
   F1/F2 ke fixes mutation-check se load-bearing saabit kiye gaye.
+- **M6 Benchmarks ✅ DONE (2026-08-05, follow-up round baad updated):** T4 ka
+  locked benchmark format poora band hua — `computeDiff` @1k/10k, FOUR
+  `startMerge` variants @1k/10k (neeche), single-verb `applyCommand`, restore
+  snapshot+replay; method wahi: 3 warm-up + 10 measurement runs → MEDIAN.
+  Owner locks (2026-08-05, do rounds): **Option A** — purane
+  `startMerge @1k/@10k` (standard) rows ka fixture/seed/position kabhi nahi
+  chhua (sirf label mein count add hua); **Option A1** — `startMerge
+  conflict-heavy` ADDITIONAL worst-case row, 100% conflict density: dono
+  sides SAME 5% clips ko SAME atom (property-change `volume`/`opacity`, ya
+  trim-end shorten — `move` explicitly excluded, wo overlap bana sakta hai)
+  par ALAG values se edit karte hain, taaki har edited clip guaranteed
+  Bucket-1 value-conflict bane; **follow-up lock** — AB har merge row apna
+  real `startMerge(...).conflicts.length` label mein dikhata hai (standard,
+  split-heavy, conflict-heavy, independent-edits — sab), kyunki bina count
+  ke merge timing interpret hi nahi ho sakti; report mein "clean merge" /
+  "conflict-free" wording kahin nahi (standard fixture conflict-free nahi
+  hai, measured proof neeche). **Naya independent-edits row** (follow-up,
+  same `applyRandomEdits` par naya `{ excludeMove }` option — default
+  `false` behaviour BYTE-IDENTICAL rakha gaya, verify kiya gaya ki purane
+  standard/split-heavy conflict counts (19/251, 32/338) bilkul same rahe
+  option add karne ke baad): standard timeline, dono sides independent
+  random edits `move` ke bina — ye guaranteed conflict-free NAHI hai (do
+  independent random pickers kabhi-kabhi same clip+atom pe coincide kar
+  sakte hain), isiliye jo bhi real number aaya wahi likha — **0 @1k, 4
+  @10k**.
+  **Saare 8 conflict counts (measured, 1k/10k):** independent-edits 0/4,
+  standard 19/251, split-heavy 32/338, conflict-heavy 50/500 (generator ka
+  `expectedConflicts` aur real count exactly match — 50/50, 500/500).
+  Standard/split-heavy ke total (19/251, 32/338) T4 lock ke ~8-conflict
+  back-of-envelope se zyada lagte hain, lekin bucket-breakdown se pata chala
+  (diagnostic probe, committed nahi): usmein zyada tar `move`-edit se aaye
+  incidental **overlap conflicts (bucket-3)** hain — generator sirf 0–3
+  frame ka gap chhodta hai jabki `move` 1–5 frame shift karta hai, isiliye
+  aksar neighbour se takra jaata hai; genuine **value-conflicts (bucket-1)**
+  sirf 0 @1k aur 5 @10k the, jo brief ke ~8 estimate se close match hai —
+  isi wajah se conflict-heavy generator mein `move` explicitly bahar rakha.
+  **Asli finding (numbers jitna support karte hain utna hi bola, force nahi
+  kiya):** conflict count ka merge time par bahut kam asar hai — 10k par
+  teen flat-timeline variants (independent-edits 4 conflicts = 698.75 ms,
+  standard 251 conflicts = 724.75 ms, conflict-heavy 500 conflicts =
+  687.81 ms) sirf ~5.4% ke andar hain, aur NON-MONOTONIC (500-conflict
+  variant sabse FAST nikla, 4-conflict wale se bhi). Split-heavy (338
+  conflicts, 791.62 ms) sabse slow hai, lekin uska extra time conflict count
+  se correlate nahi karta (338, standard-conflict-heavy ke beech mein hi
+  hai) — uski apni piece-family/refinement complexity (structurally alag
+  fixture) zyada plausible wajah hai. Matlab: merge ki cost clip
+  matching/diff se dominate hoti hai, conflict-resolution se nahi — jitna
+  data support karta hai utna hi. Saath mein `vite-node` devDependency add
+  ki (`packages/engine/package.json`, `^3.2.4` — vitest ke saath same
+  release-line, lockfile mein `3.2.4` resolve hua) — bina iske committed
+  REPORT.md reproducible hi nahi tha. Ek chhota bug pakda-aur-fix kiya
+  isi round mein: labels mein count-suffix add hone ke baad headline ka
+  exact-match `results.find` "startMerge @ 10k" se miss ho gaya tha (report
+  mein "3-way merge in 0 µs" chhap raha tha) — prefix-match (`startsWith`)
+  se fix kiya, re-run se confirm. Fresh run ka headline (committed
+  `REPORT.md` se): **diff @10k = 3.20 ms, merge @10k = 724.75 ms (251
+  conflicts)**, test count **287** (245 se update — M5 ke baad tests badh
+  gaye the). Machine: Apple M3, Darwin 25.6.0 (arm64), 8 GB RAM, Node
+  v20.19.6. Verification: typecheck/lint green, 287/287 tests,
+  `packages/engine/src/**` untouched (engine frozen, benchmarks sirf
+  consumer). Branch `feat/benchmarks`.
+- **M7 (server) pre-implementation locks ✅ DONE (2026-08-05):** paanch
+  decisions Aditya ke saath ek-ek discuss karke locked. **(A) DB layer =
+  Drizzle** — raw SQL rejected (8 tables x ~14 endpoints ka row-mapping
+  boilerplate = bug-farm), Prisma rejected (serverless par bhaari — apna
+  engine binary + cold start). **(B) Server tests ASLI Postgres par** —
+  local = Homebrew Postgres (Docker se halka), CI = GitHub Actions ka apna
+  Postgres service container (koi secret nahi). Nakli/in-memory DB REJECTED:
+  G-group ke paanchon tests hain hi wo cheezein jo DB khud karta hai (unique
+  index, transaction, CAS) — fake par test karna kuch saabit nahi karta.
+  **(C) Tables migration file se** — `drizzle-kit generate` → `.sql` repo mein
+  committed. Direct schema-push rejected: SQL repo mein dikhna chahiye
+  (reviewer ek nazar mein data-model samajh le) aur CI ko khaali DB har run
+  par EK command se bharni hai. **(D) M7 do hisson mein** (incremental-
+  shipping lock): **M7a** = DB connection + 8 tables + project bootstrap
+  (capability-token cookie + `demo.otio` seed + 100-project cap) + tickets +
+  GET timeline/history + POST ops/commit/branch (create+switch + boundary
+  auto-seal) + workingRev CAS → tests G1, G2, G3, G5. **M7b** = merge
+  (start/resolve/abort/finalize + CAS + side-branch) + restore + import/
+  export endpoints + agent/simulate + demo/reset + GET diff → test G4; T5
+  step 5 (coverage + lock-ID gap-script) M7b ke ant mein. **(E) Pehla
+  project `demo.otio` se seed** hoga aur wo fixture file M7a ke saath hi
+  banegi — C8 ki choreography baad mein badle to nuksan zero (ek fixture hi
+  hai), faayda ye ki M5 ka importer asli file par test ho jaata hai.
+  Do chhote technical locks: routes **Node runtime** par (transactions ke
+  liye — docs/09 Item 4a se meil, Edge nahi), aur server tests **route
+  handlers ko seedhe call karenge** (asli DB, koi network/port/running server
+  nahi). Pehle se locked cheezein dobara nahi khuli (Neon, Vercel, Next.js
+  API routes, C3 ke exact columns, C4 ke shapes/envelope/error-list, HLD ke
+  ticket/CAS/auto-seal/snapshot niyam). M7a ka implementation brief ban chuka
+  hai (`briefs/`, gitignored); implementation Opus 5 background agent par.
+- **M8 (UI) pre-implementation locks ✅ DONE (2026-08-05):** UI ka BEHAVIOUR
+  pehle se locked tha (kaunsi screens, conflict Level-2 bars, history 👤/🤖
+  badges, 9-step demo) — ye chhe locks "kaise banega" ke hain, sab ek-ek
+  discuss karke tay hue. **(1) Styling = Tailwind.** shadcn blanket add
+  NAHI; jahan ek-do component (dialog/tabs) sach mein time bachaye wahin utna
+  uthana. Nishaana: kam screens, har screen saaf aur polished (full-stack
+  role hai — UI ki value ginti mein aayegi). **(2) Screens ka dhaancha = EK
+  page + panels, panel ka naam URL mein** (`?view=diff` / `?view=merge`).
+  Alag routes rejected — timeline hamesha saamne rehni chahiye, version
+  control mein wahi asli context hai (diff/merge dekhte waqt clips saamne
+  dikhein). URL isliye ki back-button, direct link aur demo-video recording
+  mein kisi bhi step par seedha pahunchna — teenon kaam karein.
+  **(3) Timeline rendering = DOM divs.** Canvas rejected: PRD 5.4 ka locked
+  demo-size 10-30 clips hai, wahan canvas ka faayda ZERO hai; aur canvas mein
+  hit-testing (click kis clip par pada), hover, tooltip, text-ellipsis,
+  accessibility — sab khud likhna padta, jabki wahi cheezein (clip click,
+  conflict ke 3-layer base/ours/theirs bars, diff highlight) is product ki
+  jaan hain. Scale ka jawab canvas nahi, **virtualization** hai (sirf
+  screen-par-dikhti clips render karo — `react-window` jaisa; PRD 5.4 mein
+  pehle se "talking point"). README limitation likhni hai: engine 10,000
+  clips (benchmark se saabit), UI 10-30 — jaan-boojh ka gap, agla step
+  virtualization hai aur wo engine chhue bina aata hai. **(4) Data fetching =
+  TanStack Query.** Next.js Server Components/Actions rejected — C4 mein ~14
+  endpoints + envelope + error-list already locked hain, actions same kaam ka
+  DOOSRA darwaza bana degi (duplicate). Plain fetch rejected: "is POST ke
+  baad kaunsa data baasi ho gaya" haath se yaad rakhna sabse aam UI bug hai
+  (har op ke baad timeline + pendingCount, commit ke baad history bhi) —
+  `invalidateQueries` us poore bug-class ko khatam karta hai; loading/error/
+  retry bhi built-in. **(5) Optimistic UI = HYBRID.** Chhote aur baar-baar
+  wale kaam (8 edit verbs — move/trim/slip/split/property change) turant
+  screen par; bade aur kabhi-kabhi wale (commit, branch create/switch, merge
+  start/resolve/finalize, restore, import/export, agent-simulate) server ka
+  jawab aane par (wahan spinner turant-chhalaang se BEHTAR lagta hai).
+  Optimistic ka aam khatra — "client ne andaaza lagaya, server ne kuch aur
+  kiya" — yahan hai hi nahi: docs/11 C7 se `apps/web` engine ko import karti
+  hai, to client wahi `applyCommand` chalata hai jo server chalayega (same
+  pure function, same nateeja — andaaza nahi, exact). `E_STALE_REV` par
+  handling pehle se locked hai (docs/11 C4: "UI chupchaap refresh") —
+  optimistic badlav hatao, taaza timeline lo. **Chaar robustness rules bhi
+  LOCKED** (Aditya ki explicit chinta: ek galti poora bug-farm bana degi):
+  (a) **default = server-first**, optimistic sirf ek **opt-in list** se aur wo
+  list EK hi file mein — naya action list mein daalna bhool gaye to wo apne
+  aap safe (server-first) taraf girta hai, khatarnak taraf nahi; bikhri hui
+  `if` conditions kahin nahi; (b) optimistic ka nateeja **engine se hi**
+  (`applyCommand`), koi hand-written shortcut nahi — shortcut hi pehla bug
+  hoga; (c) saare mutations **EK hi wrapper** se guzrenge — rollback, refetch
+  aur `E_STALE_REV` handling ek jagah, har action mein dobara nahi; (d)
+  **server ka jawab hamesha aakhri sach** — jawab aate hi client wala
+  timeline hata ke server wala rakho, chahe dono same hi kyun na hon (farak
+  kabhi jama na ho sake). Plus ek test: same command par optimistic ka
+  nateeja == server ka nateeja — ye rule (b) ka pehredaar hai, aur likhna
+  aasan hai kyunki dono ek hi function chalate hain. **(6) Thumbnails =
+  pehle se bani images** — har media fixture ke saath ek chhoti `.jpg`
+  (media waise bhi URL-fixtures hain, HLD #12/#13). Browser mein runtime par
+  video se frame nikalna rejected: teen jagah fail ho sakta (load/seek/
+  draw) + pehle khaali dabba phir picture ka flicker, aur faayda chhota;
+  "koi thumbnail nahi" PRD 5.1 ka lock todta. Known limitation (README mein
+  likhni hai): ek media ka ek hi thumbnail, to split ke dono tukdon par wahi
+  picture dikhegi.
+  **NEXT:** M7a implementation (Opus 5 background agent, brief ready) → M7b
+  → M8 → M9.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

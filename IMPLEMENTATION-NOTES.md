@@ -488,3 +488,98 @@ against O9's literal "treat as video" sentence but is the self-consistent
 behaviour — a video-kind media on an audio lane is exactly what N1 forbids.
 Goes in the README limitations note alongside the extension-sniffing
 assumption and the NTSC (23.976/29.97) rate limitation.
+
+## 2026-08-05 — M6 benchmarks
+
+Trivial code-level choices made while closing the four T4 benchmark gaps
+(`vite-node` devDependency, conflict-heavy fixtures, hardcoded test count,
+docs). No `packages/engine/src/**` file was touched (engine frozen for this
+task):
+
+- **`vite-node` version specifier: `^3.2.4`** — matches the installed
+  `vitest@^3.2.4` release train per the brief's instruction. It resolved
+  cleanly to `3.2.4` in `pnpm-lock.yaml`, the exact version already present
+  transitively, so no fallback/deviation was needed.
+- **Conflicting-edit atom priority (in `generateConflictingPair`,
+  `benchmarks/generator.mjs`): `volume` → `opacity` → trim-end shorten.**
+  `move` is excluded entirely, per the brief — the standard generator only
+  leaves 0–3 frame gaps between clips while `move` shifts 1–5 frames, so it
+  can create an overlap and invalidate the fixture. This was confirmed
+  empirically as the real explanation for why the OLD (non-conflict-heavy)
+  `startMerge @1k/@10k` fixtures show a much higher total conflict count
+  (19 @1k, 251 @10k) than the brief's back-of-envelope ~8 estimate: broken
+  down by bucket, almost all of those are bucket-3 overlap conflicts caused
+  by `move`, not bucket-1 value conflicts (only 0 @1k / 5 @10k are genuine
+  value conflicts — that part matches the brief's estimate closely). See the
+  docs/07 2026-08-05 entry for the full numbers.
+- **Clip eligibility for the trim-end atom:** `timelineRange.duration.value
+  > 3` (not `> 2`, like the existing `applyRandomEdits` trim) — the
+  conflict-heavy trim shortens by 1 frame on `ours` and 2 frames on
+  `theirs` (brief's own example), so both need to stay positive after their
+  respective shorten. Text clips have no `properties` object at all, so
+  they fall through to this branch automatically (no special-casing
+  needed); a clip with neither an eligible property nor a long-enough
+  duration is skipped, not forced. The generator returns the REAL applied
+  count as `expectedConflicts`, cross-checked in `run.mjs` against the
+  actual `startMerge(...).conflicts.length` at runtime — both matched
+  exactly (50/50 @1k, 500/500 @10k), so no discrepancy to report there.
+- **Different-value formula:** property atoms use `ours = (base + 37) %
+  101`, `theirs = (base + 71) % 101` — guaranteed distinct from the base
+  value and from each other (37 ≠ 0, 71 ≠ 0, 37 ≠ 71, all mod 101), and
+  stays in the valid 0–100 range. Trim-end uses the brief's literal
+  example (`-1` / `-2`).
+- **`checkInvariants` fallback used (not the primary path):** it is not
+  re-exported from `packages/engine/src/index.ts` (only `applyCommand`,
+  `computeDiff`, `applyChoice`, `finalizeCheck`, `startMerge`,
+  `exportOtio`, `importOtio` are public), so per the brief's explicit
+  fallback, fixture validity is asserted via an untimed `startMerge(...).ok
+  === true` probe before the timed measurement loop, rather than importing
+  the internal invariant checker directly.
+- **Fresh seed `909`** used for `generateConflictingPair` at both scales
+  (not reusing 101/202/301/402, per the brief's determinism rule).
+- **Hardcoded test count (`run.mjs` headline) updated 245 → 287 by hand**,
+  per the owner's explicit "keep it hand-maintained, do not count
+  programmatically" instruction. Ran `pnpm test` from the repo root: 287
+  passed (matches the M5 entry's final count in docs/07).
+
+### 2026-08-05 — M6 follow-up (independent-edits fixture + per-row conflict counts)
+
+Same-day follow-up after the owner triaged the value/overlap-bucket finding
+above. Still zero `packages/engine/src/**` changes:
+
+- **`applyRandomEdits` options argument, `{ excludeMove = false } = {}`,
+  designed for zero effect on existing call sites:** when `excludeMove` is
+  false (every pre-existing caller), the function makes exactly the same
+  `rng` calls in exactly the same order as before the option existed — the
+  `excludeMove` branch only executes (and only then makes its one extra
+  `rng.int(0, 1)` call to remap `move` → trim/property) when a caller
+  explicitly opts in. Verified empirically, not just by inspection: probed
+  the standard and split-heavy fixtures' real `startMerge(...).conflicts.length`
+  before and after this change — both identical (19/251 standard, 32/338
+  split-heavy).
+- **New seeds `1111`/`2222`** for the independent-edits `ours`/`theirs` pair
+  (not reusing 101/202/301/402/909). Picked before ever running the
+  benchmark — not tuned after seeing the result. Measured conflict count:
+  0 @1k, 4 @10k (not forced to 0, per the brief's explicit instruction not
+  to hunt for a zero-conflict seed).
+- **Row name `startMerge independent-edits`, not "zero-conflict" or
+  "clean"**: two independently-random edit sequences can coincidentally
+  land on the same clip and atom (and did, at 10k: 4 conflicts), so a name
+  implying a guarantee would be inaccurate. Same reasoning killed "clean
+  merge"/"conflict-free" wording everywhere in the report template — the
+  standard fixture is not conflict-free either (19/251 measured).
+- **All merge-row labels now carry their real conflict count** via a shared
+  `probeConflictCount(label, fixture)` helper (one untimed `startMerge`
+  call before the timed `measure()` loop) — factored out once conflict-heavy,
+  standard, split-heavy, AND independent-edits all needed the identical
+  probe-and-throw-on-!ok pattern.
+- **Bug found and fixed in the same pass:** the report's headline built its
+  "3-way merge in X ms" number via `results.find(r => r.label === "startMerge
+  @ 10k")`. Adding the conflict-count suffix to every label (e.g. `"startMerge
+  @ 10k (251 conflicts)"`) broke that exact match, so the headline silently
+  fell through to `?? 0` and printed "3-way merge in 0 µs" on the first
+  post-change run. Fixed by matching on `label.startsWith("startMerge @
+  10k")`, which is unambiguous against the other three variants' different
+  prefixes (`startMerge split-heavy @`, `startMerge conflict-heavy @`,
+  `startMerge independent-edits @`). Caught by actually reading the
+  generated `REPORT.md` after the change, not assumed correct.

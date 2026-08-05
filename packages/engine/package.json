@@ -9,10 +9,12 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --exclude tests/fuzz.test.ts",
-    "fuzz": "node tests/run-fuzz.mjs"
+    "fuzz": "node tests/run-fuzz.mjs",
+    "benchmark": "pnpm exec vite-node benchmarks/run.mjs"
   },
   "devDependencies": {
     "typescript": "^5.9.3",
+    "vite-node": "^3.2.4",
     "vitest": "^3.2.4"
   }
 }

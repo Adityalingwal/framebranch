@@ -2,14 +2,15 @@
 
 > For every agent (Claude Code, Codex, or human) working on this repo.
 > Read THIS file first. It tells you what to read, what to skip, and which
-> document wins when two seem to disagree. Last updated: 2026-08-04
-> (M1-M3 implemented, reviewed, and merged; next = M4).
+> document wins when two seem to disagree. Last updated: 2026-08-05
+> (M1-M5 implemented, reviewed, and merged; M6 benchmarks on
+> `feat/benchmarks`; next = M7a server).
 
 ## The 10-second version
 
-- Design is 100% LOCKED. M1-M3 are merged on `main`; M4 is next.
+- Design is 100% LOCKED. M1-M5 are merged on `main`; M6 (benchmarks) is on
+  `feat/benchmarks`; M7a (server, first half) is next.
 - CANONICAL SET (read these): 07 → 11 → 12 → 09 → 13 → 15.
-- Current M4 derived handoff: read 16 after that canonical set.
 - Everything else is background or superseded — do NOT treat as authority.
 - Locked decisions are FINAL. If implementation seems to need something a
   doc doesn't answer, do NOT invent — report back (no improvised guesses).
@@ -25,10 +26,23 @@
 | 13-codex-final-review.md | Final review: 14 findings + 3 questions, ALL RESOLVED (top section) | Understanding why an amendment exists |
 | 15-codex-code-review-m2-m3.md | M2/M3 implementation review + owner triage; I1 deferred to M4 and I4 to M7 | Starting M4/M7 or auditing why M2/M3 code was accepted |
 
-Current milestone handoff (derived, not higher authority):
+Historical milestone handoff (derived, not higher authority):
 `16-m4-implementation-brief.md` maps the locked M4 scope, API, tests, fuzz, and
-I1 closure gate into implementation order. Read it after the canonical set; an
-amended canonical lock always wins if wording ever drifts.
+I1 closure gate into implementation order. M4 is done and merged; keep this
+only for auditing why M4 was built the way it was. An amended canonical lock
+always wins if wording ever drifts.
+
+Current milestone (2026-08-05): **M1-M5 merged; M6 benchmarks complete on
+`feat/benchmarks`; M7a (server, first half) is next.**
+Per-milestone locks live in the canonical docs, not in separate brief files:
+- M5 (OTIO) — docs/11's "M5 — OTIO import/export locks (O1-O10)" section
+  (semantics + public API shapes) and docs/12's "M5 (OTIO) test additions"
+  (group H, 11 goldens).
+- M6 (benchmarks) — docs/12's T4 lock; the M6 entry in docs/07 records the
+  Option A / A1 fixture locks and the per-row conflict-count rule.
+- M7 + M8 — the "M7 (server) pre-implementation locks" and "M8 (UI)
+  pre-implementation locks" entries in docs/07's CODE PHASE list. M7a's
+  implementation brief lives in `briefs/` (gitignored, local-only).
 
 Current milestone (2026-08-04): **M4 merged; M5 = OTIO import/export.**
 M5's locks live in canonical docs, not a separate brief file: docs/11's
