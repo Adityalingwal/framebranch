@@ -44,6 +44,11 @@ Per-milestone locks live in the canonical docs, not in separate brief files:
   pre-implementation locks" entries in docs/07's CODE PHASE list. M7a's
   implementation brief lives in `briefs/` (gitignored, local-only).
 
+Current milestone (2026-08-04): **M4 merged; M5 = OTIO import/export.**
+M5's locks live in canonical docs, not a separate brief file: docs/11's
+"M5 — OTIO import/export locks (O1-O10)" section (semantics + public API
+shapes) and docs/12's "M5 (OTIO) test additions" (group H, 11 goldens).
+
 ## Precedence rules (when texts seem to conflict)
 
 1. A block tagged `[AMENDED ...]`, `[ADDED ...]`, or `[Qx clarification ...]`
