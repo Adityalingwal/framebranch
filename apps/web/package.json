@@ -1,0 +1,31 @@
+{
+  "name": "@framebranch/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "node scripts/migrate.mjs"
+  },
+  "dependencies": {
+    "@framebranch/engine": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "next": "16.3.0",
+    "postgres": "^3.4.9",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@types/react": "^19.2.0",
+    "drizzle-kit": "^0.31.10",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,249 @@
+{
+  "OTIO_SCHEMA": "Timeline.1",
+  "name": "FrameBranch demo",
+  "global_start_time": {
+    "OTIO_SCHEMA": "RationalTime.1",
+    "rate": 24,
+    "value": 0
+  },
+  "metadata": {},
+  "tracks": {
+    "OTIO_SCHEMA": "Stack.1",
+    "name": "tracks",
+    "markers": [],
+    "effects": [],
+    "metadata": {},
+    "children": [
+      {
+        "OTIO_SCHEMA": "Track.1",
+        "name": "Video",
+        "kind": "Video",
+        "markers": [],
+        "effects": [],
+        "metadata": {},
+        "children": [
+          {
+            "OTIO_SCHEMA": "Clip.1",
+            "name": "A — interview",
+            "source_range": {
+              "OTIO_SCHEMA": "TimeRange.1",
+              "start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 0
+              },
+              "duration": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 240
+              }
+            },
+            "media_reference": {
+              "OTIO_SCHEMA": "ExternalReference.1",
+              "target_url": "/media/interview.mp4",
+              "available_range": {
+                "OTIO_SCHEMA": "TimeRange.1",
+                "start_time": {
+                  "OTIO_SCHEMA": "RationalTime.1",
+                  "rate": 24,
+                  "value": 0
+                },
+                "duration": {
+                  "OTIO_SCHEMA": "RationalTime.1",
+                  "rate": 24,
+                  "value": 480
+                }
+              },
+              "metadata": {}
+            },
+            "effects": [],
+            "markers": [],
+            "metadata": {}
+          },
+          {
+            "OTIO_SCHEMA": "Clip.1",
+            "name": "B — b-roll",
+            "source_range": {
+              "OTIO_SCHEMA": "TimeRange.1",
+              "start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 0
+              },
+              "duration": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 192
+              }
+            },
+            "media_reference": {
+              "OTIO_SCHEMA": "ExternalReference.1",
+              "target_url": "/media/broll.mp4",
+              "available_range": {
+                "OTIO_SCHEMA": "TimeRange.1",
+                "start_time": {
+                  "OTIO_SCHEMA": "RationalTime.1",
+                  "rate": 24,
+                  "value": 0
+                },
+                "duration": {
+                  "OTIO_SCHEMA": "RationalTime.1",
+                  "rate": 24,
+                  "value": 360
+                }
+              },
+              "metadata": {}
+            },
+            "effects": [],
+            "markers": [],
+            "metadata": {}
+          },
+          {
+            "OTIO_SCHEMA": "Clip.1",
+            "name": "C — logo",
+            "source_range": {
+              "OTIO_SCHEMA": "TimeRange.1",
+              "start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 0
+              },
+              "duration": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 96
+              }
+            },
+            "media_reference": {
+              "OTIO_SCHEMA": "ExternalReference.1",
+              "target_url": "/media/logo.png",
+              "available_range": null,
+              "metadata": {}
+            },
+            "effects": [],
+            "markers": [],
+            "metadata": {}
+          }
+        ]
+      },
+      {
+        "OTIO_SCHEMA": "Track.1",
+        "name": "Audio",
+        "kind": "Audio",
+        "markers": [],
+        "effects": [],
+        "metadata": {},
+        "children": [
+          {
+            "OTIO_SCHEMA": "Clip.1",
+            "name": "Music bed",
+            "source_range": {
+              "OTIO_SCHEMA": "TimeRange.1",
+              "start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 0
+              },
+              "duration": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 528
+              }
+            },
+            "media_reference": {
+              "OTIO_SCHEMA": "ExternalReference.1",
+              "target_url": "/media/music.wav",
+              "available_range": {
+                "OTIO_SCHEMA": "TimeRange.1",
+                "start_time": {
+                  "OTIO_SCHEMA": "RationalTime.1",
+                  "rate": 24,
+                  "value": 0
+                },
+                "duration": {
+                  "OTIO_SCHEMA": "RationalTime.1",
+                  "rate": 24,
+                  "value": 600
+                }
+              },
+              "metadata": {}
+            },
+            "effects": [],
+            "markers": [],
+            "metadata": {}
+          }
+        ]
+      },
+      {
+        "OTIO_SCHEMA": "Track.1",
+        "name": "Captions",
+        "kind": "Video",
+        "markers": [],
+        "effects": [],
+        "metadata": {
+          "framebranch": {
+            "kind": "text"
+          }
+        },
+        "children": [
+          {
+            "OTIO_SCHEMA": "Gap.1",
+            "name": "Filler",
+            "source_range": {
+              "OTIO_SCHEMA": "TimeRange.1",
+              "start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 0
+              },
+              "duration": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 24
+              }
+            },
+            "effects": [],
+            "markers": [],
+            "metadata": {}
+          },
+          {
+            "OTIO_SCHEMA": "Clip.1",
+            "name": "Caption — Welcome",
+            "source_range": {
+              "OTIO_SCHEMA": "TimeRange.1",
+              "start_time": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 0
+              },
+              "duration": {
+                "OTIO_SCHEMA": "RationalTime.1",
+                "rate": 24,
+                "value": 72
+              }
+            },
+            "media_reference": {
+              "OTIO_SCHEMA": "MissingReference.1",
+              "name": "",
+              "available_range": null,
+              "metadata": {}
+            },
+            "effects": [],
+            "markers": [],
+            "metadata": {
+              "framebranch": {
+                "kind": "text",
+                "textContent": "Welcome",
+                "textStyle": {
+                  "font": "Arial",
+                  "size": 48,
+                  "color": "#ffffff"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

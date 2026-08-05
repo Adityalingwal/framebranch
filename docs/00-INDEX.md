@@ -3,13 +3,13 @@
 > For every agent (Claude Code, Codex, or human) working on this repo.
 > Read THIS file first. It tells you what to read, what to skip, and which
 > document wins when two seem to disagree. Last updated: 2026-08-05
-> (M1-M5 implemented, reviewed, and merged; M6 benchmarks on
-> `feat/benchmarks`; next = M7a server).
+> (M1-M6 implemented, reviewed, and merged — M6 benchmarks merged into
+> `main` via PR #5, merge commit `a96c47f`; current = M7a server).
 
 ## The 10-second version
 
-- Design is 100% LOCKED. M1-M5 are merged on `main`; M6 (benchmarks) is on
-  `feat/benchmarks`; M7a (server, first half) is next.
+- Design is 100% LOCKED. M1-M6 are merged on `main` (M6 = benchmarks,
+  PR #5 / `a96c47f`); M7a (server, first half) is the current milestone.
 - CANONICAL SET (read these): 07 → 11 → 12 → 09 → 13 → 15.
 - Everything else is background or superseded — do NOT treat as authority.
 - Locked decisions are FINAL. If implementation seems to need something a
@@ -32,8 +32,8 @@ I1 closure gate into implementation order. M4 is done and merged; keep this
 only for auditing why M4 was built the way it was. An amended canonical lock
 always wins if wording ever drifts.
 
-Current milestone (2026-08-05): **M1-M5 merged; M6 benchmarks complete on
-`feat/benchmarks`; M7a (server, first half) is next.**
+Current milestone (2026-08-05): **M1-M6 merged on `main` (M6 benchmarks via
+PR #5, merge commit `a96c47f`); M7a (server, first half) in progress.**
 Per-milestone locks live in the canonical docs, not in separate brief files:
 - M5 (OTIO) — docs/11's "M5 — OTIO import/export locks (O1-O10)" section
   (semantics + public API shapes) and docs/12's "M5 (OTIO) test additions"

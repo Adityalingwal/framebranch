@@ -761,6 +761,107 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   picture dikhegi.
   **NEXT:** M7a implementation (Opus 5 background agent, brief ready) → M7b
   → M8 → M9.
+- **M7a server foundation ✅ DONE (2026-08-05):** naya `apps/web` (Next.js
+  16.3.0, App Router, **sirf API routes — koi UI nahi**, wo M8 hai);
+  `pnpm-workspace.yaml` mein ab `apps/*` bhi. **DB:** Drizzle schema mein
+  C3 ke **8/8 tables** + F1 ke `project_id` columns, aur committed migration
+  `apps/web/drizzle/0000_hesitant_vanisher.sql` — khaali DB EK command se
+  bharti hai (`pnpm --filter @framebranch/web db:migrate`). Locked indexes
+  saare maujood (verify kiya `pg_indexes` se): `branches(project_id,name)`,
+  `ops(commit_id,seq)`, `snapshots(commit_id)`, `working_state(branch_id)`,
+  `tickets(project_id,endpoint,ticket)` unique + har table par `project_id`.
+  `snapshots` mein `schema_version` NAHI (C5). Har table `projects` se
+  `ON DELETE CASCADE` — project delete par 7 tables mein orphan bachta hi
+  nahi (test se verify). **Fixture:** naya `apps/web/fixtures/demo.otio`
+  (24fps, 3 tracks video/audio/text, 5 clips A/B/C + music + caption
+  "Welcome", saath mein agent ke clip-D wala b-roll media) — M5 ke asli
+  `importOtio` se **zero warnings** par import hota hai (test, eyeball
+  nahi). **Bootstrap:** cookie nahi → naya project + 256-bit owner_token
+  (HttpOnly cookie) + demo seed + import-commit (Q1: hamesha full snapshot,
+  `snapshot_distance = 0`) + `main` branch + working_state (`working_rev`
+  0 se shuru, kabhi reset nahi); `project_rate` imported OTIO se (A1.2),
+  hardcode kahin nahi; 100-project cap inline sweep (HLD #15). **Endpoints
+  (C4 envelope `{ok,data}` / `{ok,error:{code,message}}`, error codes sirf
+  C4 list se):** GET timeline (base + pending replay), GET history
+  (`import_warnings` samet — F7), POST ops (workingRev CAS, F9 no-change
+  counter nahi badhta), POST commit (pending → `ops` rows seq-order,
+  snapshot cadence har 10th), POST branch (create+switch), POST
+  branch/switch — dono boundary par dirty ho to auto-seal (Item 6a(4)),
+  poora composite EK transaction (#16(1)). Tickets = shared register, same
+  ticket+same endpoint → stored result, alag endpoint → `E_TICKET_REUSED`
+  (F2: koi payload compare nahi), 24h TTL inline. Naam sirf deterministic
+  templates (Item 6a(5)), AI kahin nahi. **Evidence:** typecheck + lint
+  green; tests **287 (engine, waise ke waise) + 21 (server) = 308**; G1/G2/
+  G3/G5 asli Postgres par (local Homebrew 14.17, CI par GitHub ka apna
+  Postgres service container — `gate` job mein migration step add hua,
+  `gate`/`fuzz` parallel structure bilkul unchanged, T5 step 5 abhi bhi
+  TODO(M7b)). Teen mutation-checks se saabit kiya ki G-tests load-bearing
+  hain: ticket-replay hataya → G1+G2 red; auto-seal hataya → G3 red;
+  `loadBranch` se `project_id` predicate hataya → G5 red (teenon revert,
+  phir 21/21 green). `packages/engine/src/**` bilkul untouched (`git diff
+  --stat` khaali). G4 + merge/restore/import/export/agent/demo-reset/diff
+  jaan-boojh ke NAHI banaye — wo M7b hain, stub bhi nahi. Do gaps report
+  kiye gaye (invent nahi kiye): C4 list mein "malformed request body" aur
+  "branch name pehle se hai" ka koi apna code nahi — dono ke liye
+  `E_INVALID_VALUE` use hua, aur unexpected server exception ke liye koi
+  generic code banaya hi nahi gaya. [In teenon ka nipatara neeche wale
+  triage entry mein ho chuka hai.] Branch: `feat/server`.
+- **M7a independent review + owner triage + fix pass ✅ DONE (2026-08-05):**
+  review ek doosre model (**Fable 5**) se, read-only, har finding ka runtime
+  witness + locked-doc citation zaroori — role-swap kayam (jo implement kare
+  wo review na kare). **Review clean nikla: sirf 2 findings, dono LOW, koi
+  CRITICAL/HIGH nahi.** Reviewer ne suite khud chalayi (308/308) aur brief ke
+  aathon khatre wale hisse — ticket idempotency, workingRev CAS + F9,
+  timeline reconstruction + snapshot cadence, boundary auto-seal, project
+  isolation (har query ka `project_id` predicate ek-ek karke), C3 schema
+  column-by-column, envelope/error-codes, aur test-quality — **sahi paye**;
+  report ki 17 assumptions mein se 16 code se meil khaati mili.
+  Review agent ko implementation ki findings-file PEHLE se di gayi thi taaki
+  wo pata-hui cheezein dobara "finding" bana ke na laaye (naya standing
+  workflow). **Kul 6 cheezein triage hui** (2 review se + 4 jo M7a ne khud
+  flag ki thi) — ek bhi asli bug NAHI, sab decision-level; har ek Aditya ke
+  saath ek-ek discuss hui, phir SAB ek hi pass mein fix hue (inline, kyunki
+  chhote fixes the):
+  **(1) `tickets.ticket` par apna UNIQUE index** (migration `0001_bitter_
+  agent_zero.sql`) — C3 (8) literally "UNIQUE index — do baar entry DB-level
+  impossible" kehta hai, par sirf composite key thi; reviewer ne chala ke
+  dikhaya ki do concurrent client SAME ticket ko do alag endpoint par daal
+  dete the aur `E_TICKET_REUSED` aata hi nahi tha. Ticket `crypto.randomUUID()`
+  hai (C6) — waise bhi globally unique — to DB ko wahi sach bata diya.
+  **(2) Index-census theek kiya** (review F2) — notes kehte the "sirf ye do
+  index locked list se bahar hain" jabki **chaar** hain (`commits.parent_id`
+  aur `tickets.created_at` bhi). Index sahi the, **disclosure** galat thi.
+  Sirf docs.
+  **(3) Naya `E_BAD_REQUEST`** (docs/11 C4(5) amendment) — kharab JSON /
+  union se bahar ka command / missing field pehle `E_INVALID_VALUE` udhaar
+  lete the, jo ek VERB code hai. Lakeer ab saaf: **darwaze par (Zod) reject =
+  `E_BAD_REQUEST`, engine ne reject ki = us verb ka apna code.** Nateeja jo
+  jaan-boojh ke liya: whitelist-range ki galti (volume 150) Item 12 ke
+  mutabik darwaze par hi rukti hai, isliye ab wo bhi `E_BAD_REQUEST` hai —
+  batwara "kisne reject kiya" par hai, "kaisi galti thi" par nahi. UI par
+  asar zero (slider 0-100 hi bhejta hai).
+  **(4) Naya `E_BRANCH_EXISTS`** — behaviour bilkul unchanged (duplicate
+  branch pehle bhi nahi banti thi, C3 ke locked unique index ki wajah se),
+  ye sirf MESSAGE ka fix hai: UI ab "ye naam already le liya gaya hai" keh
+  sakti hai, "invalid value" ki jagah.
+  **(5) Naya `E_INTERNAL`** — anjaan crash ab bhi envelope mein aata hai;
+  iske bina wo C4(1) se poora bahar nikal jaata tha aur UI ka ek-hi-reader
+  raw platform-500 se takraata. Andar ka message client ko kabhi nahi
+  jaata (server par log) — stack trace / connection string leak nahi.
+  **(6) `demo.otio` ka clip C ab `logo.png` = IMAGE** (`available_range:
+  null`, O1) — C8 ki fixture-line "3 chhoti videos" kehti thi par usi doc
+  ka O1 wala hissa isi clip ke liye "logo.png" likhta hai, yani line apne
+  aap se ulti thi (docs/11 C8 amend). Ab demo O1 (aseem image-lambai) aur
+  O3 (image par slip = `E_NOT_APPLICABLE`) sach mein chalata hai, sirf
+  engine ke goldens par nirbhar nahi. 9-step choreography unchanged.
+  **Evidence:** typecheck + lint green; tests **287 engine + 30 server =
+  317** (21 → 30: naya `triage.test.ts` ke 8 + ops ka 1); dono naye error-
+  code raaste aur ticket ka DB-level block regression tests se pakke;
+  `packages/engine/src/**` ab bhi bilkul untouched. Amendments: docs/11
+  C4(5) (teen transport codes, ginti 14 verb + 9 system + 3 transport,
+  naya CONCEPT zero) aur C8 (logo = image). Branch: `feat/server`.
+  **NEXT:** M7b — brief mein likhna hai ki teen naye codes pehle se maujood
+  hain aur naye endpoints unhi patterns par banenge.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

@@ -9,6 +9,8 @@ export default tseslint.config(
       "**/node_modules/",
       "**/dist/",
       "**/coverage/",
+      "**/.next/", // Next.js build output (M7a)
+      "apps/web/drizzle/", // drizzle-kit output, regenerated from schema.ts
       "docs/",
       "archive/",
     ],
