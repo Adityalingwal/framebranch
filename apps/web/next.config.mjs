@@ -1,5 +1,6 @@
 /**
- * Next.js config — API routes only in M7a (no UI; that is M8).
+ * Next.js config — API routes (M7) + the UI (M8a: shell/timeline/history;
+ * M8b: diff/merge panels).
  *
  * `transpilePackages` is needed because @framebranch/engine is published
  * inside the workspace as TypeScript source (its `exports` points at
