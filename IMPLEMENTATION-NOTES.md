@@ -775,3 +775,66 @@ triaged with the owner one at a time. All six were applied in one pass on
 Evidence for the whole pass: typecheck green, lint green, **287 engine + 30
 server = 317 tests** green against real Postgres, `packages/engine/src/**`
 untouched.
+
+## 2026-08-05 — Milestone 7b (merge / restore / import / export / agent / demo-reset / diff + G4 + CI step 5)
+
+Assumptions and local calls made while implementing M7b. Anything
+design-level is **reported**, not decided — those items are listed at the end
+of this section and in the M7b findings, and they are still open questions
+for owner triage.
+
+**Trivial tooling / fixture details decided locally:**
+
+1. **`GET diff` query parameters are `from` and `to`.** C4 (2) only says "do
+   commits ke beech". These read in the same direction as the sentences and
+   match `POST branch/switch`'s existing `from`/`to` vocabulary.
+2. **New commit-name templates** (all in `server/naming.ts`, all
+   deterministic — Item 6a(5)): `Auto — before merge`, `Auto — before
+   restore`, `Auto — before agent run`, `Auto — before import`, `Auto —
+   before export` (the last is fixed verbatim by docs/09 #4);
+   `Merged "<from>" into "<into>"`; `Restored version "<name>"` (docs/09
+   Item 6c's own wording); `Agent run — "<script>"` (Item 6a(2): "script ka
+   naam"); `Imported timeline` for a user-supplied `POST import` (the seed
+   import keeps its own `Imported "demo.otio"`).
+3. **`merge_attempts.status` vocabulary = exactly one value, `"open"`.**
+   C3 says the row is DELETED on finalize and on abort, so a stored row can
+   only ever be awaiting resolution. A "resolved"/"aborted" value would be a
+   soft delete, which docs/09 triage #1 explicitly rejected.
+4. **The C8 agent script's B end-trim is 2 s.** C8 locks the four edits and
+   writes out clip D's full command, but never fixes the trim's size; 2 s is
+   a real shortening that stays inside the clip.
+5. **The two branches in `POST merge` are locked in sorted-name order**, so
+   two merges running in opposite directions queue instead of deadlocking.
+6. **`findMergeBase` breaks ties by commit id, never by `created_at`.** Two
+   commits written in one transaction share `now()`, so a timestamp order is
+   not total; the id is a content hash and is stable everywhere.
+7. **Coverage is scoped to `src/**`** in both packages' `coverage` scripts,
+   so the report is about product code rather than benchmark and fuzz
+   harness files. Report-only, no threshold (owner's T5 step-5 call).
+8. **The lock-ID gap-script's exclusion list** (`scripts/lock-id-gap-check.mjs`)
+   holds five ids, each with a written reason: `A3` (a meta-lock about
+   contract FORMAT), `A2.2` / `A2.3` (type-shape locks, compiler-enforced;
+   their runtime half is the invariant list tested under B2.3), `BC.6` (a
+   documentation wording fix that records "numbers/design/UI unchanged") and
+   `C5` (schemaVersion was cut entirely). Everything else docs/11 and
+   docs/12 yield is in scope and has at least one test; `C6` did not, so
+   `apps/web/tests/tickets.test.ts` was added rather than the lock excused.
+
+**Reported, NOT decided (open for owner triage — see the M7b findings):**
+
+- C8's clip-D `addClip` at 0:20 collides with the demo fixture's clip C
+  (18 s–22 s) on the agent's own branch, so the locked script cannot run on
+  a pristine project. Nothing was changed; the mismatch is reported with a
+  runtime witness.
+- `POST import` updates `projects.project_rate` from the imported file
+  (A1.2 read literally). A file with a different rate leaves the project
+  holding two rates across its history.
+- C4 has no "commit not found" code; `restore` and `GET diff` use
+  `E_BAD_REQUEST` for an unknown/foreign commit id.
+- C4 has no "merge attempt not found" code; `merge/resolve` and
+  `merge/abort` use `E_MERGE_PRECONDITION`.
+- C3's `tickets.endpoint` list omits `merge-abort`, which C4 (4) requires.
+- Finalizing a merge onto a branch that has acquired PENDING edits since the
+  merge started is refused with `E_STALE_HEAD`; the docs answer only the
+  moved-head case explicitly.
+- `POST merge` refuses `from === into` at the door with `E_BAD_REQUEST`.

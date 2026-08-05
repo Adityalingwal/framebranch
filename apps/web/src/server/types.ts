@@ -21,6 +21,26 @@ export type PendingOp = {
   command: Command;
 };
 
-/** C3's `tickets.endpoint` values — the locked list, M7a's subset used here. */
+/**
+ * C3 (8)'s `tickets.endpoint` vocabulary. C3 lists:
+ * ops / commit / merge / merge-resolve / import / export / agent-run /
+ * branch-create / branch-switch / demo-reset / restore.
+ *
+ * ⚠ `merge-abort` is NOT in C3's list, but C4 (4) says every mutating
+ * endpoint carries a ticket and merge/abort is a mutating endpoint (the
+ * DISCARD category, docs/09 #5). It is added here and REPORTED as a
+ * one-word documentation omission for owner triage — not a design change.
+ */
 export type TicketEndpoint =
-  "ops" | "commit" | "branch-create" | "branch-switch";
+  | "ops"
+  | "commit"
+  | "merge"
+  | "merge-resolve"
+  | "merge-abort"
+  | "import"
+  | "export"
+  | "agent-run"
+  | "branch-create"
+  | "branch-switch"
+  | "demo-reset"
+  | "restore";

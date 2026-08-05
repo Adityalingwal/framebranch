@@ -6,8 +6,7 @@
 #   longer run as one strict sequence — `gate` (1-3) and `fuzz` (4) now run
 #   IN PARALLEL as separate jobs, fanned out further into fuzz shards.
 #   Sequence was never the point of the T5 lock, completeness was — see the
-#   docs/12 T5 amendment block for the full reasoning. Step 5 (coverage +
-#   gap-script) stays TODO(M7) as already locked, unaffected by this change.
+#   docs/12 T5 amendment block for the full reasoning.
 #   Benchmarks are intentionally NOT in CI (T5 lock: CI hardware inconsistent
 #   -> local script + committed report).
 #
@@ -19,6 +18,11 @@
 #   structure is untouched: `gate` and `fuzz` still run in parallel, `fuzz`
 #   is still not `needs: gate`, `main` is still never auto-cancelled, and a
 #   docs-only commit still skips only `fuzz`.
+#
+# M7b (2026-08-05): T5 step 5 is now LIVE inside `gate` — the coverage
+#   report (report-only, no threshold) and the lock-ID gap-script
+#   (fail-blocking). The TODO(M7b) marker is gone. Job structure, triggers
+#   and the 10,000-case fuzz floor are all unchanged.
 name: CI
 
 on:
@@ -182,10 +186,20 @@ jobs:
       - name: Tests — unit + golden + integration (T5 step 3)
         run: pnpm test
 
-      # TODO(M7): Coverage + lock-ID gap-script (T5 step 5). Enable at the
-      # M7 CI-closure once the implemented lock/test universe is complete.
-      # - name: Coverage + lock-ID gap-script (T5 step 5)
-      #   run: pnpm --filter @framebranch/engine coverage && node scripts/lock-id-gap-check.mjs
+      # T5 step 5, half one: coverage is REPORT-ONLY (owner-locked
+      # 2026-08-05). The summary is printed in the log so a forgotten corner
+      # is visible; there is deliberately NO threshold and no failing on a
+      # percentage — a number gate blocks honest PRs while the report still
+      # does its real job.
+      - name: Coverage report (T5 step 5, report-only)
+        run: pnpm coverage
+
+      # T5 step 5, half two: the lock-ID gap-script is FAIL-BLOCKING. It
+      # cross-checks docs/11's lock ids (+ docs/12's G/H ids) against the
+      # test names and exits non-zero when an implemented lock has no test
+      # (docs/12 T1's first "missing test" guard).
+      - name: Lock-ID gap-script (T5 step 5, fail-blocking)
+        run: pnpm gap-check
 
   fuzz: # T5 step 4: fuzz, sharded — deliberately NOT gated on `gate`
     needs: plan

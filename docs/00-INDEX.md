@@ -32,8 +32,17 @@ I1 closure gate into implementation order. M4 is done and merged; keep this
 only for auditing why M4 was built the way it was. An amended canonical lock
 always wins if wording ever drifts.
 
-Current milestone (2026-08-05): **M1-M6 merged on `main` (M6 benchmarks via
-PR #5, merge commit `a96c47f`); M7a (server, first half) in progress.**
+Current milestone (2026-08-05): **M1-M6 + M7a merged on `main`** (M6 via
+PR #5 `a96c47f`; M7a via PR #6 `e38c18a`, including its independent review
+and the six-item owner triage). **M7b is implemented and green** (merge /
+restore / import / export / agent-simulate / demo-reset / GET diff, test G4,
+CI step 5) — see its entry in docs/07, including the **"M7b ke OPEN ITEMS"**
+list that is documented-not-fixed and still needs owner triage.
+**Next = M8 (UI)**, split into M8a (shell + timeline + history/restore) and
+M8b (diff + merge/conflict panels + the optimistic mutation wrapper). M8's
+six "how" locks AND its **visual design lock** (Cardboard-sampled tokens, the
+three depth techniques, the approved mockup) both live in docs/07's CODE
+PHASE list.
 Per-milestone locks live in the canonical docs, not in separate brief files:
 - M5 (OTIO) — docs/11's "M5 — OTIO import/export locks (O1-O10)" section
   (semantics + public API shapes) and docs/12's "M5 (OTIO) test additions"
@@ -41,13 +50,10 @@ Per-milestone locks live in the canonical docs, not in separate brief files:
 - M6 (benchmarks) — docs/12's T4 lock; the M6 entry in docs/07 records the
   Option A / A1 fixture locks and the per-row conflict-count rule.
 - M7 + M8 — the "M7 (server) pre-implementation locks" and "M8 (UI)
-  pre-implementation locks" entries in docs/07's CODE PHASE list. M7a's
-  implementation brief lives in `briefs/` (gitignored, local-only).
-
-Current milestone (2026-08-04): **M4 merged; M5 = OTIO import/export.**
-M5's locks live in canonical docs, not a separate brief file: docs/11's
-"M5 — OTIO import/export locks (O1-O10)" section (semantics + public API
-shapes) and docs/12's "M5 (OTIO) test additions" (group H, 11 goldens).
+  pre-implementation locks" entries in docs/07's CODE PHASE list, plus the
+  "M7a independent review + owner triage" entry (three C4 transport codes
+  and the logo-as-image fixture amendment landed there). Implementation
+  briefs live in `briefs/` (gitignored, local-only).
 
 ## Precedence rules (when texts seem to conflict)
 

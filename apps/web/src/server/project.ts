@@ -16,6 +16,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 
 import { importOtio } from "@framebranch/engine";
+import type { ImportWarning, Timeline } from "@framebranch/engine";
 
 import type { Db } from "../db/client";
 import {
@@ -88,73 +89,116 @@ export async function findProjectByToken(
 }
 
 /**
- * First visit: one transaction that creates the project, imports the
- * demo fixture, writes the import commit (Q1: ALWAYS a full snapshot,
- * snapshot_distance = 0 — an import has no parent, so ops cannot express
- * it), points `main` at it, and opens its working record.
+ * The demo fixture, imported through the engine exactly as a user document
+ * would be. The fixture is ours and is covered by a test; if this ever fails
+ * the deployment is broken, not the request.
+ */
+function importDemoFixture(): {
+  timeline: Timeline;
+  warnings: ImportWarning[];
+} {
+  const imported = importOtio(demoOtioJson());
+  if (!imported.ok) {
+    throw new Error(
+      `demo.otio failed to import: ${imported.error.code} ${imported.error.message}`,
+    );
+  }
+  return { timeline: imported.timeline, warnings: imported.warnings };
+}
+
+/**
+ * Seed ONE project's state from `demo.otio`: the import commit (Q1: ALWAYS a
+ * full snapshot, snapshot_distance = 0, carrying its F7 import_warnings —
+ * an import has no parent, so ops cannot express it), `main` pointing at it,
+ * and an open working record. `project_rate` is refreshed from the imported
+ * OTIO (A1.2 — never hardcoded).
+ *
+ * ONE function serves both callers: the first-visit bootstrap below and
+ * `POST demo/reset`, which wipes this project's state and re-seeds it in
+ * place. A second copy of the seed logic is exactly what this exists to
+ * prevent.
+ *
+ * Precondition: the project's branches / commits / ops / snapshots /
+ * working_state / merge_attempts rows are already gone (fresh project, or
+ * demo/reset's delete).
+ */
+export async function seedProjectFromDemo(
+  tx: Tx,
+  projectId: string,
+): Promise<{ commitId: string; branchId: string }> {
+  const imported = importDemoFixture();
+
+  await tx
+    .update(projects)
+    .set({ projectRate: imported.timeline.projectRate })
+    .where(eq(projects.id, projectId));
+
+  const commitId = mintCommitId({
+    projectId,
+    parentId: null,
+    parent2Id: null,
+    name: IMPORT_COMMIT_NAME,
+    actor: "user",
+    ops: [],
+    nonce: randomUUID(),
+  });
+  await tx.insert(commits).values({
+    id: commitId,
+    projectId,
+    parentId: null,
+    parent2Id: null,
+    name: IMPORT_COMMIT_NAME,
+    actor: "user",
+    snapshotDistance: 0,
+    // F7 — the itemized skipped-list's permanent home; NULL on every
+    // commit that is not an import (the fixture is clean, so this is an
+    // empty list, not null: "we imported and skipped nothing").
+    importWarnings: imported.warnings,
+  });
+  await tx
+    .insert(snapshots)
+    .values({ commitId, projectId, timeline: imported.timeline });
+
+  const [branch] = await tx
+    .insert(branches)
+    .values({ projectId, name: "main", headCommitId: commitId })
+    .returning();
+
+  await tx.insert(workingState).values({
+    branchId: branch.id,
+    projectId,
+    baseCommitId: commitId,
+    pendingOps: [],
+    workingRev: INITIAL_WORKING_REV,
+  });
+
+  return { commitId, branchId: branch.id };
+}
+
+/**
+ * First visit: one transaction that creates the project row, seeds it from
+ * the fixture (above) and enforces the 100-project cap.
  */
 export async function bootstrapProject(
   db: Db,
 ): Promise<{ project: ProjectRow; token: string }> {
   const token = mintOwnerToken();
-  const imported = importOtio(demoOtioJson());
-  if (!imported.ok) {
-    // The fixture is ours and is covered by a test; if this ever fires the
-    // deployment is broken, not the request.
-    throw new Error(
-      `demo.otio failed to import: ${imported.error.code} ${imported.error.message}`,
-    );
-  }
+  const imported = importDemoFixture();
 
   return db.transaction(async (tx) => {
     const [project] = await tx
       .insert(projects)
       .values({
         ownerToken: token,
-        // A1.2: the project rate comes from the imported OTIO. Never hardcoded.
+        // A1.2: the project rate comes from the imported OTIO. Never
+        // hardcoded. (seedProjectFromDemo writes the same value again — the
+        // insert needs a NOT NULL value, and one seeding function is worth
+        // one idempotent UPDATE.)
         projectRate: imported.timeline.projectRate,
       })
       .returning();
 
-    const commitId = mintCommitId({
-      projectId: project.id,
-      parentId: null,
-      parent2Id: null,
-      name: IMPORT_COMMIT_NAME,
-      actor: "user",
-      ops: [],
-      nonce: randomUUID(),
-    });
-    await tx.insert(commits).values({
-      id: commitId,
-      projectId: project.id,
-      parentId: null,
-      parent2Id: null,
-      name: IMPORT_COMMIT_NAME,
-      actor: "user",
-      snapshotDistance: 0,
-      // F7 — the itemized skipped-list's permanent home; NULL on every
-      // commit that is not an import (the fixture is clean, so this is an
-      // empty list, not null: "we imported and skipped nothing").
-      importWarnings: imported.warnings,
-    });
-    await tx
-      .insert(snapshots)
-      .values({ commitId, projectId: project.id, timeline: imported.timeline });
-
-    const [branch] = await tx
-      .insert(branches)
-      .values({ projectId: project.id, name: "main", headCommitId: commitId })
-      .returning();
-
-    await tx.insert(workingState).values({
-      branchId: branch.id,
-      projectId: project.id,
-      baseCommitId: commitId,
-      pendingOps: [],
-      workingRev: INITIAL_WORKING_REV,
-    });
-
+    await seedProjectFromDemo(tx, project.id);
     await enforceProjectCap(tx);
 
     return { project, token };
