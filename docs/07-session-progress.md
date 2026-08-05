@@ -1267,6 +1267,69 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   hain wo poori tarah verified hain).
   **NEXT:** M9 (demo polish — final fixtures, thumbnails art, Vercel
   deploy, README, docs consolidation).
+- **M8b independent review ✅ DONE (2026-08-06) — 3 findings (1 HIGH, 1
+  MEDIUM, 1 MEDIUM-LOW), all fixed same session:** Fable 5, read-only,
+  implementer's findings-file given upfront. All three shared one root
+  theme — the gesture→request boundary in the property/drag controls —
+  and none corrupted server state.
+  1. **HIGH, fixed.** A slider drag committed on React's `onChange`, which
+     for `<input type=range>` aliases the continuous native `input` event —
+     one drag fired one `POST /api/ops` per tick (reviewer witness: a
+     2-tick automated drag → 2 requests, "2 changes" for one gesture;
+     C6's per-action ticket discipline broken, C8's "3 changes" step
+     unreproducible by a real drag). Fix: commit moved to the native
+     `change` event (fires once, on release) via a ref listener; `onInput`
+     kept only for the live label. Applied to `IntSlider`, `ScaleSlider`,
+     and the text-style color input (same continuous-`input` bug in
+     Chrome's picker). Live-verified after the fix: a simulated multi-tick
+     drag → exactly **1** `POST /api/ops`, chip "1 change".
+  2. **MEDIUM, fixed.** `ClipBlock.tsx`'s `onPointerUp` called `finishDrag`
+     (which dispatches the mutation) **inside** the `setDrag((current) =>
+     …)` updater — React may legally double-invoke updaters (StrictMode
+     always does), so every completed drag fired its command **twice**,
+     the second under a fresh ticket guaranteed to 409 (reviewer witness:
+     one move → `200` immediately followed by `409`, plus a spurious
+     "Timeline updated." toast after an ordinary successful drag). Fix:
+     `finishDrag` now runs as an ordinary statement after `setDrag(null)`,
+     never inside the updater. Verified via typecheck/lint/363 tests green;
+     live drag verification hit an unrelated automation-tooling limit
+     (this session's synthetic pointer events couldn't satisfy
+     `setPointerCapture`, same class of gap the review already flagged for
+     Alt+drag/slip) — reported honestly rather than faked.
+  3. **MEDIUM-LOW, fixed.** The text-style Size field (`<input
+     type=number min=8 max=200>`) could emit out-of-range values (HTML
+     min/max don't constrain typed input — reviewer witness: typed 500 →
+     `400 E_INVALID_VALUE`, and the field stayed on the rejected "500"
+     forever, since the existing re-sync `useEffect` only fires when the
+     authoritative value *changes*, and a rejection rolls back to a value
+     that never changed). Fix, two parts: (a) client-side clamp to
+     `[8,200]` on commit for Size, and truncate to the engine's own
+     `MAX_TEXT_CONTENT` (500 chars) for text content — mirroring
+     `packages/engine/src/verbs.ts`'s own bounds so a commit is never
+     rejected for range in the first place (brief §5's locked "must not be
+     able to emit out-of-range values"); (b) a general fix for the
+     stuck-value class itself — `Shell.tsx` now bumps a
+     `propertyErrorTick` on any `propertyChange` rejection, and
+     `ClipProperties` remounts its editable controls
+     (`key={`${clip.id}-${resetToken}`}`) on that tick, forcing every
+     local-state control back to the authoritative clip value even when
+     the prop itself never structurally changed. Live-verified: typed 500
+     → clamped to 200 on blur, server `200 OK` (not rejected); cleared the
+     field → clamped to 8, not stuck empty.
+  **Evidence:** typecheck/lint green; **287 engine + 76 web = 363 tests**
+  green throughout (same count as the implementer's — no test added or
+  removed by the fixes, all three were UI-only interaction-boundary bugs).
+  `packages/engine/src/**`, `apps/web/src/{server,app/api,db}/**` untouched
+  (review independently confirmed via `git diff --stat`). Everything else
+  the reviewer checked — the optimistic wrapper's four rules, `E_STALE_REV`
+  silence, the full C8 9-step demo, all three conflict buckets with locked
+  labels, honest counts, auto-finalize, cancel-merge, agent-failure locked
+  copy, import skip-list + F7 record, export round-trip — held up clean,
+  independently reproduced, not just re-read from the implementer's account.
+  Branch `feat/ui-m8b` → PR #9 → merged into `main`. **M8 (UI) is now fully
+  done — M1 through M8b are all merged on `main`.**
+  **NEXT:** M9 (demo polish + Vercel deploy) — see docs/00-INDEX.md's
+  current-milestone line for status.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
@@ -1294,5 +1357,5 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
 
 - Browser app (Next.js), Vercel free tier deploy + live link, 2-3 min demo video
   (LinkedIn/Twitter post ke liye), public GitHub repo. DB agar chahiye: Supabase/Neon
-  free tier. Application: Ashby form + hiring@usecardboard.com / founders@usecardboard.com
-  (docs/01 mein links). Abhi tak koi application nahi bheji gayi.
+  free tier. Application: Ashby form + hiring@usecardboard.com / founders@usecardboard.com.
+  Abhi tak koi application nahi bheji gayi.
