@@ -1,0 +1,148 @@
+/**
+ * globals.css — the M8 visual design lock (docs/07 "M8 (UI) VISUAL DESIGN —
+ * LOCKED"), implemented literally: the token list, the three depth
+ * techniques as reusable utilities (.surface / .surface-lg / .lane-sunken),
+ * dark-only, weights 400/500 only, Geist.
+ *
+ * Values are copied verbatim from the lock, not re-derived.
+ */
+
+@import "tailwindcss";
+
+:root {
+  /* ground */
+  --fb-page: #1a1a1a;
+  --fb-panel: #0d0d12;
+  --fb-panel-2: #15151b;
+  --fb-deep: #08080b;
+
+  /* text */
+  --fb-text-body: #d9d9d9;
+  --fb-text-body-2: #e4e4e7;
+  --fb-text-dim: #8b8b93;
+  --fb-text-mute: #5c5c65;
+
+  /* accent gradient (never decoration — actions only) */
+  --fb-accent-from: #4fa2ff;
+  --fb-accent-to: #2b7fff;
+
+  /* semantic — meaning only, never decoration */
+  --fb-good: #3fcf8e;
+  --fb-warn: #fbb13c;
+  --fb-bad: #ff6e5c;
+
+  /* radii */
+  --fb-radius-sm: 6px;
+  --fb-radius-md: 8px;
+  --fb-radius-lg: 13px;
+  --fb-radius-pill: 999px;
+
+  /* motion */
+  --fb-ease-hover: cubic-bezier(0.4, 0, 0.2, 1);
+  --fb-ease-large: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  background: var(--fb-page);
+  color: var(--fb-text-body);
+  font-family:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
+  font-weight: 400;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Type lock: weights 400/500 only — never bold. */
+b,
+strong {
+  font-weight: 500;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: inherit;
+}
+
+/* --- depth technique 1: layered inset shadows instead of borders --- */
+
+.surface {
+  background: var(--fb-panel);
+  border-radius: var(--fb-radius-md);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.07),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 3px 8px rgba(0, 0, 0, 0.24);
+}
+
+.surface-lg {
+  /* --- depth technique 2: panels lit by a top radial gradient --- */
+  background: radial-gradient(circle at 50% 3%, #16161d, #101016);
+  border-radius: var(--fb-radius-lg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+    0 4px 16px -4px rgba(0, 0, 0, 0.45);
+}
+
+.lane-sunken {
+  background: var(--fb-deep);
+  border-radius: var(--fb-radius-sm);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* floating chrome (top bar / dialogs) */
+.chrome-blur {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  background: rgba(13, 13, 18, 0.72);
+}
+
+/* --- depth technique 3: vignette over the whole frame --- */
+.vignette {
+  position: relative;
+}
+.vignette::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    110% 110%,
+    transparent 55%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+}
+
+.motion-hover {
+  transition: all 0.15s var(--fb-ease-hover);
+}
+.motion-large {
+  transition: all 0.65s var(--fb-ease-large);
+}
+
+/* scrollbars — thin, dark, matches the ground tokens (Chromium + Firefox) */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a2a33 transparent;
+}
+*::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2a2a33;
+  border-radius: var(--fb-radius-pill);
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -838,3 +838,78 @@ for owner triage.
   merge started is refused with `E_STALE_HEAD`; the docs answer only the
   moved-head case explicitly.
 - `POST merge` refuses `from === into` at the door with `E_BAD_REQUEST`.
+
+## 2026-08-05 — Milestone 8a (UI shell + design system + data layer + timeline + history/restore)
+
+Assumptions and local calls made while implementing M8a. The design (docs/07
+"M8 (UI) VISUAL DESIGN — LOCKED" + the six "how" locks) was silent on pure
+implementation details in a few places; those are recorded here. Nothing in
+`packages/engine/src/**` or `apps/web/src/{server,app/api,db}/**` was
+touched.
+
+**Trivial tooling / fixture details decided locally:**
+
+1. **Tailwind v4** (`@tailwindcss/postcss`, CSS-first `@theme`/plain-CSS
+   config in `globals.css`) rather than v3 — no separate `tailwind.config.js`
+   needed, and the token list (colours/radii/motion) maps directly onto CSS
+   custom properties, which is what the lock's values already are.
+2. **Exactly one Radix primitive pulled in: `@radix-ui/react-dialog`**, for
+   the two modals (New branch, Reset demo confirm) — focus-trap and
+   Escape-to-close are worth not hand-rolling twice. Tabs were hand-rolled
+   (`RightPanel.tsx`): the `?view=` param already drives selection, so
+   Radix's `Tabs` would only wrap logic that already has to exist.
+3. **Clip labels.** The engine's `Clip` type (`packages/engine/src/types.ts`)
+   has no `name` field — OTIO clip names are import-time-only and don't
+   survive into the committed domain model. Labels shown on timeline clips
+   are derived from the referenced media's filename (`clip-helpers.ts`
+   `labelFromMediaUrl`: `/media/interview.mp4` → "Interview"); text clips
+   show their own `textContent` instead (per §8.1).
+4. **Thumbnails** live at `apps/web/public/thumbnails/<media-filename-stem>.jpg`,
+   one per media fixture, generated OFFLINE (ffmpeg frame-grab for the two
+   videos, ImageMagick resize of the logo image for itself) — never at
+   runtime, per M8 lock 6. The mapping from a `MediaRef.url` to its
+   thumbnail is by filename stem only (`clip-helpers.ts` `thumbnailUrl`).
+5. **Placeholder media fixtures** (no real footage available — reported per
+   the brief): `apps/web/public/media/interview.mp4` and `broll.mp4` are
+   ffmpeg solid-colour clips with a drawn text label, `music.wav` is an
+   ffmpeg sine tone, `logo.png` is an ImageMagick wordmark image. Durations
+   match `demo.otio`'s `available_range` exactly (interview 20s, broll 15s,
+   music 25s) so in-clip seeking/trimming stays inside real media bounds.
+6. **Default right-panel tab when `?view=` is absent/invalid = `history`** —
+   the only tab with a real body in M8a; Changes/Merge are shells.
+7. **Top toolbar strip** (branch control, "N changes" chip, Save version,
+   Reset demo) — the locked ASCII layout (§6) doesn't reserve a slot for
+   these controls, only for preview/properties/timeline/right-panel. They
+   were placed in a `chrome-blur` bar above the three-pane layout (the
+   lock's own "floating chrome" technique).
+8. **Known-branches list is plain `useState` in `Shell.tsx`**, not
+   persisted — C4 deliberately has no "list branches" endpoint, so this is
+   the client-state the brief (§3) asks for; it resets to `["main"]` on
+   Reset demo.
+9. **GET queries get TanStack Query's default small retry (`retry:1`)**;
+   mutations set `retry:false` on the query client so `api-client.ts`'s own
+   C6 ladder is the only retry path for mutations (no stacked retry
+   mechanisms). C6 is explicit that its numbers are for mutations; GET
+   retry behaviour is unspecified, so the smallest reasonable default was
+   used rather than re-litigating the lock.
+10. **Preview pane per clip kind:** video → native `<video>` seeked to
+    `sourceRange.start` and paused at `sourceRange.end` (so only "that
+    clip" plays, per §8.2); audio → native `<audio>` with a note-icon/
+    striped background; image → the image itself (O1: unbounded duration);
+    text → the text rendered with its own `textStyle`.
+11. **Clip-properties panel shows all four whitelist properties** (volume/
+    opacity/scale/position) with their documented defaults for every
+    non-text clip, including images and audio, even where one may not be
+    semantically load-bearing for that kind (e.g. volume on an image clip).
+    The engine's `ClipProperties` type does not restrict fields by media
+    kind at the type level, and inventing a kind-based filter would be new
+    product logic no lock specifies.
+12. **Zoom is a fixed constant** (70px/second, `Timeline/scale.ts`) — no
+    zoom control; the lane scrolls horizontally past that. Consistent with
+    "10-30 clips, no virtualization, no zoom UI" being outside M8a's scope.
+
+**Reported, NOT decided (see the M8a findings file for the full detail):**
+
+- The engine's `Clip` type has no name/label field (see #3 above) — flagged
+  in case the owner wants a dedicated label field added to the domain model
+  in a future milestone; nothing was changed to work around it.

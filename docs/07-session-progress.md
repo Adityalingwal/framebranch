@@ -1083,6 +1083,89 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   --stat` = sirf 4 code/test files (`demo.otio`, `import/route.ts`,
   `boundary.test.ts`, `packages/engine/src/otio.ts`) + do doc files
   (`docs/11`, `docs/12`) — koi aur file nahi chhue gayi.
+- **M8a UI (shell + design system + data layer + timeline + history/restore)
+  ✅ DONE (2026-08-05):** M8 ka pehla hissa — read-only UI, koi editing nahi
+  (M8b). `apps/web/src/app|lib|ui/**` naya; `server|app/api|db/**` aur
+  `packages/engine/src/**` bilkul chhue nahi gaye. **Design system:**
+  Tailwind v4 (CSS-first `@theme`, `apps/web/src/app/globals.css`) mein
+  visual-design-lock ke saare token literal (grounds/text/accent/semantic/
+  radii), teeno depth techniques reusable utilities (`.surface`,
+  `.surface-lg`, `.lane-sunken` + chrome-blur/vignette), Geist font, weight
+  400/500 hi. **Layout:** ek page (`src/app/page.tsx`), icon-rail →
+  preview+properties+timeline → right panel (tabs `?view=changes|merge|
+  history`, URL se driven, back/forward + direct-link dono verify kiye).
+  **Data layer:** `src/lib/api-client.ts` — ek hi module, envelope→typed-
+  error, C4(5) ka error-code switch, aur C6 ka exact retry ladder (1s phir
+  3s silent retry, phir "Connection lost" banner + [Retry] jo SAME ticket
+  reuse karta hai — closure ki wajah se, chahe silent ho ya manual press).
+  TanStack Query hooks (`src/lib/hooks.ts`) query-keys + invalidation
+  bilkul locked rule ke mutabik (commit → timeline+history; branch create/
+  switch → timeline, +history agar seal hua; restore → dono; demo-reset →
+  sab). **Timeline:** DOM divs (M8 lock 3), tracks top-to-bottom, clip
+  position/width `timelineRange` se ek fixed zoom factor (70px/s) se, gaps
+  render nahi hote, text-clip apna content dikhata hai thumbnail ki jagah.
+  **Preview (Level A) + properties:** clip click → sirf wahi clip play
+  (video/audio native element, seek+pause exact sourceRange par; image =
+  poori image, O1 unbounded; text = styled text) + 6-whitelist read-only
+  properties, koi editing control nahi. Media-unresolve → "Media
+  unavailable" placeholder (HLD #12/13), kuch bhi crash nahi hota.
+  **History:** `GET /api/history` newest-first, 👤/🤖 badge, itemized
+  import-warnings (F7), merge-commit visibly marked (⑂), Restore →
+  `POST /api/restore` → naya version top par, "restoring moves forward"
+  copy. **Branch + Save + Reset:** branch switch/create (dono `Auto —
+  before...` seal hone par quiet toast), Save version (optional name, blank
+  = server names), "N changes" chip = `pendingCount`, Reset demo confirm-
+  dialog (Radix `Dialog` — ek hi outside primitive, tabs hand-rolled kyunki
+  `?view=` already unka state hai) → `POST /api/demo/reset` → sab
+  invalidate. UI copy git-free poori jagah ("Save version"/"Restore"/
+  "N changes"/"Version N", "commit"/"HEAD" kahin nahi). **Fixtures:** asli
+  footage nahi tha, isliye `apps/web/public/media/{interview,broll}.mp4`
+  (ffmpeg solid-colour + label, exact `available_range` duration),
+  `music.wav` (ffmpeg tone), `logo.png` (ImageMagick wordmark) — sab
+  offline-generated, runtime par kuch nahi banta (thumbnails bhi `public/
+  thumbnails/*.jpg`, pre-made, lock 6). **Evidence:** typecheck + lint
+  green; tests **287 engine + 64 web (59 pehle se + 5 naye
+  `tests/api-client.test.ts` — envelope/error-mapping + retry-ladder timing,
+  fake timers se, koi browser/DB nahi) = 351**, sab 346 purane untouched.
+  `pnpm --filter @framebranch/web build` green (real production build) +
+  `next start` se production-mode mein browser se drive karke verify kiya
+  (dev-only UI nahi hai). Browser mein manually verify kiya: pehli visit
+  bootstrap + 5-clip demo timeline; har clip-kind click→select→preview→
+  properties (video/video/image/audio/text — paanchon); History badges +
+  Restore naya version banata hai; branch create+switch dono taraf; Save
+  version + chip/history bina refresh update (`invalidateQueries` proof);
+  Reset demo confirm→fresh state; `?view=history` direct-load + tab-switch
+  + browser-back sab kaam karte. **Spec-gaps/choices reported (invent nahi
+  kiye):** engine ke `Clip` type mein koi `name` field nahi (OTIO name
+  import-boundary tak hi hai) — clip label media-filename se derive kiya
+  (`clip-helpers.ts`); layout lock mein branch/save/reset controls ka slot
+  explicit nahi tha — top "floating chrome" bar mein daala; default `?view=`
+  tab likha nahi tha — "history" chuna (sirf real body wala tab). Poora
+  detail scratchpad findings file mein hai. Branch: `main` (owner ke pehle
+  se checked-out branch — koi naya branch nahi banaya; implementer ki apni
+  findings-file ne isse `feat/server-m7b` likha tha, jo M7b merge ke baad ab
+  galat reference tha — `git status`/`git log` se confirm karke yahan
+  correct kiya).
+- **M8a independent review ✅ DONE (2026-08-05) — 1 real-but-minor finding,
+  fixed same session:** Fable 5, read-only, implementer ki findings-file
+  pehle se di gayi thi. **Finding:** koi bhi mutation-error (jaise
+  `E_BRANCH_EXISTS`) UI mein kabhi nahi dikhta tha — `api-client.ts` ka C4(5)
+  switch message sahi banata tha, par kisi bhi `mutate()` call mein
+  `onError` tha hi nahi, isliye dialog chup-chaap band ho jaata (runtime
+  witness: reload ke baad wahi branch-naam dobara try karo → server 409
+  deta hai, UI kuch nahi dikhata). Maine khud code padh ke confirm kiya
+  (`TopBar.tsx`/`HistoryPanel.tsx` mein `onSuccess` tha, `onError` nahi),
+  phir fix kiya: `toast-status.ts` ko `kind: "info"|"error"` mila,
+  `api-client.ts` mein `mutationErrorMessage()` helper, aur `hooks.ts` ki
+  saari 5 mutations (save/create-branch/switch/restore/reset) ko ek shared
+  `onError` mila jo red toast dikhata hai (`--fb-bad`). Live browser mein
+  re-verify kiya (branch banao → reload → dobara wahi naam → red "That name
+  is taken." toast). **Baaki sab clean tha** (351 tests, frozen dirs,
+  C6 retry-ladder ticket-reuse, invalidation rules, C4(5) switch, read-only-
+  ness, visual-lock literal values — sab reviewer ne khud live verify kiya).
+  Evidence: typecheck/lint/351 tests green after the fix bhi.
+  **NEXT:** M8b — Changes(diff)/Merge panels ka real body + optimistic
+  mutation wrapper (hybrid, M8 lock 5).
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
