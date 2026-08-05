@@ -8,3 +8,6 @@ node_modules/
 dist/
 coverage/
 pnpm-lock.yaml
+# drizzle-kit output: regenerated from src/db/schema.ts, never hand-edited.
+apps/web/drizzle/
+apps/web/.next/

@@ -10,6 +10,15 @@
 #   gap-script) stays TODO(M7) as already locked, unaffected by this change.
 #   Benchmarks are intentionally NOT in CI (T5 lock: CI hardware inconsistent
 #   -> local script + committed report).
+#
+# M7a (2026-08-05): step 3's "integration" half now includes the G-group
+#   server tests, which run against a REAL Postgres (M7 lock B: a fake DB
+#   proves nothing about a unique index, a transaction or a CAS). `gate`
+#   therefore gains a Postgres SERVICE CONTAINER — GitHub's own, so no
+#   secret is involved — and one migration step before the tests. Job
+#   structure is untouched: `gate` and `fuzz` still run in parallel, `fuzz`
+#   is still not `needs: gate`, `main` is still never auto-cancelled, and a
+#   docs-only commit still skips only `fuzz`.
 name: CI
 
 on:
@@ -123,6 +132,25 @@ jobs:
     if: needs.plan.outputs.skip_all != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # The G-group server tests need a real database (M7 lock B). This is an
+    # ephemeral service container that lives and dies with the job; the
+    # credentials below are not secrets and are not reused anywhere.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: framebranch_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/framebranch_test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,6 +173,11 @@ jobs:
 
       - name: Lint (T5 step 2)
         run: pnpm lint
+
+      # M7 lock C: an empty database is filled from the committed migration
+      # with ONE command. Nothing is pushed from the schema at runtime.
+      - name: Migrate the test database
+        run: pnpm --filter @framebranch/web db:migrate
 
       - name: Tests — unit + golden + integration (T5 step 3)
         run: pnpm test

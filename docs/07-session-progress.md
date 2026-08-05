@@ -761,6 +761,51 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   picture dikhegi.
   **NEXT:** M7a implementation (Opus 5 background agent, brief ready) → M7b
   → M8 → M9.
+- **M7a server foundation ✅ DONE (2026-08-05):** naya `apps/web` (Next.js
+  16.3.0, App Router, **sirf API routes — koi UI nahi**, wo M8 hai);
+  `pnpm-workspace.yaml` mein ab `apps/*` bhi. **DB:** Drizzle schema mein
+  C3 ke **8/8 tables** + F1 ke `project_id` columns, aur committed migration
+  `apps/web/drizzle/0000_hesitant_vanisher.sql` — khaali DB EK command se
+  bharti hai (`pnpm --filter @framebranch/web db:migrate`). Locked indexes
+  saare maujood (verify kiya `pg_indexes` se): `branches(project_id,name)`,
+  `ops(commit_id,seq)`, `snapshots(commit_id)`, `working_state(branch_id)`,
+  `tickets(project_id,endpoint,ticket)` unique + har table par `project_id`.
+  `snapshots` mein `schema_version` NAHI (C5). Har table `projects` se
+  `ON DELETE CASCADE` — project delete par 7 tables mein orphan bachta hi
+  nahi (test se verify). **Fixture:** naya `apps/web/fixtures/demo.otio`
+  (24fps, 3 tracks video/audio/text, 5 clips A/B/C + music + caption
+  "Welcome", saath mein agent ke clip-D wala b-roll media) — M5 ke asli
+  `importOtio` se **zero warnings** par import hota hai (test, eyeball
+  nahi). **Bootstrap:** cookie nahi → naya project + 256-bit owner_token
+  (HttpOnly cookie) + demo seed + import-commit (Q1: hamesha full snapshot,
+  `snapshot_distance = 0`) + `main` branch + working_state (`working_rev`
+  0 se shuru, kabhi reset nahi); `project_rate` imported OTIO se (A1.2),
+  hardcode kahin nahi; 100-project cap inline sweep (HLD #15). **Endpoints
+  (C4 envelope `{ok,data}` / `{ok,error:{code,message}}`, error codes sirf
+  C4 list se):** GET timeline (base + pending replay), GET history
+  (`import_warnings` samet — F7), POST ops (workingRev CAS, F9 no-change
+  counter nahi badhta), POST commit (pending → `ops` rows seq-order,
+  snapshot cadence har 10th), POST branch (create+switch), POST
+  branch/switch — dono boundary par dirty ho to auto-seal (Item 6a(4)),
+  poora composite EK transaction (#16(1)). Tickets = shared register, same
+  ticket+same endpoint → stored result, alag endpoint → `E_TICKET_REUSED`
+  (F2: koi payload compare nahi), 24h TTL inline. Naam sirf deterministic
+  templates (Item 6a(5)), AI kahin nahi. **Evidence:** typecheck + lint
+  green; tests **287 (engine, waise ke waise) + 21 (server) = 308**; G1/G2/
+  G3/G5 asli Postgres par (local Homebrew 14.17, CI par GitHub ka apna
+  Postgres service container — `gate` job mein migration step add hua,
+  `gate`/`fuzz` parallel structure bilkul unchanged, T5 step 5 abhi bhi
+  TODO(M7b)). Teen mutation-checks se saabit kiya ki G-tests load-bearing
+  hain: ticket-replay hataya → G1+G2 red; auto-seal hataya → G3 red;
+  `loadBranch` se `project_id` predicate hataya → G5 red (teenon revert,
+  phir 21/21 green). `packages/engine/src/**` bilkul untouched (`git diff
+  --stat` khaali). G4 + merge/restore/import/export/agent/demo-reset/diff
+  jaan-boojh ke NAHI banaye — wo M7b hain, stub bhi nahi. Do gaps report
+  kiye gaye (invent nahi kiye): C4 list mein "malformed request body" aur
+  "branch name pehle se hai" ka koi apna code nahi — dono ke liye
+  `E_INVALID_VALUE` use hua, aur unexpected server exception ke liye koi
+  generic code banaya hi nahi gaya. Branch: kaam uncommitted working tree
+  mein, Aditya khud commit karega.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
