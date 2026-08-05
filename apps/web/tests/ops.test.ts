@@ -214,6 +214,34 @@ describe("C4 (3) — POST ops", () => {
       },
       session,
     );
-    expect(expectError(call).code).toBe("E_INVALID_VALUE");
+    // C4 (5) transport codes [ADDED 2026-08-05]: a command outside the Phase
+    // A union is a malformed REQUEST, not an illegal VALUE for a clip. It
+    // used to borrow E_INVALID_VALUE and the UI could not tell the two apart.
+    expect(expectError(call).code).toBe("E_BAD_REQUEST");
+  });
+
+  it("C4 (5): a well-formed command the ENGINE rejects keeps its own verb code, not E_BAD_REQUEST", async () => {
+    const { session } = await seeded();
+    // The body is valid in every schema sense — the clip simply is not there.
+    // The split between the two code families is: rejected at the door (schema)
+    // = E_BAD_REQUEST; rejected by the engine = that verb's own code.
+    const call = await post(
+      postOps,
+      "/api/ops",
+      {
+        branch: "main",
+        workingRev: 0,
+        ticket: ticket(),
+        command: {
+          op: "move",
+          clipId: "no-such-clip",
+          newStart: { value: 0, rate: 24 },
+        },
+      },
+      session,
+    );
+    const code = expectError(call).code;
+    expect(code).not.toBe("E_BAD_REQUEST");
+    expect(code).toBe("E_CLIP_NOT_FOUND");
   });
 });

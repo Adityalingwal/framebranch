@@ -758,6 +758,36 @@
   mein unreachable hai (B1.1 formula-IDs + engine-minted addClip IDs =
   collision impossible; A3.8 apni error-list ko complete bolta hai).
   Zero behavior change — list ko verbs ke sach ke barabar kiya.]
+  [AMENDED 2026-08-05, M7a owner triage — TEEN transport codes ADD:
+  **E_BAD_REQUEST**, **E_BRANCH_EXISTS**, **E_INTERNAL**. Wajah: original
+  list do parivaaron ki thi — verb ki galtiyan aur socha-hua system
+  failure — par M7a implement karte waqt teen aisi asli situation aayi
+  jinka koi ghar tha hi nahi, aur code ne kuch invent NAHI kiya (spec-gap
+  report kiya, jo sahi tha).
+  (a) **E_BAD_REQUEST** — request khud parse hi na ho: kharab JSON, Phase A
+  union se bahar ka `command`, missing field, missing query param. Pehle ye
+  `E_INVALID_VALUE` udhaar leta tha, jo ek VERB code hai jiska matlab hai
+  "is clip par ye value gair-kanooni hai" — do bilkul alag failure ek hi
+  code ke peeche, aur UI unhe alag nahi kar sakti thi. **Batwara ab saaf
+  hai: darwaze par (Zod schema) reject = `E_BAD_REQUEST`; engine ne reject
+  ki = us verb ka apna code.** Iska ek seedha nateeja: whitelist range ki
+  galti (jaise volume 150) Item 12 ke mutabik darwaze par hi ruk jaati hai,
+  isliye wo ab `E_BAD_REQUEST` hai, `E_INVALID_VALUE` nahi. Ye jaan-boojh ke
+  hai — do parivaaron ke beech ki lakeer "kisne reject kiya" hai, "kaisi
+  galti thi" nahi. UI par asar zero (slider 0-100 hi bhejta hai).
+  (b) **E_BRANCH_EXISTS** — C3 ka locked `branches(project_id, name)` unique
+  index is halat ko asli aur pakadne-layak banata hai, par C4 ne uska code
+  kabhi naam nahi diya. Behaviour bilkul unchanged (duplicate branch pehle
+  bhi nahi banti thi, ab bhi nahi banti) — ye sirf UI ko "ye naam already
+  le liya gaya hai" kehne deta hai, "invalid value" ki jagah.
+  (c) **E_INTERNAL** — anjaan exception. Iske bina crash poore envelope se
+  hi bahar nikal jaata tha aur UI ka ek-hi-reader (jo C4 (1) ka poora
+  maqsad hai) seedhe platform ke 500 se takraata tha. Andar ka message
+  client ko kabhi nahi jaata (server par log hota hai) — stack trace ya
+  connection string leak na ho.
+  Ginti: 14 verb + 9 system + 3 transport. Naya CONCEPT zero — teenon
+  sirf un darwaazon ko naam dete hain jo pehle se maujood the.
+  [Aditya lock 2026-08-05.]]
   [AMENDED 2026-08-03, Codex final review F5 — branch-selection contract:
   (a) HAR branch-scoped request mein explicit `branch` field — POST commit
   {branch, name?}, POST restore {branch, commitId}, POST agent/simulate
@@ -993,7 +1023,19 @@
 - **C8 (2026-08-03) LOCKED — Demo choreography (9-step exact + fixtures):**
   FIXTURES (Vercel static): demo.otio (24fps, 3 tracks video/audio/text,
   5 clips: A interview / B b-roll / C logo / music / caption "Welcome") +
-  3 chhoti videos (10-20s) + 1 audio. SCRIPTED EDITS (har bucket pakka
+  3 chhoti videos (10-20s) + 1 audio.
+  [AMENDED 2026-08-05, M7a owner triage — **C = `logo.png`, ek IMAGE hai,
+  video nahi.** Upar wali line "3 chhoti videos + 1 audio" kehti hai, par
+  usi doc ka A2.1/O1 wala hissa isi cheez ke liye khud likhta hai "logo.png
+  5s dikhao ya 5min — dono valid" — yani C8 ki fixture-line apne aap se
+  ulti thi. Asli edit mein logo image hi hoti hai, aur image bana dene se
+  demo un rules ko sach mein chalata hai jo humne mehnat se lock kiye:
+  O1 (`durationInSource: null` — aseem, isliye fixture mein
+  `available_range: null`) aur O3 (image par slip = `E_NOT_APPLICABLE`).
+  Media ki ginti unchanged (2 video + 1 image + 1 audio); sirf is ek clip ka
+  URL aur uska available_range badla. 9-step choreography, scripted edits,
+  teeno conflict buckets — sab bilkul unchanged (C par sirf move hota hai,
+  step 3c). Aditya lock 2026-08-05.] SCRIPTED EDITS (har bucket pakka
   bane — accident nahi, guarantee): user main par: A.volume=80, caption
   text edit, C→0:20 move; agent branch "tighten-intro" par: A.volume=40
   (→B1), caption DELETE (→B2), D add (→B3 overlap — POORI command neeche),

@@ -12,6 +12,15 @@
  * b-roll media the agent's step-3 `addClip` of clip D needs. It imports
  * with ZERO warnings (C8 step 1: "fixture clean"), which is asserted by a
  * test, not by eyeballing.
+ *
+ * C is `logo.png` — an IMAGE, not a video [AMENDED 2026-08-05, M7a owner
+ * triage]. C8's fixture line says "3 short videos + 1 audio", but the same
+ * doc calls this clip a logo and elsewhere (docs/11 A2.1 discussion) writes
+ * "logo.png 5s dikhao ya 5min — dono valid". A logo is an image in any real
+ * edit, and making it one means the demo actually exercises the image rules
+ * we designed: O1 (`durationInSource: null` — unbounded, so `available_range`
+ * is null here) and O3 (slip on an image is E_NOT_APPLICABLE). Media count
+ * is unchanged; only this one URL and its available_range moved.
  */
 
 import { readFileSync } from "node:fs";

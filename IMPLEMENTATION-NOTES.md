@@ -631,12 +631,30 @@ not decided (the two such gaps are named at the end of this section).
   the `crypto.randomUUID()` the brief offers as the floor. Cookie:
   `fb_token`, HttpOnly, SameSite=Lax, Path=/, 1 year, `Secure` in
   production.
-- **`projects.owner_token` carries a UNIQUE index** that C3's index list
-  does not mention (that list covers `project_id` and the five composite
-  keys). Reason: a capability token identifies exactly ONE project (HLD
-  #14), and every request looks the project up by it. `projects.created_at`
-  also has a plain index for the cap sweep's ordering. Neither changes any
-  behaviour.
+- **Indexes beyond C3's locked list — the complete census (FOUR).** C3's
+  index line covers `project_id` on every table plus five composite/unique
+  keys; it does not ban extra plain indexes the way the docs ban tables,
+  verbs, endpoints and error codes. These four exist on top of it, and none
+  changes any behaviour:
+  1. `projects_owner_token_key` (UNIQUE) — a capability token identifies
+     exactly ONE project (HLD #14) and every request looks the project up
+     by it.
+  2. `projects_created_at_idx` — ordering for the 100-project cap sweep
+     (HLD #15).
+  3. `commits_parent_id_idx` — the parent-chain walk back to the nearest
+     snapshot (HLD #9) follows this column.
+  4. `tickets_created_at_idx` — the 24h TTL sweep (C6) scans by age.
+
+  [CORRECTED 2026-08-05, M7a review finding F2: this entry previously named
+  only the first two and then claimed "this is the only index beyond the
+  locked set". Items 3 and 4 existed in the schema all along but were
+  undisclosed, so the owner was triaging schema deviations against an
+  incomplete list. The indexes themselves were never in question — the
+  disclosure was.]
+
+  Separately, `tickets_ticket_key` (UNIQUE on `tickets.ticket` alone) was
+  ADDED on 2026-08-05 — that one is not an extra, it is C3 (8)'s own
+  literal requirement; see the M7a triage entry below.
 - **Project deletion uses `ON DELETE CASCADE`** on every foreign key rather
   than an explicit multi-table delete: HLD #15's sweep must not leave orphan
   rows in the other seven tables, and the database enforcing that is
@@ -706,3 +724,54 @@ Also deliberate: an **unexpected server exception** is NOT mapped to an
 invented `E_INTERNAL`. Every designed failure path throws a locked code;
 anything else propagates as a crash rather than being described with a code
 the design never authorised.
+
+### 2026-08-05 — M7a owner triage (all six items resolved)
+
+The two gaps above, the review's two findings, and two smaller calls were
+triaged with the owner one at a time. All six were applied in one pass on
+`feat/server`; the three "reported, not invented" items above are now
+**resolved**, so read them as history, not as open questions.
+
+1. **`tickets.ticket` now has its own UNIQUE index** (`tickets_ticket_key`,
+   migration `0001_bitter_agent_zero.sql`). C3 (8) literally says
+   "UNIQUE index — do baar entry DB-level impossible", and the composite key
+   alone did not deliver it: the review demonstrated two concurrent clients
+   entering the SAME ticket under two different endpoints, both doing their
+   work, with no `E_TICKET_REUSED`. A ticket is a browser
+   `crypto.randomUUID()` (C6) — globally unique already — so the database is
+   simply told the truth. The composite key stays (C3's index line asks for
+   it). Regression test: `tests/triage.test.ts` 1/6.
+2. **The index census above was corrected** (review finding F2) — four extra
+   indexes, not two. Documentation only; no schema change.
+3. **`E_BAD_REQUEST` added** to the C4 list (docs/11 C4 (5) amendment,
+   2026-08-05). Malformed JSON, a `command` outside the Phase A union, a
+   missing field or query param used to borrow `E_INVALID_VALUE`, which is a
+   VERB code. The line is now: **rejected at the door (Zod) =
+   `E_BAD_REQUEST`; rejected by the engine = that verb's own code.**
+   Consequence worth knowing: a whitelist-range violation (e.g. `volume:
+   150`) is stopped at the door by Item 12's schema validation, so it is now
+   `E_BAD_REQUEST` rather than `E_INVALID_VALUE`. That is intended — the
+   split is "who rejected it", not "what kind of wrong it was". No UI impact
+   (a 0-100 slider cannot send 150). Tests: `ops.test.ts` covers both sides.
+4. **`E_BRANCH_EXISTS` added.** Behaviour unchanged — the duplicate branch
+   was never created and still is not; this only lets the UI say "that name
+   is taken". Tests: `triage.test.ts` 4/6 (both the code and the
+   still-exactly-one-branch assertion).
+5. **`E_INTERNAL` added**, and `handler.ts` now catches unexpected
+   exceptions into the envelope. The internal message is logged server-side
+   and never sent to the client (no stack trace or connection string leak);
+   the client gets "something went wrong". This closes the deliberate
+   deviation recorded above: C4 (1)'s "every response has the envelope" now
+   holds without exception.
+6. **`demo.otio`'s clip C is now `logo.png`, an image** (`available_range:
+   null`, per O1). C8's fixture line said "3 short videos", but the same
+   doc calls this clip a logo and elsewhere writes "logo.png 5s dikhao ya
+   5min". Making it an image means the demo exercises O1 (unbounded image
+   length) and O3 (slip on an image is `E_NOT_APPLICABLE`) instead of only
+   the engine's own goldens covering them. docs/11 C8 amended. The 9-step
+   choreography is untouched (C only ever gets moved). Tests:
+   `triage.test.ts` 6/6.
+
+Evidence for the whole pass: typecheck green, lint green, **287 engine + 30
+server = 317 tests** green against real Postgres, `packages/engine/src/**`
+untouched.

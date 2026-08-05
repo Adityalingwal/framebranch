@@ -9,11 +9,12 @@
  *  2. runs the route's work.
  *  3. wraps whatever comes back in the C4 envelope.
  *
- * Unexpected exceptions are deliberately NOT swallowed into an invented
- * "E_INTERNAL": the C4 error list is closed, and inventing a code to
- * describe our own bug would be inventing design. Designed failures all
- * throw `ApiError` with a locked code; anything else is a crash and is
- * reported as one.
+ * Designed failures throw `ApiError` with a locked code. An UNEXPECTED
+ * exception becomes `E_INTERNAL` [ADDED 2026-08-05, M7a owner triage: the
+ * code did not exist, so a crash used to escape the envelope entirely and
+ * the UI's single reader — the whole point of C4 (1) — met a raw platform
+ * 500]. The original message is never sent to the client; it is logged
+ * server-side so a stack trace or a connection string cannot leak.
  */
 
 import { z } from "zod";
@@ -68,7 +69,10 @@ export async function handleRequest(
     if (error instanceof ApiError) {
       return errorResponse(error.code, error.message, headers);
     }
-    throw error;
+    // Unexpected — our bug, not the caller's. Log the real thing, tell the
+    // client only that it happened (C4 (1): the envelope has no exceptions).
+    console.error("[framebranch] unhandled error", error);
+    return errorResponse("E_INTERNAL", "something went wrong", headers);
   }
 }
 
@@ -76,9 +80,10 @@ export async function handleRequest(
  * Body parsing + validation (docs/09 Item 12: every input is
  * schema-validated at the API door; bad input never reaches the engine).
  *
- * A malformed body is reported as E_INVALID_VALUE — the closest member of
- * the locked C4 list. See IMPLEMENTATION-NOTES: the list has no dedicated
- * "malformed request" code and none was invented.
+ * A malformed body is E_BAD_REQUEST [ADDED 2026-08-05, M7a owner triage].
+ * It used to borrow E_INVALID_VALUE, but that is a Phase-A VERB code meaning
+ * "that value is illegal for this clip" — a request that does not even parse
+ * is a different failure, and the UI could not tell the two apart.
  */
 export async function readBody<T>(
   request: Request,
@@ -88,13 +93,13 @@ export async function readBody<T>(
   try {
     raw = await request.json();
   } catch {
-    throw new ApiError("E_INVALID_VALUE", "request body is not valid JSON");
+    throw new ApiError("E_BAD_REQUEST", "request body is not valid JSON");
   }
   const parsed = schema.safeParse(raw);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     throw new ApiError(
-      "E_INVALID_VALUE",
+      "E_BAD_REQUEST",
       `invalid request body: ${issue.path.join(".") || "(root)"} ${issue.message}`,
     );
   }
@@ -105,7 +110,7 @@ export async function readBody<T>(
 export function requiredQuery(request: Request, name: string): string {
   const value = new URL(request.url).searchParams.get(name);
   if (value === null || value === "") {
-    throw new ApiError("E_INVALID_VALUE", `missing "${name}" query parameter`);
+    throw new ApiError("E_BAD_REQUEST", `missing "${name}" query parameter`);
   }
   return value;
 }

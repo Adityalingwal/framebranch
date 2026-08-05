@@ -41,10 +41,13 @@ export async function POST(request: Request): Promise<Response> {
         const source = await loadBranchView(tx, project.id, body.from, true);
 
         if (await findBranch(tx, project.id, body.name)) {
-          // No dedicated "name taken" code exists in the locked C4 list and
-          // none is invented here; E_INVALID_VALUE is its closest member.
+          // E_BRANCH_EXISTS [ADDED 2026-08-05, M7a owner triage]. The locked
+          // branches(project_id, name) unique index already made this real;
+          // C4 simply never named its code. Behaviour is unchanged — the
+          // branch is still not created — but the UI can now say "that name
+          // is taken" instead of a generic "invalid value".
           throw new ApiError(
-            "E_INVALID_VALUE",
+            "E_BRANCH_EXISTS",
             `a branch named "${body.name}" already exists`,
           );
         }

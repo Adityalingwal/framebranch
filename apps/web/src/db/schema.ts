@@ -214,5 +214,14 @@ export const tickets = pgTable(
     }),
     index("tickets_project_id_idx").on(table.projectId),
     index("tickets_created_at_idx").on(table.createdAt),
+    // C3 (8) says the ticket itself is "UNIQUE index — do baar entry
+    // DB-level impossible". The composite key above alone does not deliver
+    // that: the SAME ticket could enter the register twice under two
+    // different endpoints, and two concurrent instances could both pass the
+    // app-level check in runWithTicket and both commit. A ticket is a
+    // browser `crypto.randomUUID()` (C6), i.e. globally unique already, so
+    // the database is simply told the truth. [ADDED 2026-08-05, M7a review
+    // finding F1 — owner chose the index over relaxing the doc.]
+    uniqueIndex("tickets_ticket_key").on(table.ticket),
   ],
 );
