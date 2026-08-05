@@ -1,6 +1,6 @@
 # FrameBranch Engine — Benchmark Report
 
-> **Generated:** 2026-08-04
+> **Generated:** 2026-08-05
 > **Method:** 3 warm-up runs (discarded) + 10 measurement runs → **median** (T4 locked spec).
 > Benchmarks run locally (NOT CI — HLD #16: CI hardware inconsistent).
 
@@ -20,24 +20,38 @@
 | **1k** | 1,000 | ~1,000 (2–3 pieces/family) | 4 (2 video, 1 audio, 1 text) | 5% random edits per side |
 | **10k** | 10,000 | ~10,000 (2–3 pieces/family) | 4 (2 video, 1 audio, 1 text) | 5% random edits per side |
 
+> **Four merge variants, all on the standard/split-heavy timelines above** (2026-08-05 lock —
+> every row states its own real conflict count, see Results): **independent-edits** — each side
+> edits independently with `move` excluded (overlap-safe atoms only), lowest measured conflict
+> count of the four but not guaranteed zero; **standard** — each side edits independently
+> including `move`, which can add incidental overlap conflicts against an unedited neighbour;
+> **split-heavy** — same independent-edit shape, applied to the split-heavy base timeline;
+> **conflict-heavy** — `ours`/`theirs` edit the SAME 5% of clips on the SAME atom (property
+> change or trim-end shorten, never `move`) with DIFFERENT values, so every edited clip is a
+> guaranteed conflict.
+
 ## Results
 
 | Metric | Median | Min | Max |
 | :--- | ---: | ---: | ---: |
-| computeDiff @ 1k | 991 µs | 653 µs | 27.24 ms |
-| computeDiff @ 10k | 6.08 ms | 4.52 ms | 9.76 ms |
-| startMerge @ 1k | 102.23 ms | 101.23 ms | 104.04 ms |
-| startMerge @ 10k | 1.26 s | 1.22 s | 1.31 s |
-| startMerge split-heavy @ 1k | 102.74 ms | 101.66 ms | 146.79 ms |
-| startMerge split-heavy @ 10k | 1.36 s | 1.32 s | 1.39 s |
-| applyCommand trim (single) | 614 µs | 528 µs | 867 µs |
-| applyCommand split (single) | 411 µs | 407 µs | 558 µs |
-| applyCommand move (single) | 545 µs | 527 µs | 627 µs |
-| restore replay (10 steps) | 1.02 ms | 942 µs | 1.84 ms |
+| computeDiff @ 1k | 631 µs | 387 µs | 2.49 ms |
+| computeDiff @ 10k | 3.20 ms | 2.63 ms | 3.39 ms |
+| startMerge @ 1k (19 conflicts) | 59.91 ms | 59.24 ms | 61.03 ms |
+| startMerge @ 10k (251 conflicts) | 724.75 ms | 713.73 ms | 761.52 ms |
+| startMerge split-heavy @ 1k (32 conflicts) | 61.57 ms | 60.64 ms | 63.47 ms |
+| startMerge split-heavy @ 10k (338 conflicts) | 791.62 ms | 783.10 ms | 824.09 ms |
+| startMerge conflict-heavy @ 1k (50 conflicts) | 60.51 ms | 59.27 ms | 75.87 ms |
+| startMerge conflict-heavy @ 10k (500 conflicts) | 687.81 ms | 679.83 ms | 727.30 ms |
+| startMerge independent-edits @ 1k (0 conflicts) | 60.65 ms | 59.43 ms | 80.81 ms |
+| startMerge independent-edits @ 10k (4 conflicts) | 698.75 ms | 691.73 ms | 791.05 ms |
+| applyCommand trim (single) | 320 µs | 306 µs | 661 µs |
+| applyCommand split (single) | 240 µs | 239 µs | 272 µs |
+| applyCommand move (single) | 335 µs | 310 µs | 425 µs |
+| restore replay (10 steps) | 577 µs | 555 µs | 1.08 ms |
 
 ## Headline
 
-> **Semantic diff of a 10,000-clip timeline in 6.08 ms, 3-way merge in 1.26 s, backed by 245 tests and 10,000 fuzz cases.**
+> **Semantic diff of a 10,000-clip timeline in 3.20 ms, 3-way merge in 724.75 ms, backed by 287 tests and 10,000 fuzz cases.**
 
 ## Methodology Notes
 

@@ -242,9 +242,21 @@ export function generateSplitHeavyTimeline(clipCount, seed = 99) {
  * @param {import('../src/types.js').Timeline} timeline
  * @param {number} editCount
  * @param {number} [seed=7]
+ * @param {{ excludeMove?: boolean }} [options] - `excludeMove: true` never
+ *   picks the `move` edit type (only trim-end/property-change — the
+ *   overlap-safe atoms, same reasoning as `generateConflictingPair`). When
+ *   `excludeMove` is false (the default), behaviour and RNG call sequence
+ *   are BYTE-IDENTICAL to before this option existed — no extra `rng` calls
+ *   are made on that path, so every existing call site's fixtures/seeds are
+ *   unaffected.
  * @returns {import('../src/types.js').Timeline}
  */
-export function applyRandomEdits(timeline, editCount, seed = 7) {
+export function applyRandomEdits(
+  timeline,
+  editCount,
+  seed = 7,
+  { excludeMove = false } = {},
+) {
   // Deep clone
   const tl = JSON.parse(JSON.stringify(timeline));
   const rng = new Rng(seed);
@@ -254,7 +266,13 @@ export function applyRandomEdits(timeline, editCount, seed = 7) {
 
   for (let i = 0; i < editCount; i++) {
     const clip = rng.pick(allClips);
-    const editType = rng.int(0, 2);
+    let editType = rng.int(0, 2);
+    if (excludeMove && editType === 0) {
+      // Remap move → trim-end or property-change. This extra `rng` call
+      // only happens when excludeMove is requested (a new call site), so
+      // it never changes the sequence for excludeMove: false callers.
+      editType = rng.int(0, 1) === 0 ? 1 : 2;
+    }
 
     switch (editType) {
       case 0: {
@@ -287,4 +305,84 @@ export function applyRandomEdits(timeline, editCount, seed = 7) {
   }
 
   return tl;
+}
+
+/**
+ * Build a guaranteed-conflicting pair of divergent timelines (T4 "conflict
+ * fixtures" / Option A1 lock, 2026-08-05).
+ *
+ * Both sides edit the SAME set of clips on the SAME atom (property change or
+ * trim-end — never `move`, which could create an overlap) with DIFFERENT
+ * values, so every edited clip yields a guaranteed Bucket-1 value conflict.
+ *
+ * Atom choice per clip (in priority order, so every eligible clip gets
+ * exactly one edit):
+ *   1. `volume` property change (video clips carry it).
+ *   2. `opacity` property change (video/image clips carry it).
+ *   3. Trim-end shorten (any clip with sourceRange/lineage, duration > 3 so
+ *      both a 1-frame and a 2-frame shorten stay positive). Text clips have
+ *      no `properties`, so they fall through to this branch.
+ * A clip that qualifies for neither (e.g. too short to trim, no properties)
+ * is skipped — `expectedConflicts` reports the real count actually applied,
+ * not the requested `editCount`.
+ *
+ * @param {import('../src/types.js').Timeline} timeline
+ * @param {number} editCount - target number of conflicting clips (upper bound)
+ * @param {number} seed
+ * @returns {{ ours: import('../src/types.js').Timeline, theirs: import('../src/types.js').Timeline, expectedConflicts: number }}
+ */
+export function generateConflictingPair(timeline, editCount, seed) {
+  const rng = new Rng(seed);
+
+  // Independent deep clones — same track/clip order (both derived from the
+  // same source timeline), so index-aligned iteration hits the SAME clip on
+  // both sides.
+  const ours = JSON.parse(JSON.stringify(timeline));
+  const theirs = JSON.parse(JSON.stringify(timeline));
+
+  const oursClips = ours.tracks.flatMap((track) => track.clips);
+  const theirsClips = theirs.tracks.flatMap((track) => track.clips);
+
+  // Deterministic Fisher-Yates shuffle of clip indices so the chosen clips
+  // are spread across the timeline rather than always the first N.
+  const indices = oursClips.map((_, i) => i);
+  for (let i = indices.length - 1; i > 0; i--) {
+    const j = rng.int(0, i);
+    const tmp = indices[i];
+    indices[i] = indices[j];
+    indices[j] = tmp;
+  }
+
+  let expectedConflicts = 0;
+  for (const idx of indices) {
+    if (expectedConflicts >= editCount) break;
+    const a = oursClips[idx];
+    const b = theirsClips[idx];
+
+    if (a.properties && a.properties.volume !== undefined) {
+      const base = a.properties.volume;
+      a.properties.volume = (base + 37) % 101;
+      b.properties.volume = (base + 71) % 101;
+      expectedConflicts++;
+    } else if (a.properties && a.properties.opacity !== undefined) {
+      const base = a.properties.opacity;
+      a.properties.opacity = (base + 37) % 101;
+      b.properties.opacity = (base + 71) % 101;
+      expectedConflicts++;
+    } else if (a.timelineRange.duration.value > 3) {
+      // Trim end (shorten only — can never introduce an overlap). Different
+      // shorten amounts on each side guarantee different resulting values.
+      a.timelineRange.duration.value -= 1;
+      if (a.sourceRange) a.sourceRange.duration.value -= 1;
+      a.lineage.span.duration.value -= 1;
+
+      b.timelineRange.duration.value -= 2;
+      if (b.sourceRange) b.sourceRange.duration.value -= 2;
+      b.lineage.span.duration.value -= 2;
+      expectedConflicts++;
+    }
+    // else: clip has no properties and is too short to trim safely — skip.
+  }
+
+  return { ours, theirs, expectedConflicts };
 }
