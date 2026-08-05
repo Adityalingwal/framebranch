@@ -27,6 +27,24 @@ export function findMediaRef(
   return timeline.mediaRefs.find((ref) => ref.id === mediaRefId);
 }
 
+/**
+ * M8b — selection is kept as an id (Shell.tsx), never a snapshot object:
+ * every edit replaces the timeline in the query cache, and a stored object
+ * reference would go stale the instant its own value changed (e.g. a
+ * volume slider would keep showing the pre-drag number). This is the one
+ * read site that turns an id back into the live clip.
+ */
+export function findClipById(
+  timeline: Timeline,
+  clipId: string,
+): AnyClip | undefined {
+  for (const track of timeline.tracks) {
+    const clip = (track.clips as AnyClip[]).find((c) => c.id === clipId);
+    if (clip) return clip;
+  }
+  return undefined;
+}
+
 /** `/media/interview.mp4` → `interview` */
 function fileStem(url: string): string {
   const base = url.split("/").pop() ?? url;
