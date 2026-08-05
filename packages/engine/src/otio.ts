@@ -448,9 +448,19 @@ const PROPERTY_KEYS_BY_KIND = {
 // importOtio (public 6/7)
 // ---------------------------------------------------------------------------
 
-export function importOtio(otioJson: unknown): ImportResult {
+/**
+ * `targetRate` — M7b: importing into a project that already has a rate
+ * (a re-import, not the project's first) must land ON that rate, not
+ * whatever the new file declares (O6 is for establishing a rate from
+ * scratch). When given, it skips O6 entirely and every value converts to
+ * it — same single door, same `convertRate()`, just caller-supplied.
+ */
+export function importOtio(
+  otioJson: unknown,
+  targetRate?: number,
+): ImportResult {
   try {
-    return runImport(otioJson);
+    return runImport(otioJson, targetRate);
   } catch (error) {
     if (error instanceof OtioAbortError) {
       return { ok: false, error: error.engineError };
@@ -467,7 +477,7 @@ export function importOtio(otioJson: unknown): ImportResult {
   }
 }
 
-function runImport(otioJson: unknown): ImportResult {
+function runImport(otioJson: unknown, targetRate?: number): ImportResult {
   const root = requireObject(otioJson, "document");
   const rootSchema = requireSchema(root, "document");
   if (rootSchema.name !== "Timeline") {
@@ -491,9 +501,11 @@ function runImport(otioJson: unknown): ImportResult {
 
   // O6 — (1) global_start_time's RATE (its value is ignored: our timelines
   // always start at 0), (2) else the first clip's rate, (3) else 24 + warning.
-  let rate: number | null = null;
+  // Skipped entirely when the caller supplies `targetRate` (a re-import
+  // landing on an existing project's rate, not establishing a fresh one).
+  let rate: number | null = targetRate ?? null;
   const globalStart = root.global_start_time;
-  if (globalStart !== undefined && globalStart !== null) {
+  if (rate === null && globalStart !== undefined && globalStart !== null) {
     rate = parseRationalTime(globalStart, "global_start_time").rate;
   }
   if (rate === null) rate = firstClipRate(trackNodes);

@@ -862,6 +862,227 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   naya CONCEPT zero) aur C8 (logo = image). Branch: `feat/server`.
   **NEXT:** M7b — brief mein likhna hai ki teen naye codes pehle se maujood
   hain aur naye endpoints unhi patterns par banenge.
+- **M7b server ka doosra hissa ✅ DONE (2026-08-05):** M7 ka baaki aadha —
+  **merge (start/resolve/abort/finalize)**, **restore**, **import/export**,
+  **agent/simulate**, **demo/reset** aur **GET diff**, saath mein test **G4**
+  aur **CI step 5**. Naya table/verb/endpoint/error-code EK bhi nahi; sab
+  M7a ke hi darwazon par bana (`handleRequest` → `readBody` →
+  `runWithTicket` → `loadBranchView(lock)` → seal → **re-read** → C4 shape).
+  **createCommit ko uske teen M7b parameters wapas mile** (`forceSnapshot`,
+  `parent2Id`, `importWarnings`) — M7a ne inhe jaan-boojh ke hataya tha
+  kyunki caller nahi tha; ab callers hain (Q1: import/restore/merge commits
+  hamesha poora snapshot, `snapshot_distance = 0`, koi ops row nahi).
+  **Merge:** dono branch dirty hon to dono seal (merge committed heads se
+  banti hai, aur wahi do head `merge_attempts` mein finalize-CAS ke liye
+  likhe jaate hain); merge base = commit-DAG ka common ancestor, `parent_id`
+  **aur** `parent2_id` dono se chal ke, deterministic (tie sirf commit-id se,
+  `created_at` se KABHI nahi — ek hi transaction ke do commits ka `now()`
+  same hota hai); zero conflict → usi transaction mein turant finalize
+  (`{done, mergeCommitId}`), conflict → ek draft row (`status` ki poori
+  vocabulary = ek hi value `"open"`, kyunki C3 kehta hai row finalize/abort
+  par delete hoti hai — soft-delete docs/09 #1 mein reject ho chuka).
+  Finalize EK jagah hai (`server/merge.ts`), aur wahi **HLD #8 ka dono-parent
+  CAS** karta hai: koi bhi head hila → `E_STALE_HEAD`, commit nahi, kuch bhi
+  nahi likha (throw poora transaction rollback karta hai — yahi mechanism
+  hai), aur draft bacha rehta hai taaki user restart kar sake.
+  **Agent:** `script` ek NAAM hai (server-side fixture `agent-scripts.ts`,
+  C8 ke chaar edits), poora run pehle MEMORY mein chalta hai — ek bhi command
+  fail → kuch bhi nahi likha, us verb ka apna error; sab pass → ek auto-commit
+  + ops rows, sab par `actor:"agent"`. **demo/reset:** project row, token aur
+  cookie zinda rehte hain (fresh STATE chahiye, nayi pehchaan nahi) aur
+  `tickets` bhi (project delete karte to cascade isi call ki ticket row uda
+  deta aur endpoint idempotent reh hi nahi sakta); seed ka code ab EK hi
+  function (`seedProjectFromDemo`) hai jise bootstrap aur reset dono bulate
+  hain. **export:** `mediaWarnings` field JAAN-BOOJH ke chhodi — V1 media
+  deployment URL fixtures hain, koi runtime resolve-check hai hi nahi
+  (HLD #12/#13), to us field mein daalne ko koi imaandaar signal nahi.
+  **Side-branch (HLD 7b/#7) NAHI banaya — proof ke saath:** head sirf EK
+  jagah hilta hai (`createCommit`), aur uska har caller usi branch ka
+  `working_state` row pehle `FOR UPDATE` leta hai aur CAS ki ummeed usi lock
+  ke andar padhi `base_commit_id` se banati hai; Postgres READ COMMITTED mein
+  doosra writer lock milne par nayi row-version dobara padhta hai, isliye
+  agent-run par stale head reachable hi nahi. M4 ke I1 wala precedent —
+  na-chal-sakne wali machinery add karne se behtar hai proof likhna.
+  **Test G4 asli hai:** merge khuli rehte hue ek branch ka head SACH MEIN
+  normal edit+commit se hilaya, phir aakhri conflict resolve — `E_STALE_HEAD`,
+  commit-count same, koi `parent2_id` wala commit nahi, dono heads aur dono
+  timelines bilkul waise ke waise; phir wahi test DOOSRE parent ke liye
+  (docs/09 #8 dono revalidate karta hai). **Evidence:** typecheck + lint
+  green; tests **287 engine + 58 server = 345** (30 → 58; M7a ke 30 bina
+  chhue green). Do mutation-check se saabit kiya ki naye test load-bearing
+  hain: doosre parent ka CAS hataya → G4 (FROM) red; draft-row ka delete
+  hataya → finalize wala test red (dono revert, phir 58/58 green). Khaali DB
+  par EK migration command se poori suite chali (koi naya migration NAHI —
+  aathon table pehle se the). **CI step 5 LIVE:** `gate` job mein coverage
+  (report-only, koi threshold nahi — engine src 94.31%, web src 95.10%) +
+  `scripts/lock-id-gap-check.mjs` (fail-blocking; docs/11 ke lock-ID aur
+  docs/12 ke G/H ids test-naamon se cross-check — 66 ids, 5 wajah-samet
+  excluded, 61 in scope, sab covered). `TODO(M7b)` marker hata; `gate`/`fuzz`
+  parallel structure aur 10,000-case fuzz floor bilkul unchanged.
+  **Report ki gayi cheezein (invent NAHI ki):** (1) C8 ki clip-D wali command
+  0:20 par baithti hai par fixture mein clip C 18s–22s ghera hue hai, isliye
+  locked script pristine project par `E_OVERLAP` deti hai — runtime witness
+  ke saath report; (2) `POST import` A1.2 ko literal pad ke `project_rate`
+  update karta hai, to alag-rate file project ki history mein do rate chhod
+  deti hai; (3) C4 mein "commit not found" aur "merge attempt not found" ka
+  koi code nahi (abhi `E_BAD_REQUEST` / `E_MERGE_PRECONDITION`); (4) C3 ki
+  `tickets.endpoint` list mein `merge-abort` likhna reh gaya tha.
+- **M7b independent review ✅ DONE (2026-08-05) — ZERO findings:** review ek
+  doosre model (**Fable 5**) se, read-only, har finding ke liye runtime witness
+  + locked-doc citation zaroori (role-swap kayam: jo implement kare wo review
+  na kare; reviewer ko implementation ki findings-file pehle se di gayi thi).
+  **Ek bhi locked-doc violation demonstrate nahi hua** — na CRITICAL, na LOW.
+  Reviewer ne har number KHUD reproduce kiya (287+58=345, gap-check 66/5/61,
+  coverage 94.31/95.10, engine diff khaali, koi naya migration nahi) aur apne
+  scratch DB par asli witness chalaye: **merge base** ek synthetic 9-commit DAG
+  par (chain + do-parent merge + criss-cross — `base(B,C)=R`, `base(M,C)=C`
+  proper-ancestor drop ke saath, criss-cross ka jawab dono taraf se same),
+  **cross-project** (Bob Alice ka attempt resolve/abort kare →
+  `E_MERGE_PRECONDITION`, Bob ka demo/reset Alice ka data nahi chhuta),
+  **idempotency** (retried merge = wahi `attemptId`, retried resolve = parchi
+  mein ek hi jawab), aur sabse zaroori — **implementation ke dono
+  mutation-claims dobara khud derive kiye**: `from`-side CAS hata ke chalaya to
+  sach mein STALE `parent2` ke saath aadha-merge commit likha gaya
+  (`fromMoved=true, merge commits written=1`), yani G4 asli mein farak karta
+  hai. **Side-branch ka unreachability proof bhi TRUE nikla** — `update
+  (branches)` poore `apps/web` mein ek hi jagah hai aur `createCommit` ka har
+  caller usi transaction mein `working_state` ka `FOR UPDATE` lock rakhta hai;
+  reviewer counterexample bana hi nahi paya. M8 ka kuch nahi ghusa (`app/`
+  mein sirf `api/`), M7a ka koi test/file nahi toota, CI ka structure aur
+  10k fuzz floor bilkul waise ke waise, coverage bina threshold ke (owner lock).
+  **Do "worth knowing" (findings NAHI, koi doc nahi toota):** (a) gap-script
+  sirf item-level lock-ID padhta hai — nested amendment ids (Q1-Q3, F5/F7/F13,
+  N2-N4) apne parent lock ke through cover hote hain, aur reviewer
+  green-CI-with-missing-test wali halat bana nahi paya; agar kabhi
+  amendment-granularity chahiye to wo enhancement hai, aaj ka gap nahi;
+  (b) ek commit agar usi project ke `demo/reset` ke saath race kare to
+  `E_INTERNAL` ("working_state row missing") dikhega — docs is mid-reset race
+  par khamosh hain, single-user demo hai, sirf isliye likha hai ki log mein
+  dikhe to anjaan crash na lage.
+- **M8 (UI) VISUAL DESIGN — LOCKED (2026-08-05, ab canonical yahan):** ye lock
+  M8 ke chhe "kaise banega" decisions ke UPAR ka hai — **kaisa DIKHEGA**.
+  Approved mockup (round 2):
+  `https://claude.ai/code/artifact/ea52c506-f9d8-4be6-a93e-05cce919e75f`
+  (source `framebranch-ui-mockup.html`, scratchpad mein — repo mein nahi).
+  Ye starting point hai; banate waqt chhote badlav honge, par buniyaad yahi.
+  **Values anumaan NAHI hain:** sab `usecardboard.com` par LIVE browser
+  inspection (computed-styles ka frequency analysis) se nikale — isliye "unke
+  jaisa lagta hai" verifiable claim hai, taste nahi (no-unproven-claims rule).
+  **Tokens:** ground — page `#1a1a1a`, panel `#0d0d12`, panel-2 `#15151b`,
+  deep `#08080b`; text — body `#d9d9d9`/`#e4e4e7`, dim `#8b8b93`, mute
+  `#5c5c65`; **accent (unka asli) `#4fa2ff` → `#2b7fff` gradient**; semantic
+  (unke asli, 1.5px borders par mile) good `#3fcf8e`, warn `#fbb13c`, bad
+  `#ff6e5c` — accent se ALAG, decoration ke liye kabhi nahi; radii 5-6px
+  chhoti cheezein / 8px / 12-14px panels / buttons pill; type sirf weight
+  **400 aur 500** (koi bold nahi — restraint hi premium hai), sizes
+  10/11/12/13/14/16; UI font **Geist** (npm `geist`; unka display face Denton
+  landing-page ki cheez hai, tool mein zaroorat nahi).
+  **Premium feel ki ASLI wajah = teen depth techniques, colors nahi** (round 1
+  "flat, AI-generated" isi wajah se laga tha):
+  (1) border ki jagah **layered inset shadows** —
+  `inset 0 1px 0 rgba(255,255,255,.07)` + `inset 0 0 0 1px rgba(255,255,255,.04)`
+  + `0 3px 8px rgba(0,0,0,.24)`; bada variant `inset 0 1px 0 #fff/.06,
+  inset 0 0 0 1px #fff/.05, 0 4px 16px -4px rgba(0,0,0,.45)`;
+  (2) panels flat nahi — **top se lit radial gradient**
+  `radial-gradient(circle at 50% 3%, #16161d, #101016)`;
+  (3) **vignette** poore frame par
+  `radial-gradient(110% 110%, transparent 55%, rgba(0,0,0,.45) 100%)`.
+  Plus: floating chrome par `backdrop-filter: blur(8px)`; sunken lanes par
+  `inset 0 1px 2px rgba(0,0,0,.4)`; hover `.15s cubic-bezier(.4,0,.2,1)`,
+  bade movements `.65s cubic-bezier(.16,1,.3,1)`.
+  **Aur kya locked:** dark-only jaan-boojh ke (editing tool hai — light theme
+  banana hi nahi); **zero art/illustration** (landing-page ki cheez, tool mein
+  khilona lagti hai); layout mockup jaisa — patli left icon-rail → preview +
+  clip-properties → timeline (tracks + clips) → right panel jisme tabs
+  **Changes / Merge / History** (= locked `?view=` panels); UI copy
+  git-shabdon se paak ("Save version", "Restore", "3 changes", conflict
+  buttons "Keep yours / Keep agent's / Keep original"); thumbnails mockup mein
+  CSS stand-in hain, asli mein pre-made `.jpg` (M8 lock 6).
+- **M7b ke OPEN ITEMS — owner triage abhi baaki (2026-08-05):** ye
+  jaan-boojh ke FIX nahi kiye gaye, sirf likh diye gaye hain; M8 shuru karne
+  se pehle ya M9 (demo polish) mein decide honge. Koi bhi test/CI ko nahi
+  rok raha (suite green hai).
+  1. **⚠ C8 ka clip-D command demo fixture se takrata hai (sabse zaroori).**
+     C8 (F12 amendment) clip D ko `timelineRange { start: 0:20, duration: 5s }`
+     par likhta hai, par M7a ke `apps/web/fixtures/demo.otio` mein clip C
+     432–528 frames (18s–22s) ghere hue hai — D 480–600 par usme ghus jaata
+     hai. Nateeja: locked agent script pristine project par `E_OVERLAP` deta
+     hai aur (HLD #3 ke mutabik, sahi) kuch bhi nahi likhta — **9-step
+     choreography aise nahi chalegi.** Precedence: C8 ka command LOCK hai,
+     fixture ki clip-durations M7a ka implementation choice thi — yani
+     fixture hi line se bahar hai. Sujha hua ek-number fix (owner ka call,
+     lagaya NAHI gaya): C ki duration 48 frames (2s) → C 432–480, 0:20 khaali,
+     aur user ka "C → 0:20" move phir bhi wahi B3 overlap deta hai.
+     Test abhi is sach ke saath imaandaar hain: success-path pehle C delete
+     karta hai, aur atomicity-path asli script pristine fixture par chala ke
+     `E_OVERLAP` + zero-writes assert karta hai (fixture theek hote hi us
+     doosre test ko naya failing script chahiye — comment mein likha hai).
+  2. **`POST import` ka project-rate edge.** A1.2 literally lagaya gaya:
+     import `projects.project_rate` update kar deta hai. 24fps project mein
+     30fps file import ho to purane commits 24fps ke rehte hain aur `GET diff`
+     us seedhe par JHOOTH bolta hai — proven witness: 240@24 vs 300@30 (dono
+     exactly 10s) par `computeDiff` "Clip c extended by 60 frames at the end"
+     likhta hai. Aaj asar seemit hai kyunki `project_rate` server mein
+     **write-only** hai (koi padhta nahi; engine ka `E_RATE_MISMATCH`
+     materialized timeline ke apne `projectRate` se compare karta hai).
+     Options (koi implement nahi): alag rate wali import reject, ya A1.3 ke
+     `convertRate` se darwaze par convert, ya accept + README limitation.
+  3. **C4 mein do code missing.** "commit not found" (restore/diff ka anjaan
+     ya doosre project ka commitId) abhi `E_BAD_REQUEST` hai, aur "merge
+     attempt not found" `E_MERGE_PRECONDITION`. Dono jagah lakeer "kisne
+     reject kiya" wali hai, isliye behaviour defensible hai — par agar UI ko
+     alag message chahiye to ye C4 amendment hai.
+  4. **C3 ki `tickets.endpoint` list mein `merge-abort` likhna reh gaya tha**
+     (ek-shabd ka doc omission; code mein add ho chuka, C4(4) "har mutating
+     endpoint par ticket" se derive).
+  5. **Chhoti observations (M7a code, chhue nahi gaye):** `loadBranchView`
+     `branches` row ko `working_state` lock lene se PEHLE padhta hai — har CAS
+     ke liye harmless (CAS `working.baseCommitId` par hai), par `POST branch`
+     ka clean-source path usi unlocked read se nayi branch ka start-point
+     leta hai; aur `docs/12` ka "Step 5 stays TODO(M7)" waala jumla ab
+     historical hai (CI se marker hat chuka, locked doc ko chheda nahi gaya).
+- **M7b OPEN ITEMS ka owner triage ✅ DONE (2026-08-05):** paanchon item ek-ek
+  karke discuss hue, decisions:
+  1. **Fix kiya.** `apps/web/fixtures/demo.otio` mein clip C ki duration
+     96→48 frames (18s-20s ab), 0:20 khaali ho gaya — C8 ka locked script ab
+     PRISTINE fixture par bhi seedha chalta hai, koi workaround nahi chahiye.
+     `boundary.test.ts` ka success-test (`branchForAgentRun`) ab branch
+     banane ke baad kuch bhi delete NAHI karta — real 9-step choreography ke
+     match mein. Atomicity-test ("fails part-way writes NOTHING") ko naya,
+     fixture-independent failure-trigger mila (`branchWithShortB` — B ko 1s
+     tak pre-shrink karta hai taaki script ka apna -2s end-trim usse negative
+     duration mein le jaaye → `E_INVALID_RANGE`, teen pehle commands already
+     succeed ho chuke the). Mutation-check se dono saabit hue load-bearing
+     (fixture 96 pe wapas kiya → success-test `E_OVERLAP` se red; import-fix
+     hataya → naya test red).
+  2. **Fix kiya.** `packages/engine/src/otio.ts` ke `importOtio()` ko optional
+     `targetRate` param mila — diya jaaye to O6 ka apna-rate-detect skip
+     karke seedha usi rate mein convert karta hai (wahi locked `convertRate()`
+     mechanism, bas target caller-supplied). `apps/web/src/app/api/import/
+     route.ts` ab project ka EXISTING rate isi param mein deta hai aur
+     `projects.projectRate` ko ab kabhi overwrite nahi karta — project ka
+     rate sirf pehli baar (bootstrap/demo-reset) set hota hai, uske baad
+     hamesha stable. Naya test: 30fps file 24fps project mein import →
+     `projectRate` 24 hi rehta hai, clip ki duration 60 frames@30fps se
+     48 frames@24fps mein sahi convert hoti hai (raw copy nahi). Mutation-
+     check se load-bearing saabit.
+  3. **Reject kiya (documented rehne diya, fix nahi).** Impact demo ke liye
+     namatter hai — UI kabhi invalid commitId/attemptId khud type/bhejta
+     nahi (state se aata hai), aur request abhi bhi sahi reject ho rahi hai,
+     sirf code generic hai. Naya C4 lock + UI error-switch ka extra case
+     iske liye worth nahi laga.
+  4. **Doc fix kiya.** docs/11 C3 ki `tickets.endpoint` list mein
+     `merge-abort` add (amendment note ke saath).
+  5. **Doc fix kiya (sirf 5b — stale line).** docs/12 ka "Step 5 stays
+     TODO(M7)" ab batata hai ki step 5 M7b ke ant mein live hua (2026-08-05).
+     5a (`loadBranchView` observation) ke liye koi separate stale doc nahi
+     thi fix karne ko — upar wali entry hi uska sahi, permanent record hai.
+  **Evidence:** typecheck + lint green; **287 engine + 59 server = 346**
+  tests (58→59, naya import-rate test; agent-simulate ke dono tests updated,
+  koi count nahi badla wahan). Engine 500-case local fuzz green. `git diff
+  --stat` = sirf 4 code/test files (`demo.otio`, `import/route.ts`,
+  `boundary.test.ts`, `packages/engine/src/otio.ts`) + do doc files
+  (`docs/11`, `docs/12`) — koi aur file nahi chhue gayi.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

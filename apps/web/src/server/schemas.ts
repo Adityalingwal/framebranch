@@ -172,3 +172,115 @@ export const branchSwitchBodySchema = z
     ticket,
   })
   .strict();
+
+// ---------------------------------------------------------------------------
+// M7b bodies. Same discipline: SHAPE only. Merge rules belong to the engine
+// (startMerge / applyChoice / finalizeCheck), OTIO rules to importOtio.
+// ---------------------------------------------------------------------------
+
+/**
+ * C4 (4) — POST merge `{ from, into }`: `from` is merged INTO `into`.
+ *
+ * The `from !== into` refusal is a SHAPE rule (two distinct branch names are
+ * required), not a merge rule: merging a branch into itself would write a
+ * commit whose two parents are the same commit, which C3's "SIRF merge — 2
+ * baap" cannot mean. Rejected at the door → E_BAD_REQUEST (reported as an
+ * assumption).
+ */
+export const mergeBodySchema = z
+  .object({
+    from: branchName,
+    into: branchName,
+    ticket,
+  })
+  .strict()
+  .refine((body) => body.from !== body.into, {
+    message: "a branch cannot be merged into itself",
+    path: ["from"],
+  });
+
+/**
+ * C4 (4) — POST merge/resolve. `choice` is the union of the three buckets'
+ * fixed button sets (C7: B1 ours/theirs/base · B2 delete/clip/base ·
+ * B3 shift-a/shift-b/base). Whether a given choice is legal for a given
+ * conflict is the ENGINE's call (`applyChoice`), not this schema's.
+ */
+export const mergeResolveBodySchema = z
+  .object({
+    attemptId: z.uuid(),
+    conflictId: z.string().min(1),
+    choice: z.enum([
+      "ours",
+      "theirs",
+      "base",
+      "delete",
+      "clip",
+      "shift-a",
+      "shift-b",
+    ]),
+    ticket,
+  })
+  .strict();
+
+/** C4 (4) — POST merge/abort (DISCARD: the draft row goes, nothing else). */
+export const mergeAbortBodySchema = z
+  .object({
+    attemptId: z.uuid(),
+    ticket,
+  })
+  .strict();
+
+/** C4 (4) + F5(a) — POST restore {branch, commitId}. */
+export const restoreBodySchema = z
+  .object({
+    branch: branchName,
+    commitId: z.string().min(1),
+    ticket,
+  })
+  .strict();
+
+/**
+ * C4 (4) — POST import. `otioJson` is arbitrary JSON: the schema only checks
+ * that it is PRESENT and lets `importOtio` judge it (O7/H11 — it takes
+ * `unknown` and never throws). Re-validating OTIO here would duplicate the
+ * engine, which is exactly what the locks forbid.
+ */
+export const importBodySchema = z
+  .object({
+    branch: branchName,
+    otioJson: z.unknown(),
+    ticket,
+  })
+  .strict()
+  .refine((body) => "otioJson" in body, {
+    message: "otioJson is required",
+    path: ["otioJson"],
+  });
+
+/** C4 (4) + F5(a) — POST export {branch}. */
+export const exportBodySchema = z
+  .object({
+    branch: branchName,
+    ticket,
+  })
+  .strict();
+
+/**
+ * C4 (4) + F5(a) — POST agent/simulate {branch, script}. `script` is a NAME
+ * (C3's branch template is literally `agent/<script>-N`), not a payload of
+ * commands; the scripted edits are a server-side fixture (C8).
+ */
+export const agentSimulateBodySchema = z
+  .object({
+    branch: branchName,
+    script: z.string().min(1).max(100),
+    ticket,
+  })
+  .strict();
+
+/** C4 (4) — POST demo/reset {}: nothing but the ticket. */
+export const demoResetBodySchema = z
+  .object({
+    ticket,
+  })
+  .strict();

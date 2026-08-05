@@ -51,6 +51,27 @@ export async function findBranch(
   return rows[0] ?? null;
 }
 
+/**
+ * Branch lookup BY ID — the merge path stores branch ids on the attempt row
+ * (C3's `branch_into` / `branch_from`) and re-reads the rows at finalize for
+ * the both-parents CAS (docs/09 #8). Project-scoped like every other query.
+ */
+export async function loadBranchById(
+  tx: Tx,
+  projectId: string,
+  branchId: string,
+): Promise<BranchRow> {
+  const rows = await tx
+    .select()
+    .from(branches)
+    .where(and(eq(branches.projectId, projectId), eq(branches.id, branchId)))
+    .limit(1);
+  if (rows.length === 0) {
+    throw new ApiError("E_BRANCH_NOT_FOUND", `no branch "${branchId}"`);
+  }
+  return rows[0];
+}
+
 export async function loadWorkingState(
   tx: Tx,
   projectId: string,
