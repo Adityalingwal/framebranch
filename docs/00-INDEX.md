@@ -34,10 +34,11 @@ always wins if wording ever drifts.
 
 Current milestone (2026-08-05): **M1-M6 + M7a merged on `main`** (M6 via
 PR #5 `a96c47f`; M7a via PR #6 `e38c18a`, including its independent review
-and the six-item owner triage). **M7b is implemented and green** (merge /
-restore / import / export / agent-simulate / demo-reset / GET diff, test G4,
-CI step 5) — see its entry in docs/07, including the **"M7b ke OPEN ITEMS"**
-list that is documented-not-fixed and still needs owner triage.
+and the six-item owner triage). **M7b is implemented, reviewed (Fable 5,
+zero findings), and its five OPEN ITEMS are triaged** (merge / restore /
+import / export / agent-simulate / demo-reset / GET diff, test G4, CI step
+5; two items fixed with evidence, one rejected, two doc-only) — see its
+entry in docs/07, **"M7b OPEN ITEMS ka owner triage ✅ DONE"**.
 **Next = M8 (UI)**, split into M8a (shell + timeline + history/restore) and
 M8b (diff + merge/conflict panels + the optimistic mutation wrapper). M8's
 six "how" locks AND its **visual design lock** (Cardboard-sampled tokens, the

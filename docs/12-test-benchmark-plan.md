@@ -122,7 +122,10 @@
   job **in parallel**, not `needs: gate` — a lint failure and a fuzz run can
   both be in flight at once (public-repo Actions minutes are free; wasted
   compute on a doomed run is an accepted trade for wall-clock speed). Step 5
-  stays TODO(M7), unaffected. Trigger ladder (which depth runs when):
+  was TODO(M7) at the time of this amendment; it went live in `gate` at the
+  end of M7b (2026-08-05 — coverage report-only + the lock-ID gap-script,
+  fail-blocking), unaffected by anything else here. Trigger ladder (which
+  depth runs when):
   | event | gate | fuzz |
   |---|---|---|
   | push, feature branch, no open PR | yes | 500-case smoke, 1 shard |

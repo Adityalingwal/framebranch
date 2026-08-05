@@ -212,10 +212,10 @@ const time = (value: number, rate = 24) => ({
   rate,
   value,
 });
-const range = (start: number, duration: number) => ({
+const range = (start: number, duration: number, rate = 24) => ({
   OTIO_SCHEMA: "TimeRange.1",
-  start_time: time(start),
-  duration: time(duration),
+  start_time: time(start, rate),
+  duration: time(duration, rate),
 });
 /** A hand-written document, deliberately NOT produced by `exportOtio`. */
 const otioDoc = (children: unknown[]) => ({
@@ -303,6 +303,50 @@ describe("C4 (4) — POST import", () => {
     const after = await view(s);
     expect(after.timeline.tracks).toHaveLength(1);
     expect(after.timeline.tracks[0].clips).toHaveLength(1);
+  });
+
+  it("M7b fix: a re-import lands on the project's EXISTING rate, not the file's", async () => {
+    const s = await session();
+    // A hand-written 30fps document: one clip, 60 frames (2s) long.
+    const doc = otioDoc([
+      {
+        OTIO_SCHEMA: "Clip.1",
+        name: "thirty",
+        source_range: range(0, 60, 30),
+        media_reference: {
+          OTIO_SCHEMA: "ExternalReference.1",
+          target_url: "/media/other.mp4",
+          available_range: range(0, 300, 30),
+          metadata: {},
+        },
+        effects: [],
+        markers: [],
+        metadata: {},
+      },
+    ]);
+
+    expectOk(
+      await post(
+        postImport,
+        "/api/import",
+        { branch: "main", otioJson: doc, ticket: ticket() },
+        s,
+      ),
+    );
+
+    // The demo project is 24fps; import must never change project_rate
+    // (the old bug: it took the file's own rate instead — see the M7b
+    // findings' witness: 240@24 vs 300@30, same 10s, called a 60-frame
+    // extension).
+    const projectRow = (await getDb().select().from(projects))[0];
+    expect(projectRow.projectRate).toBe(24);
+
+    // The file's 60 frames @ 30fps (2s) convert to 48 frames @ 24fps — a
+    // real unit conversion, not a raw copy of the file's own frame count.
+    const after = await view(s);
+    expect(after.timeline.projectRate).toBe(24);
+    const clip = after.timeline.tracks[0].clips[0];
+    expect(clip.timelineRange.duration).toEqual({ value: 48, rate: 24 });
   });
 
   it("H11: a garbage payload is E_INVALID_OTIO and NOTHING is written", async () => {
@@ -416,13 +460,14 @@ describe("C4 (4) — POST export", () => {
 
 describe("C4 (4) — POST agent/simulate", () => {
   /**
-   * C8's script places clip D at 0:20 on the video track. On the UNTOUCHED
-   * demo fixture, clip C already occupies 18s–22s, so that placement is an
-   * overlap — see the M7b findings ("C8's D command vs the fixture layout").
-   * This branch removes C first, which is the state the choreography assumes
-   * and lets the run's success path be tested against the REAL locked script.
+   * C8's script places clip D at 0:20 on the video track (frames 480-600 @
+   * 24fps). The M7b fixture fix shortened clip C to 18s-20s (frames
+   * 432-480) so the untouched fixture no longer overlaps D there — the
+   * choreography's step 2 (branch "tighten-intro" off pristine main, no
+   * other edits before the agent runs) now matches the locked script
+   * as-is, with no workaround needed.
    */
-  async function branchWithRoomForD(s: Session): Promise<string> {
+  async function branchForAgentRun(s: Session): Promise<string> {
     const name = "tighten-intro";
     expectOk(
       await post(
@@ -432,14 +477,12 @@ describe("C4 (4) — POST agent/simulate", () => {
         s,
       ),
     );
-    await edit(s, name, 0, { op: "deleteClip", clipId: "clip-3" });
-    await save(s, name);
     return name;
   }
 
   it("Item 6a(2)/#3: a run is ONE commit whose ops all carry actor 'agent'", async () => {
     const s = await session();
-    const branch = await branchWithRoomForD(s);
+    const branch = await branchForAgentRun(s);
     const before = await commitCount();
 
     const data = expectOk(
@@ -477,23 +520,54 @@ describe("C4 (4) — POST agent/simulate", () => {
     expect(after.timeline.tracks[2].clips).toHaveLength(0);
   });
 
+  /**
+   * Independent of the fixture layout: pre-shrinks B (clip-2) to 1s so the
+   * script's OWN 4th command — its -2s end-trim on B — pushes B's duration
+   * negative. The script's first three commands (volume, caption delete,
+   * add D) still succeed against this branch's timeline and land in the
+   * in-memory `applied` list before the 4th one fails, so this still proves
+   * a part-way failure writes nothing (same shape as the original test).
+   */
+  async function branchWithShortB(s: Session): Promise<string> {
+    const name = "short-b";
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name, from: "main", ticket: ticket() },
+        s,
+      ),
+    );
+    await edit(s, name, 0, {
+      op: "trim",
+      clipId: "clip-2",
+      edge: "end",
+      delta: { value: -168, rate: 24 }, // 192 frames -> 24 frames (1s)
+    });
+    await save(s, name);
+    return name;
+  }
+
   it("#3: a script that fails part-way writes NOTHING at all", async () => {
     const s = await session();
+    const branch = await branchWithShortB(s);
     const before = await commitCount();
-    const beforeTimeline = (await view(s)).timeline;
+    const beforeOpsCount = (await getDb().select().from(ops)).length;
+    const beforeTimeline = (await view(s, branch)).timeline;
 
-    // On the untouched fixture the locked script's clip D overlaps clip C.
+    // B is down to 1s; the script's own -2s end-trim on B (its 4th and
+    // last command) would leave it at -1s — nonpositive duration.
     const call = await post(
       postAgent,
       "/api/agent/simulate",
-      { branch: "main", script: "tighten-intro", ticket: ticket() },
+      { branch, script: "tighten-intro", ticket: ticket() },
       s,
     );
-    expect(expectError(call).code).toBe("E_OVERLAP");
+    expect(expectError(call).code).toBe("E_INVALID_RANGE");
 
     expect(await commitCount()).toBe(before);
-    expect(await getDb().select().from(ops)).toHaveLength(0);
-    expect((await view(s)).timeline).toEqual(beforeTimeline);
+    expect(await getDb().select().from(ops)).toHaveLength(beforeOpsCount);
+    expect((await view(s, branch)).timeline).toEqual(beforeTimeline);
   });
 
   it("E_BAD_REQUEST: an unknown script name never touches the branch", async () => {

@@ -111,7 +111,7 @@
               "duration": {
                 "OTIO_SCHEMA": "RationalTime.1",
                 "rate": 24,
-                "value": 96
+                "value": 48
               }
             },
             "media_reference": {

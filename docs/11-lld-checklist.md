@@ -692,10 +692,12 @@
   nahi.
   (8) **tickets**: ticket (browser-generated UUID; UNIQUE index — do baar
   entry DB-level impossible), project_id, endpoint (kaunsa KAAM tha —
-  ops/commit/merge/merge-resolve/import/export/agent-run/branch-create/
-  branch-switch [F5 propagation 2026-08-03]/demo-reset/
-  restore; same ticket + alag endpoint = explicit error, HLD #16 — galat
-  jawab wapas jaane se bachaav), result (stored jawab — retry par yahi
+  ops/commit/merge/merge-resolve/merge-abort/import/export/agent-run/
+  branch-create/branch-switch [F5 propagation 2026-08-03]/demo-reset/
+  restore [AMENDED 2026-08-05, M7b owner triage — `merge-abort` ki list mein
+  likhna reh gaya tha; code mein pehle se hai (C4(4) "har mutating endpoint
+  par ticket" se derive)]; same ticket + alag endpoint = explicit error,
+  HLD #16 — galat jawab wapas jaane se bachaav), result (stored jawab — retry par yahi
   wapas, kaam dobara kabhi nahi), created_at (per-row 24h TTL cleanup —
   poori table kabhi khaali nahi hoti). SAB mutating endpoints ka shared
   register; GET/read requests ticket nahi laati (side-effect-free).

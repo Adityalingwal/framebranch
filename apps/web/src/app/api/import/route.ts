@@ -19,11 +19,18 @@
  *
  * Import is a FRESH START (docs/09 #10): new ids, nothing matched against
  * what was there before. The engine guarantees that; no matching is added.
+ *
+ * A1.2/A1.3 read literally would let a re-import overwrite `project_rate`
+ * with the new file's own rate, leaving the project's older commits (still
+ * in the old rate's frame-numbers) misinterpreted from then on (the M7b
+ * findings' witness: 240@24 vs 300@30, same 10s, `GET diff` calls it a
+ * 60-frame extension). Fixed here — the project's EXISTING rate is passed
+ * to the engine as `targetRate`, so the incoming file lands on it instead
+ * of the project ever changing rate after its first import.
  */
 
 import { importOtio } from "@framebranch/engine";
 
-import { projects } from "../../../db/schema";
 import { isDirty, loadBranchView } from "../../../server/branches";
 import { createCommit } from "../../../server/commits";
 import { ApiError } from "../../../server/envelope";
@@ -34,7 +41,6 @@ import {
 } from "../../../server/naming";
 import { importBodySchema } from "../../../server/schemas";
 import { runWithTicket } from "../../../server/tickets";
-import { eq } from "drizzle-orm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,7 +52,7 @@ export async function POST(request: Request): Promise<Response> {
     return runWithTicket(db, project.id, "import", body.ticket, async (tx) => {
       const view = await loadBranchView(tx, project.id, body.branch, true);
 
-      const imported = importOtio(body.otioJson);
+      const imported = importOtio(body.otioJson, project.projectRate);
       if (!imported.ok) {
         // Nothing is written: this throw rolls the transaction back, seal
         // included.
@@ -64,15 +70,6 @@ export async function POST(request: Request): Promise<Response> {
           actor: "user",
         });
       }
-
-      // A1.2 read literally: the project rate comes from the imported OTIO.
-      // ⚠ FLAGGED for owner triage (see the M7b findings): if the new file's
-      // rate differs from the project's, the project's older commits keep
-      // their own rate and the project holds two rates across its history.
-      await tx
-        .update(projects)
-        .set({ projectRate: imported.timeline.projectRate })
-        .where(eq(projects.id, project.id));
 
       // Re-read after the seal.
       const fresh = await loadBranchView(tx, project.id, body.branch, true);

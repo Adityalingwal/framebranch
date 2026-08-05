@@ -1041,6 +1041,48 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
      ka clean-source path usi unlocked read se nayi branch ka start-point
      leta hai; aur `docs/12` ka "Step 5 stays TODO(M7)" waala jumla ab
      historical hai (CI se marker hat chuka, locked doc ko chheda nahi gaya).
+- **M7b OPEN ITEMS ka owner triage ✅ DONE (2026-08-05):** paanchon item ek-ek
+  karke discuss hue, decisions:
+  1. **Fix kiya.** `apps/web/fixtures/demo.otio` mein clip C ki duration
+     96→48 frames (18s-20s ab), 0:20 khaali ho gaya — C8 ka locked script ab
+     PRISTINE fixture par bhi seedha chalta hai, koi workaround nahi chahiye.
+     `boundary.test.ts` ka success-test (`branchForAgentRun`) ab branch
+     banane ke baad kuch bhi delete NAHI karta — real 9-step choreography ke
+     match mein. Atomicity-test ("fails part-way writes NOTHING") ko naya,
+     fixture-independent failure-trigger mila (`branchWithShortB` — B ko 1s
+     tak pre-shrink karta hai taaki script ka apna -2s end-trim usse negative
+     duration mein le jaaye → `E_INVALID_RANGE`, teen pehle commands already
+     succeed ho chuke the). Mutation-check se dono saabit hue load-bearing
+     (fixture 96 pe wapas kiya → success-test `E_OVERLAP` se red; import-fix
+     hataya → naya test red).
+  2. **Fix kiya.** `packages/engine/src/otio.ts` ke `importOtio()` ko optional
+     `targetRate` param mila — diya jaaye to O6 ka apna-rate-detect skip
+     karke seedha usi rate mein convert karta hai (wahi locked `convertRate()`
+     mechanism, bas target caller-supplied). `apps/web/src/app/api/import/
+     route.ts` ab project ka EXISTING rate isi param mein deta hai aur
+     `projects.projectRate` ko ab kabhi overwrite nahi karta — project ka
+     rate sirf pehli baar (bootstrap/demo-reset) set hota hai, uske baad
+     hamesha stable. Naya test: 30fps file 24fps project mein import →
+     `projectRate` 24 hi rehta hai, clip ki duration 60 frames@30fps se
+     48 frames@24fps mein sahi convert hoti hai (raw copy nahi). Mutation-
+     check se load-bearing saabit.
+  3. **Reject kiya (documented rehne diya, fix nahi).** Impact demo ke liye
+     namatter hai — UI kabhi invalid commitId/attemptId khud type/bhejta
+     nahi (state se aata hai), aur request abhi bhi sahi reject ho rahi hai,
+     sirf code generic hai. Naya C4 lock + UI error-switch ka extra case
+     iske liye worth nahi laga.
+  4. **Doc fix kiya.** docs/11 C3 ki `tickets.endpoint` list mein
+     `merge-abort` add (amendment note ke saath).
+  5. **Doc fix kiya (sirf 5b — stale line).** docs/12 ka "Step 5 stays
+     TODO(M7)" ab batata hai ki step 5 M7b ke ant mein live hua (2026-08-05).
+     5a (`loadBranchView` observation) ke liye koi separate stale doc nahi
+     thi fix karne ko — upar wali entry hi uska sahi, permanent record hai.
+  **Evidence:** typecheck + lint green; **287 engine + 59 server = 346**
+  tests (58→59, naya import-rate test; agent-simulate ke dono tests updated,
+  koi count nahi badla wahan). Engine 500-case local fuzz green. `git diff
+  --stat` = sirf 4 code/test files (`demo.otio`, `import/route.ts`,
+  `boundary.test.ts`, `packages/engine/src/otio.ts`) + do doc files
+  (`docs/11`, `docs/12`) — koi aur file nahi chhue gayi.
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 
