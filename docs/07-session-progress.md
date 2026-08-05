@@ -1166,6 +1166,107 @@ local-only). Agents ka reading-map: docs/00-INDEX.md.
   Evidence: typecheck/lint/351 tests green after the fix bhi.
   **NEXT:** M8b — Changes(diff)/Merge panels ka real body + optimistic
   mutation wrapper (hybrid, M8 lock 5).
+- **M8b UI (editing + optimistic wrapper + Changes/Merge panels + agent/
+  import/export) ✅ DONE (2026-08-06):** M8 ka doosra hissa — M8a ke upar
+  editing aur do panels ka real body. `packages/engine/src/**` aur
+  `server|app/api|db/**` bilkul chhue nahi gaye.
+  **Optimistic wrapper (§4, sabse zaroori hissa):** `src/lib/optimistic.ts`
+  — EK opt-in list (`OPTIMISTIC_VERBS`: move/trim/slip/split/deleteClip/
+  rippleDelete/propertyChange — 7 of 8; `addClip` jaan-boojh ke bahar, neeche
+  wajah) aur EK `computeOptimisticResult` jo seedha `applyCommand` chalata
+  hai (rule b — koi hand-written shortcut nahi). `src/lib/hooks.ts` ka
+  `useOpsMutation` TanStack Query ke locked `onMutate/onError/onSuccess`
+  pattern se: onMutate optimistic timeline paint karta hai (agar verb list
+  mein hai), onSuccess `noChange` ko chhuta nahi (F9), warna server ka
+  `workingRev/pendingCount` seedha likh ke timeline query invalidate karta
+  hai (rule d — POST ops timeline wapas nahi deta, isliye "server ka jawab
+  final truth" ka matlab hi ye refetch hai), onError rollback + `E_STALE_REV`
+  ko khaas silent treatment (invalidate + "Timeline updated." quiet toast,
+  koi dialog nahi) deta hai. **Locked test:** `tests/optimistic.test.ts` —
+  har opt-in verb (+ ek rejected command) ke liye
+  `computeOptimisticResult(tl,cmd) === applyCommand(tl,cmd)`, table-driven.
+  **8 verbs:** Timeline clips ab drag-editable — `ClipBlock.tsx` pointer
+  events se move (poora body), trim (7px edge handles, BC.3 sign convention
+  se), aur slip (Alt+drag, sirf video/audio clips par — text/image ke liye
+  client-side hi disabled, jaisa brief ne slip ke liye explicitly locked
+  kiya). Split = ek click-to-place playhead (ruler) + "Split at playhead"
+  button jo tabhi enabled hota hai jab playhead clip ke andar strictly ho.
+  Delete/rippleDelete = do buttons ClipProperties mein + Delete key (jab
+  koi input focused na ho). Property edit = sliders/inputs, sab 6
+  whitelist properties har clip-kind ke liye dikhte hain (M8a ke apne
+  IMPLEMENTATION-NOTES #11 precedent follow kiya — "kind-based filter koi
+  lock nahi maangta"); galat kind par edit → server `E_PROPERTY_NOT_APPLICABLE`
+  deta hai, wrapper rollback + honest message dikhata hai (slip jaisa hi
+  pattern, jahan explicit lock nahi tha). `addClip` NAHI banaya — server
+  addClip ke liye clip-id ek server-generated `randomUUID()` se mint hoti hai
+  (`minterFor(opId)`), jo browser predict nahi kar sakta, isliye optimistic
+  add "client ne andaaza lagaya" wahi bug hoti jo rule (b) rokta hai; aur
+  brief khud (§5) ise optional bolta hai.
+  **Changes panel:** do version-pickers (history se, `👤/🤖 naam — time`
+  label) + `GET /api/diff`, `sentences` bilkul verbatim render (C1 — kabhi
+  reword/resort nahi), khaali diff → "No changes.", pending edits ho to
+  ek line warning. Default pair = "is branch ka head vs uska parent" jab
+  pata ho.
+  **Merge panel (Level 2):** from-branch dropdown → `[Start merge]` →
+  `{done}` ya `{attemptId,conflicts,counts}`. Har conflict card = 3-row
+  bars (Base/Yours/Agent's) + explanation (verbatim) + bucket ke locked
+  buttons (`Keep yours/Keep agent's/Keep original`, `Keep delete/Keep clip/
+  Keep original`, `Shift A/Shift B/Remove both — back to original`) —
+  saare teen buckets live browser mein verify kiye (asli C8 conflicts:
+  volume B1, caption delete-vs-edit B2, C-vs-D overlap B3). Resolve → fresh
+  counts+conflicts ya `{done}` (koi alag Finish button nahi). Cancel merge
+  → confirm dialog → abort → timeline untouched (live verify kiya: dusra
+  clip ka apna pending edit bhi safe raha). `E_STALE_HEAD` par-resolve →
+  locked sentence + `[Restart merge]`, generic toast nahi (hooks.ts mein
+  khaas-case).
+  **Agent/Import/Export (TopBar mein, M8a ke "floating chrome" slot):**
+  Simulate agent edits = hardcoded `{branch:"tighten-intro",
+  script:"tighten-intro"}` (C8 lock). Import = hidden file input → JSON
+  parse (browser) → `POST import` → itemized skip-toast + History mein
+  permanent record (F7). Export = `POST export` → Blob download `.otio` +
+  toast jisme exported version ka naam ho.
+  **Spec gap reported (invent nahi kiya, workaround diya):** koi GET
+  endpoint branch ka head-commit-id wapas nahi deta (aur `commits` rows mein
+  branch attribution bhi nahi — C3 ka jaan-boojh ka design), isliye Changes
+  panel ka "current head" default banana seedha possible nahi tha.
+  `src/lib/head-tracking.ts` — ek chhota client-side store jo har mutation
+  ke apne response se (commit/branch-create/restore/agent-run/merge) head
+  yaad rakhta hai — poori live session mein sahi kaam karta hai, par hard
+  reload par khaali ho jaata hai (tab manual version-pickers hamesha kaam
+  karte hain, koi feature block nahi hota). Report: ek sasta `GET /api/branch?
+  name=` (sirf `{headCommitId}`) ye workaround hata sakta — implement nahi
+  kiya gaya, sirf suggest.
+  **Verification mein 3 asli bugs mile aur fix hue (sab same session):**
+  (1) merge-start conflicts-path apne hi branch ka boundary auto-seal
+  invalidate nahi karta tha — "N changes" chip stale reh jaata (fixed:
+  merge start ab HAMESHA dono branches ka timeline+history invalidate karta
+  hai, `done` ho ya conflicts); (2) property-sliders/text-fields ka local
+  "live" state server-driven correction (E_STALE_REV rollback, restore,
+  doosre tab ka edit) ke baad stale reh jaata tha — `useEffect(() =>
+  setLive(value), [value])` sabhi 5 controls mein add kiya (do-tab live
+  test se pakda — slider dikhata raha rejected value jab tak clip badal ke
+  wapas na aaye); (3) agent-run failure generic C4(5) toast dikhata tha,
+  jabki docs/09 Item 10(2) EK fixed locked sentence maangta hai ("Agent run
+  failed — no changes were made.") kyunki poora run all-or-nothing hai —
+  hooks.ts mein khaas-case kiya. Teeno browser mein re-verify kiye.
+  **Evidence:** typecheck/lint green; **287 engine + 76 web (64 pehle se +
+  11 naye `optimistic.test.ts` + 1 chhota pehle se tha) = 363**, purane
+  345+ sab untouched. `pnpm --filter @framebranch/web build` green. Live
+  browser (dev mode) se poora C8 9-step demo drive kiya: import (auto) →
+  branch create+switch → 3 user edits (volume drag-verify EXACT frame 480
+  tak) → agent run → diff (3 sentences match) → merge (3 conflicts, teeno
+  bucket buttons) → History mein 2-parent merge badge → restore →
+  export→re-import round-trip (`skippedItems: []`). Har 8 verb (7 banaye +
+  addClip out-of-scope) live drag/click se verify — move/trim/split/delete/
+  rippleDelete/propertyChange real mouse automation se frame-accurate;
+  slip ka engine-path direct API se verify hua, par UI ka Alt+drag
+  automation-tool ki modifier-key limitation ki wajah se end-to-end
+  reproduce nahi ho paya (document-level listener se proof: tool ka
+  `modifiers:"alt"` asli `altKey` browser event tak pahunchta hi nahi —
+  environment gap, app code nahi; move/trim jis SAME mechanism se banaye
+  hain wo poori tarah verified hain).
+  **NEXT:** M9 (demo polish — final fixtures, thumbnails art, Vercel
+  deploy, README, docs consolidation).
 
 ## Build philosophy (Aditya ne explicitly lock ki — har decision ispe test karo)
 

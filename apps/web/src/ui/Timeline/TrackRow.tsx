@@ -14,12 +14,20 @@ export function TrackRow({
   track,
   timeline,
   selectedClipId,
+  highlightedClipId,
   onSelectClip,
+  onMove,
+  onTrim,
+  onSlip,
 }: {
   track: Track;
   timeline: Timeline;
   selectedClipId: string | null;
+  highlightedClipId?: string | null;
   onSelectClip: (clip: AnyClip, track: Track) => void;
+  onMove: (clipId: string, newStartFrame: number) => void;
+  onTrim: (clipId: string, edge: "start" | "end", deltaFrame: number) => void;
+  onSlip: (clipId: string, deltaFrame: number) => void;
 }) {
   const totalSeconds = Math.ceil(timelineEndFrame(timeline) / timeline.projectRate) + 1;
   const widthPx = totalSeconds * PX_PER_SECOND;
@@ -49,21 +57,30 @@ export function TrackRow({
         className="lane-sunken"
         style={{ position: "relative", width: widthPx, height }}
       >
-        {(track.clips as AnyClip[]).map((clip) => (
-          <ClipBlock
-            key={clip.id}
-            clip={clip}
-            mediaRef={
-              isTextClip(clip)
-                ? undefined
-                : findMediaRef(timeline, clip.mediaRefId)
-            }
-            trackKind={track.kind}
-            projectRate={timeline.projectRate}
-            selected={clip.id === selectedClipId}
-            onSelect={() => onSelectClip(clip, track)}
-          />
-        ))}
+        {(track.clips as AnyClip[]).map((clip) => {
+          const mediaRef = isTextClip(clip)
+            ? undefined
+            : findMediaRef(timeline, clip.mediaRefId);
+          // §5 — slip is E_NOT_APPLICABLE on text clips and image clips
+          // (O3): disabled here because both are knowable client-side.
+          const slipEnabled = !isTextClip(clip) && mediaRef?.kind !== "image";
+          return (
+            <ClipBlock
+              key={clip.id}
+              clip={clip}
+              mediaRef={mediaRef}
+              trackKind={track.kind}
+              projectRate={timeline.projectRate}
+              selected={clip.id === selectedClipId}
+              highlighted={clip.id === highlightedClipId}
+              slipEnabled={slipEnabled}
+              onSelect={() => onSelectClip(clip, track)}
+              onMove={onMove}
+              onTrim={onTrim}
+              onSlip={onSlip}
+            />
+          );
+        })}
       </div>
     </div>
   );

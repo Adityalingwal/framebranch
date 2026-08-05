@@ -913,3 +913,76 @@ touched.
 - The engine's `Clip` type has no name/label field (see #3 above) — flagged
   in case the owner wants a dedicated label field added to the domain model
   in a future milestone; nothing was changed to work around it.
+
+## 2026-08-06 — Milestone 8b (editing + optimistic wrapper + Changes/Merge panels + agent/import/export)
+
+Assumptions and local calls made while implementing M8b. Nothing in
+`packages/engine/src/**` or `apps/web/src/{server,app/api,db}/**` was
+touched.
+
+1. **`addClip` was not built.** The brief explicitly allows skipping it
+   ("not needed for the 9-step demo; build only if it costs nothing"), and
+   it would not have cost nothing: the server mints a new clip's id from
+   the op's id, which is a `randomUUID()` generated server-side after the
+   request arrives — the browser cannot predict it, so an optimistic add
+   would show a clip under a client-guessed id the server's real id would
+   never match (exactly the "client guessed, server did something else"
+   failure mode the optimistic-wrapper lock rule (b) exists to rule out).
+2. **Property-edit controls show all 6 whitelist properties for every
+   clip they can structurally carry**, with no kind-based applicability
+   filter (e.g. volume is offered even on an image clip) — this repeats
+   M8a's own decision (#11 above) for editable controls, not just
+   read-only ones: no lock specifies a kind-based filter, and an
+   inapplicable edit is already handled honestly by the optimistic
+   wrapper's generic rollback path (server returns
+   `E_PROPERTY_NOT_APPLICABLE`, same treatment as any other verb error).
+   Slip is the one exception with an explicit brief instruction ("disable
+   the affordance where you can tell") — text and image clips are
+   knowable client-side (already checked for the read-only preview in
+   M8a), so slip's Alt-drag is disabled for those two kinds specifically.
+3. **Playhead = a single click-to-place marker on the ruler**, not a
+   scrubbing transport with playback sync — the brief's only stated need
+   for it is Split's "a playhead/marker + a Split action", and a
+   full transport was out of scope (M8a already locked "single-clip
+   preview only, no whole-timeline playback").
+4. **Merge conflict bars (Level 2) show Base as a labelled placeholder,
+   not real data.** No endpoint returns the merge's `base` timeline (the
+   engine computes it per merge call and never sends it over the wire;
+   `server/merge.ts`'s `loadMergeSides` is server-internal), so the Base
+   row is a dashed, tooltipped "original — not available to preview"
+   strip. Yours/Agent's rows ARE accurate: they read each branch's
+   CURRENT timeline via the existing `GET /api/timeline?branch=`, which
+   equals the merge's actual `ours`/`theirs` input because both branches
+   are auto-sealed the instant a merge starts (docs/09 6a(4)) — the same
+   guarantee `E_STALE_HEAD` exists to protect. Reported as a gap, not
+   invented around: exposing `base`/`ours`/`theirs` (or at least the
+   participant clips' before/after values) in the merge response would
+   remove the placeholder.
+5. **Branch head-commit tracking is a small client-side store**
+   (`src/lib/head-tracking.ts`), same external-store shape as
+   `connection-status.ts`/`toast-status.ts`, populated only from data
+   mutations already return. No endpoint reports a branch's head commit
+   id (C3's `commits` rows carry no branch attribution, by design), so
+   this is the only way the Changes panel can default to "this branch's
+   head vs its parent" — it works for the live session and is empty after
+   a hard reload, at which point the panel's manual version-pickers (which
+   need no tracking) still cover every case, including the demo's "main
+   head vs tighten-intro head".
+6. **Three real bugs found during live-browser verification, fixed in the
+   same session** (see the M8b docs/07 entry and the scratchpad findings
+   file for the full detail): a stale "N changes" chip after a merge-start
+   auto-seal on the conflicts path (missing invalidation), property
+   sliders/text fields not re-syncing after a server-driven correction
+   (E_STALE_REV rollback, restore, another tab's edit — `useEffect`
+   added to 5 controls), and the agent-run failure toast using the
+   generic per-code message instead of docs/09 Item 10(2)'s locked fixed
+   sentence.
+7. **Slip's Alt-drag could not be end-to-end verified through browser
+   automation** (confirmed to be a tooling limitation, not app code: a
+   document-level listener showed `altKey: false` on the dispatched
+   events even when the automation's drag action was given an `alt`
+   modifier). The underlying `slip` verb was verified directly via a raw
+   `POST /api/ops` call; the UI trigger code is the same
+   `pointerHandlers` mechanism move/trim use (both fully verified via
+   real mouse automation), differing only in one `if (slipEnabled &&
+   e.altKey)` line.

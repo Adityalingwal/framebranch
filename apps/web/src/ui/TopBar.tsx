@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
+
+import type { ImportWarning } from "@framebranch/engine";
 
 import { showToast } from "../lib/toast-status";
 import { BranchControl } from "./BranchControl";
@@ -8,11 +10,38 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { chip, primaryButton, secondaryButton, textInput } from "./styles";
 import { useConnectionStatus } from "../lib/connection-status";
 import {
+  useAgentSimulateMutation,
   useCreateBranchMutation,
   useDemoResetMutation,
+  useExportMutation,
+  useImportMutation,
   useSaveVersionMutation,
   useSwitchBranchMutation,
 } from "../lib/hooks";
+
+/** §8 locked example format: "Skipped: 2 transitions, 1 blur — ...". */
+function describeSkipped(items: ImportWarning[]): string {
+  if (items.length === 0) return "Imported successfully.";
+  const list = items.map((w) => `${w.count} ${w.detail}`).join(", ");
+  return `Imported. Skipped: ${list} — these will not come back on export.`;
+}
+
+/** Client-side save-as-file — no network involved, the user's own export. */
+function downloadJson(data: unknown, filename: string): void {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** C8's only script — always this exact branch+script pair (§8). */
+const AGENT_BRANCH = "tighten-intro";
+const AGENT_SCRIPT = "tighten-intro";
 
 export function TopBar({
   currentBranch,
@@ -31,6 +60,7 @@ export function TopBar({
 }) {
   const [versionName, setVersionName] = useState("");
   const [resetOpen, setResetOpen] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   const editingPaused = useConnectionStatus().lost;
 
@@ -38,12 +68,36 @@ export function TopBar({
   const createBranch = useCreateBranchMutation();
   const switchBranch = useSwitchBranchMutation();
   const demoReset = useDemoResetMutation();
+  const agentSimulate = useAgentSimulateMutation();
+  const importMutation = useImportMutation();
+  const exportMutation = useExportMutation();
 
   const busy =
     saveVersion.isPending ||
     createBranch.isPending ||
     switchBranch.isPending ||
     demoReset.isPending;
+
+  function handleImportFile(file: File) {
+    file
+      .text()
+      .then((text) => {
+        let otioJson: unknown;
+        try {
+          otioJson = JSON.parse(text);
+        } catch {
+          showToast("That file isn't valid JSON.", "error");
+          return;
+        }
+        importMutation.mutate(
+          { branch: currentBranch, otioJson },
+          {
+            onSuccess: (data) => showToast(describeSkipped(data.skippedItems)),
+          },
+        );
+      })
+      .catch(() => showToast("Couldn't read that file.", "error"));
+  }
 
   return (
     <header
@@ -130,6 +184,74 @@ export function TopBar({
       </button>
 
       <div style={{ flex: 1 }} />
+
+      <button
+        type="button"
+        style={
+          agentSimulate.isPending || editingPaused
+            ? { ...secondaryButton, opacity: 0.5 }
+            : secondaryButton
+        }
+        disabled={agentSimulate.isPending || editingPaused}
+        title={`Runs the "${AGENT_SCRIPT}" script on branch "${AGENT_BRANCH}"`}
+        onClick={() =>
+          agentSimulate.mutate(
+            { branch: AGENT_BRANCH, script: AGENT_SCRIPT },
+            {
+              onSuccess: (data) => {
+                onBranchAdded(AGENT_BRANCH);
+                showToast(`Agent run complete — "${data.name}".`);
+              },
+            },
+          )
+        }
+      >
+        {agentSimulate.isPending ? "Agent running…" : "Simulate agent edits"}
+      </button>
+
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".otio,application/json,.json"
+        style={{ display: "none" }}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = ""; // allow re-selecting the same file next time
+          if (file) handleImportFile(file);
+        }}
+      />
+      <button
+        type="button"
+        style={
+          importMutation.isPending || editingPaused
+            ? { ...secondaryButton, opacity: 0.5 }
+            : secondaryButton
+        }
+        disabled={importMutation.isPending || editingPaused}
+        onClick={() => importInputRef.current?.click()}
+      >
+        {importMutation.isPending ? "Importing…" : "Import"}
+      </button>
+
+      <button
+        type="button"
+        style={
+          exportMutation.isPending || editingPaused
+            ? { ...secondaryButton, opacity: 0.5 }
+            : secondaryButton
+        }
+        disabled={exportMutation.isPending || editingPaused}
+        onClick={() =>
+          exportMutation.mutate(currentBranch, {
+            onSuccess: (data) => {
+              downloadJson(data.otioJson, `${data.name}.otio`);
+              showToast(`Exported "${data.name}".`);
+            },
+          })
+        }
+      >
+        {exportMutation.isPending ? "Exporting…" : "Export"}
+      </button>
 
       <button
         type="button"

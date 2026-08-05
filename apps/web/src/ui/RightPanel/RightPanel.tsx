@@ -17,10 +17,18 @@ export function RightPanel({
   view,
   onViewChange,
   currentBranch,
+  knownBranches,
+  pendingCount,
+  onHighlightClip,
+  onBranchTouched,
 }: {
   view: PanelView;
   onViewChange: (view: PanelView) => void;
   currentBranch: string;
+  knownBranches: string[];
+  pendingCount: number;
+  onHighlightClip: (clipId: string | null) => void;
+  onBranchTouched: (branch: string) => void;
 }) {
   return (
     <div
@@ -70,8 +78,20 @@ export function RightPanel({
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
-        {view === "changes" && <ChangesPanel />}
-        {view === "merge" && <MergePanel />}
+        {view === "changes" && (
+          <ChangesPanel
+            currentBranch={currentBranch}
+            pendingCount={pendingCount}
+            onHighlightClip={onHighlightClip}
+          />
+        )}
+        {view === "merge" && (
+          <MergePanel
+            currentBranch={currentBranch}
+            knownBranches={knownBranches}
+            onBranchTouched={onBranchTouched}
+          />
+        )}
         {view === "history" && <HistoryPanel currentBranch={currentBranch} />}
       </div>
     </div>

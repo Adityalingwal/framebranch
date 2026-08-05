@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-import type { Track } from "@framebranch/engine";
+import type { Command, PropertyValue } from "@framebranch/engine";
 
 import { ApiClientError } from "../lib/api-client";
-import type { AnyClip } from "../lib/clip-helpers";
-import { findMediaRef } from "../lib/clip-helpers";
-import { useTimelineQuery } from "../lib/hooks";
+import { findClipById, findMediaRef } from "../lib/clip-helpers";
+import { useConnectionStatus } from "../lib/connection-status";
+import { useOpsMutation, useTimelineQuery } from "../lib/hooks";
 import { ClipProperties } from "./ClipProperties";
 import { IconRail } from "./IconRail";
 import { PreviewPane } from "./PreviewPane";
@@ -29,11 +29,15 @@ export function Shell() {
 
   const [currentBranch, setCurrentBranch] = useState("main");
   const [knownBranches, setKnownBranches] = useState<string[]>(["main"]);
-  const [selected, setSelected] = useState<{ clip: AnyClip; track: Track } | null>(
+  const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [playheadFrame, setPlayheadFrame] = useState(0);
+  const [highlightedClipId, setHighlightedClipId] = useState<string | null>(
     null,
   );
 
   const timeline = useTimelineQuery(currentBranch);
+  const opsMutation = useOpsMutation(currentBranch);
+  const editingPaused = useConnectionStatus().lost;
 
   const setView = useCallback(
     (next: PanelView) => {
@@ -46,7 +50,8 @@ export function Shell() {
 
   const switchToBranch = useCallback((branch: string) => {
     setCurrentBranch(branch);
-    setSelected(null);
+    setSelectedClipId(null);
+    setPlayheadFrame(0);
   }, []);
 
   const addBranch = useCallback((branch: string) => {
@@ -56,14 +61,121 @@ export function Shell() {
   const resetToFreshDemo = useCallback(() => {
     setKnownBranches(["main"]);
     setCurrentBranch("main");
-    setSelected(null);
+    setSelectedClipId(null);
+    setPlayheadFrame(0);
   }, []);
 
+  const selectedClip = useMemo(() => {
+    if (!selectedClipId || !timeline.data) return null;
+    return findClipById(timeline.data.timeline, selectedClipId) ?? null;
+  }, [selectedClipId, timeline.data]);
+
+  // A clip that no longer exists (deleted, or split into new ids) cannot
+  // stay selected — the panel would otherwise render stale/undefined data.
+  useEffect(() => {
+    if (selectedClipId && timeline.data && !selectedClip) {
+      setSelectedClipId(null);
+    }
+  }, [selectedClipId, selectedClip, timeline.data]);
+
   const mediaRef = useMemo(() => {
-    if (!selected || !timeline.data) return undefined;
-    if ("textContent" in selected.clip) return undefined;
-    return findMediaRef(timeline.data.timeline, selected.clip.mediaRefId);
-  }, [selected, timeline.data]);
+    if (!selectedClip || !timeline.data) return undefined;
+    if ("textContent" in selectedClip) return undefined;
+    return findMediaRef(timeline.data.timeline, selectedClip.mediaRefId);
+  }, [selectedClip, timeline.data]);
+
+  const rate = timeline.data?.timeline.projectRate ?? 1;
+
+  const emit = useCallback(
+    (command: Command, options?: { onError?: () => void }) => {
+      if (editingPaused) return; // C6: editing paused while connection is lost
+      opsMutation.mutate(command, options);
+    },
+    [editingPaused, opsMutation],
+  );
+
+  // Bumped whenever a propertyChange is rejected, so ClipProperties can
+  // remount its local-state controls back to the authoritative clip value —
+  // a rejection that doesn't change the clip's data (rollback = the value
+  // it already was) never fires the controls' own "value changed" re-sync,
+  // so without this an out-of-range/rejected input stays stuck on screen.
+  const [propertyErrorTick, setPropertyErrorTick] = useState(0);
+
+  const handleMove = useCallback(
+    (clipId: string, newStartFrame: number) => {
+      emit({ op: "move", clipId, newStart: { value: newStartFrame, rate } });
+    },
+    [emit, rate],
+  );
+  const handleTrim = useCallback(
+    (clipId: string, edge: "start" | "end", deltaFrame: number) => {
+      emit({ op: "trim", clipId, edge, delta: { value: deltaFrame, rate } });
+    },
+    [emit, rate],
+  );
+  const handleSlip = useCallback(
+    (clipId: string, deltaFrame: number) => {
+      emit({ op: "slip", clipId, delta: { value: deltaFrame, rate } });
+    },
+    [emit, rate],
+  );
+  const handleSplit = useCallback(
+    (clipId: string, atFrame: number) => {
+      emit({ op: "split", clipId, at: { value: atFrame, rate } });
+    },
+    [emit, rate],
+  );
+  const handleDelete = useCallback(
+    (clipId: string) => {
+      emit({ op: "deleteClip", clipId });
+      setSelectedClipId(null);
+    },
+    [emit],
+  );
+  const handleRippleDelete = useCallback(
+    (clipId: string) => {
+      emit({ op: "rippleDelete", clipId });
+      setSelectedClipId(null);
+    },
+    [emit],
+  );
+  const handlePropertyChange = useCallback(
+    (
+      clipId: string,
+      property:
+        | "volume"
+        | "opacity"
+        | "scale"
+        | "position"
+        | "textContent"
+        | "textStyle",
+      value: PropertyValue,
+    ) => {
+      emit(
+        { op: "propertyChange", clipId, property, value },
+        { onError: () => setPropertyErrorTick((t) => t + 1) },
+      );
+    },
+    [emit],
+  );
+
+  // §5: "Delete on a selected clip" — the keyboard path, ignored while
+  // typing in a text field/input so it never hijacks normal editing.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
+      if (!selectedClipId) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) {
+        return;
+      }
+      e.preventDefault();
+      handleDelete(selectedClipId);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedClipId, handleDelete]);
 
   if (timeline.isLoading) {
     return <FullPageMessage>Loading FrameBranch…</FullPageMessage>;
@@ -143,18 +255,41 @@ export function Shell() {
                 overflowY: "auto",
               }}
             >
-              <PreviewPane clip={selected?.clip ?? null} mediaRef={mediaRef} />
-              <ClipProperties clip={selected?.clip ?? null} />
+              <PreviewPane clip={selectedClip} mediaRef={mediaRef} />
+              <ClipProperties
+                clip={selectedClip}
+                playheadFrame={playheadFrame}
+                disabled={editingPaused}
+                resetToken={propertyErrorTick}
+                onPropertyChange={handlePropertyChange}
+                onDelete={handleDelete}
+                onRippleDelete={handleRippleDelete}
+                onSplit={handleSplit}
+              />
             </div>
             <div style={{ flex: "0 0 320px", minHeight: 0, minWidth: 0 }}>
-              <RightPanel view={view} onViewChange={setView} currentBranch={currentBranch} />
+              <RightPanel
+                view={view}
+                onViewChange={setView}
+                currentBranch={currentBranch}
+                knownBranches={knownBranches}
+                pendingCount={data.pendingCount}
+                onHighlightClip={setHighlightedClipId}
+                onBranchTouched={addBranch}
+              />
             </div>
           </div>
           <div className="surface-lg" style={{ flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
             <TimelineView
               timeline={data.timeline}
-              selectedClipId={selected?.clip.id ?? null}
-              onSelectClip={(clip, track) => setSelected({ clip, track })}
+              selectedClipId={selectedClipId}
+              highlightedClipId={highlightedClipId}
+              playheadFrame={playheadFrame}
+              onSelectClip={(clip: { id: string }) => setSelectedClipId(clip.id)}
+              onSetPlayhead={setPlayheadFrame}
+              onMove={handleMove}
+              onTrim={handleTrim}
+              onSlip={handleSlip}
             />
           </div>
         </div>

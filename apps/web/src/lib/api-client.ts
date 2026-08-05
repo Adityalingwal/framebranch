@@ -17,7 +17,15 @@
  *     reusing the SAME ticket for as long as the user keeps pressing it.
  */
 
-import type { DiffResult, ImportWarning, Timeline } from "@framebranch/engine";
+import type {
+  Command,
+  DiffResult,
+  ImportWarning,
+  MergeChoice,
+  MergeConflict,
+  MergeCounts,
+  Timeline,
+} from "@framebranch/engine";
 
 // ---------------------------------------------------------------------------
 // Envelope + error mapping
@@ -280,4 +288,94 @@ export function postDemoReset(hooks: RetryHooks): Promise<{ done: true }> {
     () => postJson("/api/demo/reset", { ticket }),
     hooks,
   );
+}
+
+// ---------------------------------------------------------------------------
+// M8b — editing, merge, agent, import/export (brief §3)
+// ---------------------------------------------------------------------------
+
+/**
+ * POST /api/ops success shape (docs/11 C4(3) + F9): `{workingRev,
+ * pendingCount}` for a real edit, or the SAME shape with `noChange:true` and
+ * both fields unchanged for an A4 no-op. Modelled as one type with an
+ * optional flag rather than a union — the two amount to "read these two
+ * fields, then check the flag", and every call site does exactly that.
+ */
+export type OpsResult = {
+  workingRev: number;
+  pendingCount: number;
+  noChange?: boolean;
+};
+
+export function postOps(
+  input: { branch: string; workingRev: number; command: Command },
+  hooks: RetryHooks,
+): Promise<OpsResult> {
+  const ticket = newTicket();
+  return runMutation(() => postJson("/api/ops", { ...input, ticket }), hooks);
+}
+
+export type MergeStartResult =
+  | { done: true; mergeCommitId: string }
+  | { attemptId: string; conflicts: MergeConflict[]; counts: MergeCounts };
+
+export function postMergeStart(
+  input: { from: string; into: string },
+  hooks: RetryHooks,
+): Promise<MergeStartResult> {
+  const ticket = newTicket();
+  return runMutation(() => postJson("/api/merge", { ...input, ticket }), hooks);
+}
+
+export type MergeResolveResult =
+  | { done: true; mergeCommitId: string }
+  | { counts: MergeCounts; conflicts: MergeConflict[] };
+
+export function postMergeResolve(
+  input: { attemptId: string; conflictId: string; choice: MergeChoice },
+  hooks: RetryHooks,
+): Promise<MergeResolveResult> {
+  const ticket = newTicket();
+  return runMutation(
+    () => postJson("/api/merge/resolve", { ...input, ticket }),
+    hooks,
+  );
+}
+
+export function postMergeAbort(
+  input: { attemptId: string },
+  hooks: RetryHooks,
+): Promise<{ aborted: true }> {
+  const ticket = newTicket();
+  return runMutation(
+    () => postJson("/api/merge/abort", { ...input, ticket }),
+    hooks,
+  );
+}
+
+export function postAgentSimulate(
+  input: { branch: string; script: string },
+  hooks: RetryHooks,
+): Promise<{ commitId: string; name: string; actor: "agent"; opsApplied: number }> {
+  const ticket = newTicket();
+  return runMutation(
+    () => postJson("/api/agent/simulate", { ...input, ticket }),
+    hooks,
+  );
+}
+
+export function postImport(
+  input: { branch: string; otioJson: unknown },
+  hooks: RetryHooks,
+): Promise<{ commitId: string; skippedItems: ImportWarning[] }> {
+  const ticket = newTicket();
+  return runMutation(() => postJson("/api/import", { ...input, ticket }), hooks);
+}
+
+export function postExport(
+  input: { branch: string },
+  hooks: RetryHooks,
+): Promise<{ otioJson: unknown; commitId: string; name: string }> {
+  const ticket = newTicket();
+  return runMutation(() => postJson("/api/export", { ...input, ticket }), hooks);
 }
