@@ -1,5 +1,5 @@
 import type { Position, PropertyValue, TextStyle, Timeline } from "../types";
-import type { DiffEntry, DiffPropertyName, DiffResult, KeyedEntry } from "./types";
+import type { DiffEntry, DiffPropertyName, DiffResult, KeyedEntry, Located } from "./types";
 import { KHAANA_ORDER, clipKey, cmpKey, indexClips, nearestAncestorIn, tlStart } from "./match";
 import { classifyFamily, classifyPair } from "./classify";
 
@@ -230,3 +230,4 @@ export function computeDiff(a: Timeline, b: Timeline): DiffResult {
   keyed.sort((x, y) => cmpKey(x.key, y.key));
   const entries = keyed.map((k) => k.entry);
   return { entries, sentences: entries.map(renderEntry) };
+}

@@ -1,4 +1,4 @@
-import type { Clip, Position, PropertyValue, TextClip, TextStyle, Timeline, TimeRange, Track } from "../types";
+import type { Clip, PropertyValue, TextClip, Track } from "../types";
 
 /**
  * All numbers in entries are integer frame counts at `a.projectRate`
@@ -128,3 +128,4 @@ type KeyedEntry = { key: SortKey; entry: DiffEntry };
 
 
 export type { AnyClip, Located, SortKey, KeyedEntry };
+export { isText };

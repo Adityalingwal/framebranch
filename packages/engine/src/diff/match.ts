@@ -1,6 +1,7 @@
 import { PROPERTY_DEFAULTS } from "../verbs";
 import type { Position, TextStyle, TimeRange, Timeline } from "../types";
-import type { AnyClip, DiffEntry, KeyedEntry, Located, SortKey } from "./types";
+import type { AnyClip, DiffEntry, Located, SortKey } from "./types";
+import { isText } from "./types";
 
 const KHAANA_ORDER: Readonly<Record<DiffEntry["rule"], number>> = {
   14: 0,
@@ -124,5 +125,7 @@ function indexClips(
     const clips: readonly AnyClip[] = track.clips;
     for (const clip of clips) out.set(clip.id, { clip, track, trackIndex });
   }
+  return out;
+}
 
-export { KHAANA_ORDER, PROPERTY_RULE, spanStart, spanEnd, tlStart, tlEnd, anchor, clipKey, cmpKey, fmtRange, isText, materialized, nearestAncestorIn, indexClips };
+export { KHAANA_ORDER, PROPERTY_RULE, spanStart, spanEnd, tlStart, tlEnd, anchor, clipKey, cmpKey, fmtRange, isText, materialized, nearestAncestorIn, indexClips, eqPos, eqStyle };

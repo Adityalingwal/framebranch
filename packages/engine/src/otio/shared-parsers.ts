@@ -1,5 +1,6 @@
 import type { Clip, EngineError, RationalTime, TextClip, TimeRange } from "../types";
-import type { OtioJson } from "./types";
+import { convertRate } from "../time";
+import { SCHEMA_WHITELIST } from "./types";
 
 type AnyClip = Clip | TextClip;
 

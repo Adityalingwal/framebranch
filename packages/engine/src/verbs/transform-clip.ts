@@ -1,6 +1,7 @@
 import type {
   ApplyResult,
   Clip,
+  EngineCommand,
   MoveCommand,
   SlipCommand,
   SplitCommand,
@@ -270,7 +271,7 @@ export function applySplit(tl: Timeline, cmd: SplitCommand): ApplyResult {
 
   // Inverse (atomic composite, undo-internal only): remove the right
   // piece, then restore the left piece from the captured preimage.
-  const inverse = [
+  const inverse: EngineCommand[] = [
     { op: "deleteClip", clipId: rightId },
     { op: "deleteClip", clipId: clip.id },
     { op: "addClip", trackId: loc.track.id, clip },

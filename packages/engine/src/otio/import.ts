@@ -2,8 +2,8 @@ import { checkInvariants } from "../invariants";
 import { convertRate } from "../time";
 import { TEXT_FONT_WHITELIST, TEXT_STYLE_DEFAULTS } from "../verbs";
 import type { Clip, MediaKind, MediaRef, RationalTime, TextClip, TextFont, TextStyle, Timeline, TimeRange, Track, TrackKind } from "../types";
-import { COLOR_RE, FALLBACK_RATE, IMAGE_EXTENSIONS, MAX_TEXT_CONTENT, SCHEMA_WHITELIST, TRACK_KIND_FOR_MEDIA, type ImportResult, type ImportWarning, type ImportWarningCode } from "./types";
-import { type AnyClip, OtioAbortError, childrenOf, convertTimeRange, framebranchMeta, invalid, isObject, parseRationalTime, parseTimeRange, rangeEnd, requireObject, requireRate, requireSchema, rt, unsupportedVersion } from "./shared-parsers";
+import { COLOR_RE, FALLBACK_RATE, IMAGE_EXTENSIONS, MAX_TEXT_CONTENT, TRACK_KIND_FOR_MEDIA, type ImportResult, type ImportWarning, type ImportWarningCode } from "./types";
+import { type AnyClip, OtioAbortError, childrenOf, convertTimeRange, framebranchMeta, invalid, isObject, parseRationalTime, parseTimeRange, requireObject, requireSchema, rt } from "./shared-parsers";
 
 type ImportCtx = {
   rate: number;
