@@ -2,9 +2,19 @@
 
 Semantic version-control engine for video timelines — branch, diff, and merge edits at the timeline level instead of file-level diffs.
 
-Design docs live in `/docs` (start at `docs/00-INDEX.md`).
+Status: feature-complete. Engine (`packages/engine` — 8 verbs, diff, 3-way merge, OTIO import/export, benchmarks), server (`apps/web` — API routes, 8-table Postgres schema, merge/conflict resolution), and UI (timeline, editing, branch/merge/history panels) are all built and merged.
 
-Status: engine complete (`packages/engine` — 8 verbs, diff, 3-way merge, OTIO import/export, benchmarks). Server foundation in progress in `apps/web` (API routes only; no UI yet).
+> Semantic diff of a 10,000-clip timeline in 3.20 ms, 3-way merge in 724.75 ms, backed by 363 tests and 10,000 fuzz cases.
+
+## Documentation
+
+- [Project Requirements Document](docs/PRD.md) — what this is and why, what's in scope and out
+- [High-Level Design](docs/HLD.md) — architecture, storage, API, reliability
+- [Algorithms](docs/ALGORITHMS.md) — the diff engine, split identity, and the 3-way merge
+- [Low-Level Design](docs/LLD.md) — types, database schema, API reference
+- [Open Questions](docs/OPEN-QUESTIONS.md) — genuinely unresolved design questions
+
+Suggested reading order: PRD → HLD → Algorithms → LLD → Open Questions.
 
 ## Running the server locally
 
@@ -29,5 +39,3 @@ pnpm --filter @framebranch/web dev
 The server tests truncate every table between tests, so `TEST_DATABASE_URL`
 must point at a throwaway database (`framebranch_test` above), never at the
 one you develop against.
-
-# framebranch
