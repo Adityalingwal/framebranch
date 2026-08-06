@@ -1,6 +1,6 @@
 "use client";
 
-import { useToast } from "../lib/toast-status";
+import { useToast } from "../lib/state/toast-status";
 
 export function ToastHost() {
   const toast = useToast();

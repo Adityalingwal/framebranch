@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 
-import type { HistoryCommit } from "../../lib/api-client";
-import { useHeadCommits } from "../../lib/head-tracking";
-import { useDiffQuery, useHistoryQuery } from "../../lib/hooks";
+import type { HistoryCommit } from "../../lib/data/api-client";
+import { useHeadCommits } from "../../lib/state/head-tracking";
+import { useDiffQuery, useHistoryQuery } from "../../lib/data/hooks";
 import { relativeTime } from "../../lib/format";
 import { textInput } from "../styles";
 

@@ -5,10 +5,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import type { Command, PropertyValue } from "@framebranch/engine";
 
-import { ApiClientError } from "../lib/api-client";
+import { ApiClientError } from "../lib/data/api-client";
 import { findClipById, findMediaRef } from "../lib/clip-helpers";
-import { useConnectionStatus } from "../lib/connection-status";
-import { useOpsMutation, useTimelineQuery } from "../lib/hooks";
+import { useConnectionStatus } from "../lib/state/connection-status";
+import { useOpsMutation, useTimelineQuery } from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
 import { IconRail } from "./IconRail";
 import { PreviewPane } from "./PreviewPane";

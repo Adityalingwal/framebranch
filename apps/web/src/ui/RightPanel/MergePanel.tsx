@@ -5,18 +5,18 @@ import { useQueryClient } from "@tanstack/react-query";
 
 import type { MergeChoice, MergeConflict, Timeline } from "@framebranch/engine";
 
-import { ApiClientError } from "../../lib/api-client";
+import { ApiClientError } from "../../lib/data/api-client";
 import { findClipById, isTextClip, type AnyClip } from "../../lib/clip-helpers";
 import { formatTimecode } from "../../lib/format";
-import { recordHead } from "../../lib/head-tracking";
+import { recordHead } from "../../lib/state/head-tracking";
 import {
   useMergeAbortMutation,
   useMergeResolveMutation,
   useMergeStartMutation,
   useTimelineQuery,
-} from "../../lib/hooks";
-import { queryKeys } from "../../lib/query-keys";
-import { showToast } from "../../lib/toast-status";
+} from "../../lib/data/hooks";
+import { queryKeys } from "../../lib/data/query-keys";
+import { showToast } from "../../lib/state/toast-status";
 import { ConfirmDialog } from "../ConfirmDialog";
 import { primaryButton, secondaryButton, textInput } from "../styles";
 
