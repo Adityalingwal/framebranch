@@ -13,8 +13,8 @@ import {
   mutationErrorMessage,
   postBranch,
   postCommit,
-} from "../src/lib/api-client";
-import type { RetryHooks } from "../src/lib/api-client";
+} from "../src/lib/data/api-client";
+import type { RetryHooks } from "../src/lib/data/api-client";
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {

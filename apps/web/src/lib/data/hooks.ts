@@ -24,11 +24,11 @@ import { ApiClientError, type TimelineData } from "./api-client";
 import {
   reportConnectionLost,
   reportConnectionRestored,
-} from "./connection-status";
-import { recordHead, resetHeads } from "./head-tracking";
-import { computeOptimisticResult, isOptimisticVerb } from "./optimistic";
+} from "../state/connection-status";
+import { recordHead, resetHeads } from "../state/head-tracking";
+import { computeOptimisticResult, isOptimisticVerb } from "../optimistic";
 import { queryKeys } from "./query-keys";
-import { showToast } from "./toast-status";
+import { showToast } from "../state/toast-status";
 
 function onMutationError(error: unknown): void {
   showToast(api.mutationErrorMessage(error), "error");

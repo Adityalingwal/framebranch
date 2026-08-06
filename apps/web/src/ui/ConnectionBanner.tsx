@@ -3,7 +3,7 @@
 import {
   CONNECTION_LOST_MESSAGE,
   useConnectionStatus,
-} from "../lib/connection-status";
+} from "../lib/state/connection-status";
 
 /**
  * The C6 failure banner — exact copy, a [Retry] button that keeps reusing

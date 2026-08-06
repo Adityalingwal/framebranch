@@ -4,11 +4,11 @@ import { useRef, useState } from "react";
 
 import type { ImportWarning } from "@framebranch/engine";
 
-import { showToast } from "../lib/toast-status";
+import { showToast } from "../lib/state/toast-status";
 import { BranchControl } from "./BranchControl";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { chip, primaryButton, secondaryButton, textInput } from "./styles";
-import { useConnectionStatus } from "../lib/connection-status";
+import { useConnectionStatus } from "../lib/state/connection-status";
 import {
   useAgentSimulateMutation,
   useCreateBranchMutation,
@@ -17,7 +17,7 @@ import {
   useImportMutation,
   useSaveVersionMutation,
   useSwitchBranchMutation,
-} from "../lib/hooks";
+} from "../lib/data/hooks";
 
 /** §8 locked example format: "Skipped: 2 transitions, 1 blur — ...". */
 function describeSkipped(items: ImportWarning[]): string {

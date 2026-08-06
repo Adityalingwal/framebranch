@@ -1,10 +1,10 @@
 "use client";
 
-import type { HistoryCommit } from "../../lib/api-client";
-import { useConnectionStatus } from "../../lib/connection-status";
+import type { HistoryCommit } from "../../lib/data/api-client";
+import { useConnectionStatus } from "../../lib/state/connection-status";
 import { relativeTime } from "../../lib/format";
-import { showToast } from "../../lib/toast-status";
-import { useHistoryQuery, useRestoreMutation } from "../../lib/hooks";
+import { showToast } from "../../lib/state/toast-status";
+import { useHistoryQuery, useRestoreMutation } from "../../lib/data/hooks";
 import { secondaryButton } from "../styles";
 
 /**
