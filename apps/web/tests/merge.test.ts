@@ -1,4 +1,4 @@
-// Merge endpoint tests (POST merge/resolve/abort) + : merge finalize when head has moved → E_STALE_HEAD.
+// Merge endpoint tests (POST merge/resolve/abort), including stale-head finalize.
 // Real Postgres. Heads moved through the normal commit path — a faked race proves nothing.
 import { eq, isNotNull } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -160,7 +160,7 @@ describe("C4 (4) — POST merge", () => {
     expect(merges[0].id).toBe(data.mergeCommitId);
     expect(merges[0].parentId).toBe(headInto);
     expect(merges[0].parent2Id).toBe(headFrom);
-    // #9 + : a merge commit is ALWAYS a full snapshot.
+    // A merge commit is always a full snapshot.
     expect(merges[0].snapshotDistance).toBe(0);
 
     // Nothing is left behind: the two-phase flow's phase 2 was empty.
@@ -299,7 +299,7 @@ describe("C4 (4) — POST merge", () => {
 
     expect(aborted.aborted).toBe(true);
     expect(await attemptRows()).toHaveLength(0);
-    // DISCARD: no commit is created at all ( #5).
+    // DISCARD: no commit is created at all.
     expect(await commitCount()).toBe(before);
     expect(await headOf("main")).toBe(headMain);
     expect(await headOf(AGENT)).toBe(headAgent);
@@ -349,7 +349,7 @@ describe("C4 (4) — POST merge", () => {
     expect(mainView.pendingCount).toBe(0);
   });
 
-  it("#16: a retried merge with the SAME ticket replays and creates no second draft", async () => {
+  it("a retried merge with the SAME ticket replays and creates no second draft", async () => {
     const s = await session();
     await conflictingBranches(s);
     const t = ticket();
@@ -361,7 +361,7 @@ describe("C4 (4) — POST merge", () => {
     expect(await attemptRows()).toHaveLength(1);
   });
 
-  it("#16: a retried merge/resolve with the SAME ticket replays and does NOT answer twice", async () => {
+  it("a retried merge/resolve with the SAME ticket replays and does NOT answer twice", async () => {
     const s = await session();
     await conflictingBranches(s);
     const started = expectOk(await startMergeCall(s)) as MergeStarted;
@@ -382,16 +382,16 @@ describe("C4 (4) — POST merge", () => {
 
     expect(retry).toEqual(first);
     const rows = await attemptRows();
-    // 's parchi has exactly ONE answer in it, not two.
+    // The stored choices contain exactly ONE answer, not two.
     expect(Object.keys(rows[0].choices as object)).toHaveLength(1);
   });
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// : the both-parents CAS at finalize ( #8)
+// Both-parent CAS at finalize: if either branch head moved, finalize writes nothing.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-describe("G-group — merge finalize CAS (docs/12 T2 F11)", () => {
+describe("G-group — merge finalize CAS", () => {
   /**
    * Open a merge with conflicts, answer all but the last, then move ONE
    * branch's head with a real commit and answer the last conflict. The
@@ -475,7 +475,7 @@ describe("G-group — merge finalize CAS (docs/12 T2 F11)", () => {
     expect(await attemptRows()).toHaveLength(1);
   });
 
-  it("G4: the FROM branch moving under an open merge → E_STALE_HEAD too (docs/09 #8 revalidates BOTH)", async () => {
+  it("G4: the FROM branch moving under an open merge → E_STALE_HEAD too", async () => {
     const { code, before, after } = await stalenessRun(AGENT);
     expect(code).toBe("E_STALE_HEAD");
     expect(after.commits).toBe(before.commits);

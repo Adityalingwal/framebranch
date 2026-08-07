@@ -381,8 +381,8 @@ const tableRows = results
 const report = `# FrameBranch Engine — Benchmark Report
 
 > **Generated:** ${now}
-> **Method:** ${WARMUP_RUNS} warm-up runs (discarded) + ${MEASURE_RUNS} measurement runs → **median** (T4 locked spec).
-> Benchmarks run locally (NOT CI — HLD #16: CI hardware inconsistent).
+> **Method:** ${WARMUP_RUNS} warm-up runs (discarded) + ${MEASURE_RUNS} measurement runs → **median**.
+> Benchmarks run locally (NOT CI — CI hardware is too inconsistent for stable benchmark numbers).
 
 ## Environment
 
@@ -400,8 +400,8 @@ const report = `# FrameBranch Engine — Benchmark Report
 | **1k** | 1,000 | ~1,000 (2–3 pieces/family) | 4 (2 video, 1 audio, 1 text) | 5% random edits per side |
 | **10k** | 10,000 | ~10,000 (2–3 pieces/family) | 4 (2 video, 1 audio, 1 text) | 5% random edits per side |
 
-> **Four merge variants, all on the standard/split-heavy timelines above** (2026-08-05 lock —
-> every row states its own real conflict count, see Results): **independent-edits** — each side
+> **Four merge variants, all on the standard/split-heavy timelines above**
+> (every row states its own real conflict count, see Results): **independent-edits** — each side
 > edits independently with \`move\` excluded (overlap-safe atoms only), lowest measured conflict
 > count of the four but not guaranteed zero; **standard** — each side edits independently
 > including \`move\`, which can add incidental overlap conflicts against an unedited neighbour;
@@ -426,7 +426,7 @@ ${tableRows}
 - **Median (not average):** Garbage collection spikes are outliers; median filters them naturally.
 - **Pure in-memory:** No disk I/O, no network — measures raw engine computation only.
 - **Reproducible:** Fixed seeds (42/99) produce identical fixtures on any run.
-- **Honest framing (HLD #18):** These are MEASURED numbers on the documented hardware.
+- **Honest framing:** These are MEASURED numbers on the documented hardware.
   Pattern-correctness (stateless pure functions → horizontal scaling) and designed-for
   capacity (V2 Merkle caching, worker offload) are documented, not benchmarked.
 `;

@@ -29,11 +29,8 @@ const seed =
 // cross 60s and Vitest kills it with `Timeout calling "onTaskUpdate"`, even
 // though every case passed.
 //
-// [AMENDED 2026-08-04] 500 was sized against a sequential run on the owner's
-// Mac (18.5s/chunk). It failed on GitHub's slower runners once chunks began
-// running concurrently: a 500-case chunk measured 66.01s there (CI run
-// 30928377322) and every shard died on the RPC timeout. 250 halves that to
-// ~33s, keeping a real margin on the slowest machine we actually run on.
+// 500 was fine on a fast local sequential run, but GitHub's slower concurrent
+// shards crossed Vitest's RPC timeout. 250 keeps a real margin there.
 // Override per-machine with FRAMEBRANCH_FUZZ_CHUNK if a future runner needs it.
 const chunkSize = parseInteger(
   "FRAMEBRANCH_FUZZ_CHUNK",

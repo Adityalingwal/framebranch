@@ -71,7 +71,7 @@ function fixtureTimeline(): Timeline {
   };
 }
 
-/** One command per opt-in verb, table-driven per 's pattern. */
+/** One command per opt-in verb, table-driven for readability. */
 const COMMANDS: { name: string; command: Command }[] = [
   { name: "move", command: { op: "move", clipId: "B", newStart: t(200) } },
   {
@@ -103,7 +103,7 @@ const COMMANDS: { name: string; command: Command }[] = [
   },
 ];
 
-describe("optimistic.ts — optimistic result == server result (brief §4 locked test)", () => {
+describe("optimistic.ts — optimistic result == server result", () => {
   it.each(COMMANDS)(
     "$name: computeOptimisticResult(tl, cmd) equals applyCommand(tl, cmd)",
     ({ command }) => {
@@ -117,7 +117,7 @@ describe("optimistic.ts — optimistic result == server result (brief §4 locked
     },
   );
 
-  it("every opt-in verb is one of the 8 locked verbs; addClip is excluded on purpose (id-minting, see optimistic.ts header)", () => {
+  it("every opt-in verb is supported; addClip is excluded on purpose because it mints ids", () => {
     expect([...OPTIMISTIC_VERBS].sort()).toEqual(
       [
         "deleteClip",

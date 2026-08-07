@@ -14,7 +14,7 @@ const timeRangeJson = (r: TimeRange): OtioJson => ({
   duration: rationalTimeJson(r.duration),
 });
 
-/** — every empty stretch becomes a real `Gap.1` item ("Filler"). */
+/** Every empty stretch becomes a real `Gap.1` item ("Filler"). */
 const gapJson = (duration: number, rate: number): OtioJson => ({
   OTIO_SCHEMA: "Gap.1",
   name: "Filler",
@@ -31,8 +31,8 @@ const isTextClip = (c: AnyClip): c is TextClip => "textContent" in c;
 
 /**
  * exportOtio — our timeline → an OTIO document. Never fails, never writes
- * internal IDs ( #11); the only thing we add to the format is the
- * locked `metadata.framebranch` extension .
+ * internal IDs; the only thing we add to the format is the
+ * `metadata.framebranch` extension.
  */
 export function exportOtio(timeline: Timeline): OtioJson {
   const rate = timeline.projectRate;
@@ -146,8 +146,8 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
                 }),
           metadata: {},
         }
-      : // Export never fails (docs/09 #12/#13): a clip whose media ref is
-        // gone still goes out, honestly, as a placeholder.
+      : // Export still succeeds if a clip's media ref is gone; it writes an
+        // honest placeholder instead of hiding the broken reference.
         {
           OTIO_SCHEMA: "MissingReference.1",
           name: "",
@@ -156,8 +156,8 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
         },
     effects: [],
     markers: [],
-    // / — properties ride in our own namespace; a clip sitting at the
-    // defaults writes nothing at all, so plain files stay plain.
+    // Properties ride in our own namespace; a clip sitting at the defaults
+    // writes nothing at all, so plain files stay plain.
     metadata: emptyOrFramebranch(propertiesJson(clip.properties)),
   };
 }

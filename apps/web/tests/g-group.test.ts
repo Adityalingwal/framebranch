@@ -67,7 +67,7 @@ async function editMain(
 const commitCount = async (): Promise<number> =>
   (await getDb().select({ id: commits.id }).from(commits)).length;
 
-describe("G-group — server/state integration (docs/12 T2 F11)", () => {
+describe("G-group — server/state integration", () => {
   it("G1: response-lost retry — the same ticket returns the stored result and creates NO second commit", async () => {
     const s = await newSession();
     await editMain(s, 0, 80);

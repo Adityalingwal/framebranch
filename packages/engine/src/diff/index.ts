@@ -117,8 +117,8 @@ export function computeDiff(a: Timeline, b: Timeline): DiffResult {
     });
   }
 
-  // Track order: a's tracks first, then b-only tracks ( has no track
-  // verbs — a differing track set is out-of-family, reported via #16).
+  // Track order: a's tracks first, then b-only tracks. Track add/delete is
+  // out of scope, so a differing track set is reported as a fallback diff.
   const trackIndexById = new Map<string, number>();
   for (const t of a.tracks) trackIndexById.set(t.id, trackIndexById.size);
   for (const t of b.tracks) {

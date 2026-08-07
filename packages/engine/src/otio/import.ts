@@ -7,7 +7,7 @@ import { type AnyClip, OtioAbortError, childrenOf, convertTimeRange, framebranch
 
 type ImportCtx = {
   rate: number;
-  /** key = JSON.stringify([code, detail]) → grouped entry . */
+  /** key = JSON.stringify([code, detail]) -> grouped entry. */
   warnings: Map<string, ImportWarning>;
   mediaByUrl: Map<string, MediaRef>;
   mediaRefs: MediaRef[];
@@ -15,7 +15,7 @@ type ImportCtx = {
 };
 
 /**
- * Import is always a fresh start ( #10) — every id is minted here.
+ * Import is always a fresh start: every id is minted here.
  * Deterministic per-document counters: same file in → same ids out, and the
  * ids are `@`-free, so the split namespace stays reserved.
  */
@@ -42,7 +42,7 @@ function warn(ctx: ImportCtx, code: ImportWarningCode, detail: string): void {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /**
- * (2): the rate of the FIRST clip in document order. Deliberately
+ * Uses the rate of the FIRST clip in document order. Deliberately
  * tolerant — it only reads; every real validation (and every abort) is the
  * main walk's job, so a broken document reports its error exactly once.
  */
@@ -51,8 +51,7 @@ function firstClipRate(trackNodes: readonly unknown[]): number | null {
     if (!isObject(trackNode)) continue;
     // Only real Tracks: a nested Stack at this level is skipped by the walk
     // so taking the project rate from a clip inside it would let a
-    // discarded clip decide the rate every KEPT value then converts into.
-    // [, 2026-08-05 review.]
+    // discarded clip decide the rate every kept value then converts into.
     const trackSchema = trackNode.OTIO_SCHEMA;
     if (typeof trackSchema !== "string" || !trackSchema.startsWith("Track.")) {
       continue;
@@ -82,9 +81,8 @@ function firstClipRate(trackNodes: readonly unknown[]): number | null {
 
 /**
  * `.png .jpg .jpeg .webp` → image; otherwise the track decides. An
- * extension-less URL is treated as VIDEO on purpose — the safe side,
- * because the source-bounds invariant then still applies (documented
- * assumption, IMPLEMENTATION-NOTES 2026-08-04).
+ * extension-less URL is treated as VIDEO on purpose: source-bounds checks
+ * still apply, which is safer than treating unknown media as unlimited.
  */
 function mediaKindFromUrl(url: string, trackKind: TrackKind): MediaKind {
   const path = url.split(/[?#]/)[0];
@@ -106,7 +104,7 @@ function parseTextContent(raw: unknown): string | null {
 }
 
 /**
- * BC.5 — missing style fields materialize to the defaults; a field that is
+ * Missing style fields materialize to the defaults; a field that is
  * PRESENT but invalid makes the clip un-importable (returns null → skip +
  * warning). We never silently "fix" a value we were given.
  */
@@ -142,8 +140,8 @@ function parseTextStyle(raw: unknown): TextStyle | null {
 }
 
 /**
- * / [AMENDED 2026-08-05, owner call] — clip properties travel in the
- * framebranch metadata slot, the same door text clips already use.
+ * Clip properties travel in the framebranch metadata slot, the same place text
+ * clips already use.
  *
  * OTIO core has no volume/opacity/scale/position field, so no other tool can
  * read these either way; writing them is what makes OUR export -> import
@@ -193,7 +191,7 @@ function parseProperties(
  * the same table `verbs.ts` enforces. Import must not mint a state
  * no verb could produce: an image with a volume would fail
  * E_PROPERTY_NOT_APPLICABLE from applyCommand, yet diff/merge would go on
- * comparing it as a real field. [, 2026-08-05 review.]
+ * comparing it as a real field.
  */
 const PROPERTY_KEYS_BY_KIND = {
   video: ["volume", "opacity", "scale", "position"],
@@ -210,11 +208,10 @@ const PROPERTY_KEYS_BY_KIND = {
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /**
- * `targetRate` — : importing into a project that already has a rate
+ * `targetRate` lets a re-import land on the existing project rate.
  * (a re-import, not the project's first) must land ON that rate, not
- * whatever the new file declares ( is for establishing a rate from
- * scratch). When given, it skips entirely and every value converts to
- * it — same single door, same `convertRate`, just caller-supplied.
+ * When present, it overrides the file-declared rate and every value converts
+ * to it through the same `convertRate` path.
  */
 export function importOtio(
   otioJson: unknown,
@@ -295,7 +292,7 @@ function runImport(otioJson: unknown, targetRate?: number): ImportResult {
   // The engine's contract is that a Timeline in hand is always valid. Only
   // an internally inconsistent document can get here (e.g. a source_range
   // outside its own available_range) — that is malformed input, not a clip
-  // to silently drop beyond the locked skip rules (/).
+  // to silently drop outside the explicit skip rules.
   const violations = checkInvariants(timeline);
   if (violations.length > 0) {
     invalid(
@@ -308,7 +305,7 @@ function runImport(otioJson: unknown, targetRate?: number): ImportResult {
   return { ok: true, timeline, warnings: [...ctx.warnings.values()] };
 }
 
-/** — a track is ours-text if it says so in metadata; else Video/Audio. */
+/** A track is text if metadata says so; otherwise it follows Video/Audio. */
 function importTrackKind(track: Record<string, unknown>): TrackKind | null {
   const fb = framebranchMeta(track);
   if (fb && fb.kind === "text") return "text";
@@ -321,8 +318,7 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
   const node = requireObject(trackNode, "track");
   const schema = requireSchema(node, "track");
   if (schema.name !== "Track") {
-    // (b) — a non-Track child of the top-level Stack (e.g. a nested
-    // Stack): skip + warning, import carries on.
+    // A non-Track child of the top-level Stack is skipped with a warning.
     warn(ctx, "skipped-unsupported", schema.raw);
     return null;
   }
@@ -355,13 +351,11 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
     }
 
     if (childSchema.name !== "Clip") {
-      // /(b) — Transition.1, effects, a nested Stack, …: skip + warning.
-      // [AMENDED 2026-08-05, owner call] The cursor advances by the skipped
-      // item's OWN duration when it has one. A Transition carries no
-      // source_range, so it still does not move the cursor ('s locked
-      // rule — it consumes no track time). But a nested Stack DOES occupy
-      // its span; not advancing there pulled every later clip left.
-      // One rule covers both: "advance by whatever span the item declares".
+      // Unsupported child types (Transition.1, effects, nested Stack, etc.)
+      // are skipped with a warning.
+      // Advance by the skipped item's own duration when it has one. A
+      // Transition has no source_range, so it consumes no track time; a nested
+      // Stack does occupy its declared span.
       warn(ctx, "skipped-unsupported", childSchema.raw);
       // `source_range: null` is what real serializers write for an untrimmed
       // Item — it means "no range of its own", exactly like the field being
@@ -514,12 +508,12 @@ function importMediaClip(
 
   const kind = mediaKindFromUrl(url, trackKind);
 
-  // track mapping : an image is visual, so it lives on a VIDEO
+  // Track mapping: an image is visual, so it lives on a VIDEO
   // track — never on an audio or text lane. `addClip` refuses that placement
   // with E_TRACK_KIND_MISMATCH, and the invariant sweep does not cover
   // track-kind, so without this check import could mint a timeline no verb
   // could build. Same non-coercion rule already used for text/media
-  // mismatches: skip the clip, never guess the track. [, 2026-08-05.]
+  // mismatches: skip the clip, never guess the track.
   if (TRACK_KIND_FOR_MEDIA[kind] !== trackKind) {
     warn(ctx, "skipped-unknown-clip", `${kind} media on a ${trackKind} track`);
     return null;
@@ -540,7 +534,7 @@ function importMediaClip(
       : parseTimeRange(media.available_range, "available_range");
 
   // image = "unbounded": durationInSource is null, exactly and only
-  // for images. — video/audio without a length is not importable.
+  // for images. Video/audio without a length is not importable.
   let durationInSource: RationalTime | null;
   if (kind === "image") {
     durationInSource = null;
@@ -551,8 +545,8 @@ function importMediaClip(
     durationInSource = convertRate(rawAvailable.duration, ctx.rate);
   }
 
-  // amendment (2026-08-05) — OTIO source coordinates live inside the
-  // media's OWN range, which need not start at 0 (embedded timecode). Engine
+  // OTIO source coordinates live inside the media's OWN range, which need not
+  // start at 0 (embedded timecode). Engine
   // coordinates always start at 0, so the door normalizes: subtract the
   // file's start here, add it back on export. Ignoring it rejected valid
   // files (a window at 250 inside [90,290) looked out of a 200-long file)
@@ -575,7 +569,7 @@ function importMediaClip(
       kind,
       url,
       // OTIO carries no fingerprint; hash is an integration-ready field
-      // that flows never read .
+      // that current flows never read.
       hash: "",
       // The file's native fps: the media's own range when it has one,
       // otherwise the rate the clip's source window was written in.

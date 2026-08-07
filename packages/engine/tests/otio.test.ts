@@ -284,7 +284,7 @@ describe("O4/H2: transition does not move the cursor", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// + : an image has no length, so it can be extended freely
+// Image media: an image has no length, so it can be extended freely.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O1+O9/H3: image media", () => {
@@ -473,7 +473,6 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
     // matrix: an image has no volume (a photo makes no sound). Importing
     // one would mint a state no verb can produce — applyCommand would answer
     // E_PROPERTY_NOT_APPLICABLE — while diff/merge kept comparing it.
-    // [, 2026-08-05 review.]
     const doc = otioTimeline({
       tracks: [
         otioTrack({
@@ -501,7 +500,7 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
   it("A3.6/H5: image media on an audio track is skipped, not coerced", () => {
     // track mapping: an image is visual, so it belongs on a video lane.
     // addClip refuses this placement outright (E_TRACK_KIND_MISMATCH); import
-    // used to accept it silently. [, 2026-08-05 review.]
+    // must not accept it silently.
     const doc = otioTimeline({
       tracks: [
         otioTrack({
@@ -527,7 +526,7 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
   it("O6/H7: the project rate ignores clips inside a skipped nested Stack", () => {
     // The rate must come from content we KEEP. A nested Stack is skipped
     // so its 30fps clip must not decide the rate that the surviving
-    // 24fps track then gets converted into. [, 2026-08-05 review.]
+    // 24fps track then gets converted into.
     const doc = otioTimeline({
       tracks: [
         {
@@ -1159,7 +1158,7 @@ describe("O10/H10: round-trip (gap + text + image)", () => {
     );
     expect(warnings).toEqual([]);
     expect(structure(after)).toEqual(structure(before));
-    // Fresh start: the ids are genuinely new ( #10).
+    // Fresh start: the ids are genuinely new.
     expect(clipsOf(after, 0)[0].id).not.toBe("A");
   });
 });

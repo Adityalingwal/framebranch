@@ -102,7 +102,7 @@ const volumeOf = (timeline: Timeline, clipId: string): number | undefined =>
   ).properties.volume;
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// POST restore — +
+// POST restore
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST restore", () => {
@@ -141,7 +141,7 @@ describe("C4 (4) — POST restore", () => {
       .from(snapshots)
       .where(eq(snapshots.commitId, restored.commitId));
     expect(snap).toHaveLength(1);
-    // No ops rows: restore has no verb representation .
+    // No ops rows: restore has no verb representation.
     const opRows = await getDb()
       .select()
       .from(ops)
@@ -181,7 +181,7 @@ describe("C4 (4) — POST restore", () => {
     expect((await view(s)).pendingCount).toBe(0);
   });
 
-  it("HLD#14: a commit id from ANOTHER project is not restorable", async () => {
+  it("a commit id from ANOTHER project is not restorable", async () => {
     const alice = await session();
     const hers = await save(alice); // her import commit, returned as a no-op
     const bob = await session();
@@ -192,14 +192,14 @@ describe("C4 (4) — POST restore", () => {
       { branch: "main", commitId: hers.commitId, ticket: ticket() },
       bob,
     );
-    // No "commit not found" code exists in — see the findings.
+    // Cross-project commit ids are rejected at the request boundary.
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
     expect(await commitCount()).toBe(2); // one import commit each, nothing new
   });
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// POST import — / + +
+// POST import
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 const time = (value: number, rate = 24) => ({
@@ -300,7 +300,7 @@ describe("C4 (4) — POST import", () => {
     expect(after.timeline.tracks[0].clips).toHaveLength(1);
   });
 
-  it("M7b fix: a re-import lands on the project's EXISTING rate, not the file's", async () => {
+  it("a re-import lands on the project's EXISTING rate, not the file's", async () => {
     const s = await session();
     // A hand-written 30fps document: one clip, 60 frames (2s) long.
     const doc = otioDoc([
@@ -380,11 +380,11 @@ describe("C4 (4) — POST import", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// POST export — #4
+// POST export
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST export", () => {
-  it("HLD#4: export seals a dirty branch, ties the file to that head, and round-trips", async () => {
+  it("export seals a dirty branch, ties the file to that head, and round-trips", async () => {
     const s = await session();
     await edit(s, "main", 0, volume("clip-1", 80));
     const before = await commitCount();
@@ -398,7 +398,7 @@ describe("C4 (4) — POST export", () => {
       ),
     ) as { otioJson: unknown; commitId: string; name: string };
 
-    // The seal ran with the name #4 fixes verbatim…
+    // The seal uses the deterministic export boundary name.
     expect(data.name).toBe("Auto — before export");
     expect(await commitCount()).toBe(before + 1);
     expect((await view(s)).pendingCount).toBe(0);
@@ -408,15 +408,15 @@ describe("C4 (4) — POST export", () => {
     )[0];
     expect(head.name).toBe("Auto — before export");
 
-    // The locked shape has mediaWarnings OPTIONAL; there is no honest signal
-    // for it in ( #12/#13), so the field is omitted entirely.
+    // mediaWarnings is optional; there is no honest signal for it here, so the
+    // field is omitted entirely.
     expect(Object.keys(data as object).sort()).toEqual([
       "commitId",
       "name",
       "otioJson",
     ]);
 
-    // -style structural round-trip through the real importer.
+    // Structural round-trip through the real importer.
     const back = importOtio(data.otioJson);
     expect(back.ok).toBe(true);
     if (!back.ok) return;
@@ -433,7 +433,7 @@ describe("C4 (4) — POST export", () => {
     );
   });
 
-  it("HLD#4: exporting a CLEAN branch creates no commit and names the existing head", async () => {
+  it("exporting a CLEAN branch creates no commit and names the existing head", async () => {
     const s = await session();
     const before = await commitCount();
     const data = expectOk(
@@ -450,16 +450,16 @@ describe("C4 (4) — POST export", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// POST agent/simulate — #3 +
+// POST agent/simulate
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST agent/simulate", () => {
   /**
-   * 's script places clip D at 0:20 on the video track (frames 480-600 @
+   * The agent script places clip D at 0:20 on the video track (frames 480-600 @
    * 24fps). The fixture fix shortened clip C to 18s-20s (frames
    * 432-480) so the untouched fixture no longer overlaps D there — the
    * choreography's step 2 (branch "tighten-intro" off pristine main, no
-   * other edits before the agent runs) now matches the locked script
+   * other edits before the agent runs) now matches the script
    * as-is, with no workaround needed.
    */
   async function branchForAgentRun(s: Session): Promise<string> {
@@ -475,7 +475,7 @@ describe("C4 (4) — POST agent/simulate", () => {
     return name;
   }
 
-  it("Item 6a(2)/#3: a run is ONE commit whose ops all carry actor 'agent'", async () => {
+  it("an agent run is ONE commit whose ops all carry actor 'agent'", async () => {
     const s = await session();
     const branch = await branchForAgentRun(s);
     const before = await commitCount();
@@ -543,7 +543,7 @@ describe("C4 (4) — POST agent/simulate", () => {
     return name;
   }
 
-  it("#3: a script that fails part-way writes NOTHING at all", async () => {
+  it("a script that fails part-way writes NOTHING at all", async () => {
     const s = await session();
     const branch = await branchWithShortB(s);
     const before = await commitCount();
@@ -578,11 +578,11 @@ describe("C4 (4) — POST agent/simulate", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// POST demo/reset — #5 (DISCARD)
+// POST demo/reset
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST demo/reset", () => {
-  it("HLD#5: the project row and cookie survive, the state is the fresh fixture", async () => {
+  it("the project row and cookie survive, the state is the fresh fixture", async () => {
     const s = await session();
     const projectBefore = (await getDb().select().from(projects))[0];
     await edit(s, "main", 0, volume("clip-1", 80));
@@ -623,7 +623,7 @@ describe("C4 (4) — POST demo/reset", () => {
     const gone = await get(getTimeline, "/api/timeline?branch=scratch", s);
     expect(expectError(gone).code).toBe("E_BRANCH_NOT_FOUND");
 
-    // #16: the retry is a replay, not a second reset.
+    // The retry is a replay, not a second reset.
     const seeded = (await getDb().select().from(commits))[0].id;
     const retry = expectOk(
       await post(postDemoReset, "/api/demo/reset", { ticket: t }, s),
@@ -634,7 +634,7 @@ describe("C4 (4) — POST demo/reset", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// GET diff — (2) +
+// GET diff
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (2) — GET diff", () => {
@@ -671,7 +671,7 @@ describe("C4 (2) — GET diff", () => {
     expect(data.sentences).toEqual([]);
   });
 
-  it("HLD#14: another project's commit is never readable through diff", async () => {
+  it("another project's commit is never readable through diff", async () => {
     const alice = await session();
     const hers = await rootCommitOf(alice);
     const bob = await session();

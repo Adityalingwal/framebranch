@@ -9,8 +9,7 @@
     "test": "pnpm -r run test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "coverage": "pnpm -r run coverage",
-    "gap-check": "node scripts/lock-id-gap-check.mjs"
+    "coverage": "pnpm -r run coverage"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
