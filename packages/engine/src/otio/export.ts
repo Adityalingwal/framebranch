@@ -1,4 +1,10 @@
-import type { RationalTime, TextClip, Timeline, TimeRange, Track } from "../types";
+import type {
+  RationalTime,
+  TextClip,
+  Timeline,
+  TimeRange,
+  Track,
+} from "../types";
 import type { OtioJson } from "./types";
 import { type AnyClip, rangeEnd, rt } from "./shared-parsers";
 

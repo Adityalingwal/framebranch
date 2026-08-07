@@ -1,4 +1,3 @@
-
 import type { RationalTime } from "./time";
 
 export type { RationalTime };
@@ -31,9 +30,9 @@ export type MediaRef = {
 export type Position = { x: number; y: number };
 
 export type ClipProperties = {
-  volume?: number;   // int 0–100
-  opacity?: number;  // int 0–100
-  scale?: number;    // 0.1–10 (1 = normal)
+  volume?: number; // int 0–100
+  opacity?: number; // int 0–100
+  scale?: number; // 0.1–10 (1 = normal)
   position?: Position;
 };
 
@@ -55,8 +54,8 @@ export type TextFont = "Arial" | "Georgia" | "Courier New";
 
 export type TextStyle = {
   font: TextFont;
-  size: number;   // int 8–200, default 48
-  color: string;  // lowercase 6-digit #rrggbb
+  size: number; // int 8–200, default 48
+  color: string; // lowercase 6-digit #rrggbb
 };
 
 export type TextClipProperties = {

@@ -265,9 +265,7 @@ export function ClipBlock({
           width: HANDLE_WIDTH,
           cursor: "ew-resize",
           background:
-            drag?.mode === "trim-start"
-              ? "var(--fb-accent-to)"
-              : "transparent",
+            drag?.mode === "trim-start" ? "var(--fb-accent-to)" : "transparent",
         }}
       />
       <div

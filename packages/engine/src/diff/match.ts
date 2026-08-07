@@ -128,4 +128,21 @@ function indexClips(
   return out;
 }
 
-export { KHAANA_ORDER, PROPERTY_RULE, spanStart, spanEnd, tlStart, tlEnd, anchor, clipKey, cmpKey, fmtRange, isText, materialized, nearestAncestorIn, indexClips, eqPos, eqStyle };
+export {
+  KHAANA_ORDER,
+  PROPERTY_RULE,
+  spanStart,
+  spanEnd,
+  tlStart,
+  tlEnd,
+  anchor,
+  clipKey,
+  cmpKey,
+  fmtRange,
+  isText,
+  materialized,
+  nearestAncestorIn,
+  indexClips,
+  eqPos,
+  eqStyle,
+};

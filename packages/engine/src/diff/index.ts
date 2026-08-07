@@ -1,6 +1,19 @@
 import type { Position, PropertyValue, TextStyle, Timeline } from "../types";
-import type { DiffEntry, DiffPropertyName, DiffResult, KeyedEntry, Located } from "./types";
-import { KHAANA_ORDER, clipKey, cmpKey, indexClips, nearestAncestorIn, tlStart } from "./match";
+import type {
+  DiffEntry,
+  DiffPropertyName,
+  DiffResult,
+  KeyedEntry,
+  Located,
+} from "./types";
+import {
+  KHAANA_ORDER,
+  clipKey,
+  cmpKey,
+  indexClips,
+  nearestAncestorIn,
+  tlStart,
+} from "./match";
 import { classifyFamily, classifyPair } from "./classify";
 
 export type {

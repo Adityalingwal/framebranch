@@ -1,6 +1,25 @@
 import type { PropertyValue } from "../types";
-import type { DiffEntry, DiffPropertyName, KeyedEntry, Located, TrimmedEntry } from "./types";
-import { KHAANA_ORDER, PROPERTY_RULE, anchor, clipKey, eqPos, eqStyle, fmtRange, isText, materialized, spanEnd, spanStart, tlStart } from "./match";
+import type {
+  DiffEntry,
+  DiffPropertyName,
+  KeyedEntry,
+  Located,
+  TrimmedEntry,
+} from "./types";
+import {
+  KHAANA_ORDER,
+  PROPERTY_RULE,
+  anchor,
+  clipKey,
+  eqPos,
+  eqStyle,
+  fmtRange,
+  isText,
+  materialized,
+  spanEnd,
+  spanStart,
+  tlStart,
+} from "./match";
 
 /**
  * Compare one `b` clip (`cur`) against its `a`-side reference (`ref` —

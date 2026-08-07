@@ -353,8 +353,7 @@ function trimExtensionRoom(
   const headroom =
     edge === "start"
       ? source.start.value
-      : sourceLength(media) -
-        (source.start.value + source.duration.value);
+      : sourceLength(media) - (source.start.value + source.duration.value);
   return Math.min(room, headroom);
 }
 
@@ -522,7 +521,10 @@ function makeAwareCommand(
   }
   if (operation === "split" && clip.timelineRange.duration.value > 1) {
     const start = clip.timelineRange.start.value;
-    const at = rng.int(start + 1, start + clip.timelineRange.duration.value - 1);
+    const at = rng.int(
+      start + 1,
+      start + clip.timelineRange.duration.value - 1,
+    );
     return { command: { op: "split", clipId: clip.id, at: time(at) } };
   }
   if (operation === "ripple") {
@@ -659,7 +661,11 @@ function editBranch(base: Timeline, rng: Rng, branch: string): Timeline {
   const steps = rng.int(5, 50);
   for (let step = 0; step < steps; step++) {
     if (rng.chance(0.05)) {
-      timeline = applySplitDeleteExtendChain(timeline, rng, `${branch} ${step}`);
+      timeline = applySplitDeleteExtendChain(
+        timeline,
+        rng,
+        `${branch} ${step}`,
+      );
       continue;
     }
     const generated = rng.chance(0.15)

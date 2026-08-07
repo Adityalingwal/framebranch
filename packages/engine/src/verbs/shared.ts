@@ -99,7 +99,10 @@ export const noChange = (timeline: Timeline): ApplyNoChange => ({
   timeline,
 });
 
-export const rt = (value: number, rate: number): RationalTime => ({ value, rate });
+export const rt = (value: number, rate: number): RationalTime => ({
+  value,
+  rate,
+});
 
 export const rangeEnd = (r: TimeRange): number =>
   r.start.value + r.duration.value;

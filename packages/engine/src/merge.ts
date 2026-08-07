@@ -817,7 +817,11 @@ function assignRefinedIds(
 ): string[] {
   const used = new Set<string>();
   return segments.map((segment) => {
-    const candidates = refinedIdCandidates(segment.start, segment.end, families);
+    const candidates = refinedIdCandidates(
+      segment.start,
+      segment.end,
+      families,
+    );
     let id = candidates.find((candidate) => !used.has(candidate));
     if (id === undefined) {
       // Defensive only — all lawful candidates consumed (no observed path).
@@ -1576,9 +1580,8 @@ function processOverlaps(ctx: MergeContext, input: Timeline): Timeline {
             "saved overlap choices did not reach a clean fixed point";
         } else {
           ctx.conflicts.set(conflict.public.conflictId, conflict);
-          for (const id of (
-            conflict.public.participants as OverlapParticipants
-          ).clipIds) {
+          for (const id of (conflict.public.participants as OverlapParticipants)
+            .clipIds) {
             pendingIds.add(id);
           }
         }

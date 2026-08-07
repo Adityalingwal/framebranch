@@ -663,9 +663,7 @@ describe("T2-A: split-family merge goldens", () => {
       [5, 2],
       [7, 3],
     ]);
-    expect(
-      (clipById(result.timeline, "A") as Clip).properties.volume,
-    ).toBe(60);
+    expect((clipById(result.timeline, "A") as Clip).properties.volume).toBe(60);
     assertCleanAndPositive(result.timeline);
     const repeat = ready(startMerge({ base: nextBase, ours, theirs }));
     expect(JSON.stringify(repeat)).toBe(JSON.stringify(result));
@@ -1006,12 +1004,21 @@ describe("T2-B: atom composition and conflict goldens", () => {
     const scenario = {
       base,
       ours: shrinkThree(base),
-      theirs: edit(base, { op: "trim", clipId: "A", edge: "end", delta: t(-5) }),
+      theirs: edit(base, {
+        op: "trim",
+        clipId: "A",
+        edge: "end",
+        delta: t(-5),
+      }),
     };
     const start = needs(startMerge(scenario));
     expect(start.conflicts).toHaveLength(1);
     const conflict = findConflict(start, 1, "coverage-end");
-    const expected = { ours: range(10, 7), theirs: range(10, 5), base: range(10, 10) };
+    const expected = {
+      ours: range(10, 7),
+      theirs: range(10, 5),
+      base: range(10, 10),
+    };
     for (const choice of ["ours", "theirs", "base"] as const) {
       const done = ready(choose(scenario, start, conflict, choice));
       expect(

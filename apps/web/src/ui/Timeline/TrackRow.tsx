@@ -29,7 +29,8 @@ export function TrackRow({
   onTrim: (clipId: string, edge: "start" | "end", deltaFrame: number) => void;
   onSlip: (clipId: string, deltaFrame: number) => void;
 }) {
-  const totalSeconds = Math.ceil(timelineEndFrame(timeline) / timeline.projectRate) + 1;
+  const totalSeconds =
+    Math.ceil(timelineEndFrame(timeline) / timeline.projectRate) + 1;
   const widthPx = totalSeconds * PX_PER_SECOND;
   const height = TRACK_HEIGHT[track.kind];
 

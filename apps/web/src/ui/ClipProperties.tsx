@@ -54,12 +54,7 @@ export function ClipProperties({
   onPropertyChange: (
     clipId: string,
     property:
-      | "volume"
-      | "opacity"
-      | "scale"
-      | "position"
-      | "textContent"
-      | "textStyle",
+      "volume" | "opacity" | "scale" | "position" | "textContent" | "textStyle",
     value: PropertyValue,
   ) => void;
   onDelete: (clipId: string) => void;
@@ -262,7 +257,9 @@ function TextControls({
           value={style.font}
           disabled={disabled}
           style={{ ...textInput, width: "auto" }}
-          onChange={(e) => commitStyle({ ...style, font: e.target.value as TextFont })}
+          onChange={(e) =>
+            commitStyle({ ...style, font: e.target.value as TextFont })
+          }
         >
           {FONTS.map((f) => (
             <option key={f} value={f}>
@@ -353,7 +350,13 @@ function IntSlider({
           style={{ flex: 1 }}
           onInput={(e) => setLive(Number((e.target as HTMLInputElement).value))}
         />
-        <span style={{ width: 34, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+        <span
+          style={{
+            width: 34,
+            textAlign: "right",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {live}%
         </span>
       </div>
@@ -398,7 +401,13 @@ function ScaleSlider({
           style={{ flex: 1 }}
           onInput={(e) => setLive(Number((e.target as HTMLInputElement).value))}
         />
-        <span style={{ width: 34, textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
+        <span
+          style={{
+            width: 34,
+            textAlign: "right",
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
           {live.toFixed(1)}x
         </span>
       </div>
@@ -436,7 +445,13 @@ function ColorInput({
         type="color"
         value={live}
         disabled={disabled}
-        style={{ width: 40, height: 24, border: "none", background: "none", cursor: "pointer" }}
+        style={{
+          width: 40,
+          height: 24,
+          border: "none",
+          background: "none",
+          cursor: "pointer",
+        }}
         onInput={(e) => setLive((e.target as HTMLInputElement).value)}
       />
     </Row>
@@ -482,7 +497,13 @@ function PositionInputs({
   );
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
   return (
     <div
       style={{
@@ -495,8 +516,12 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
         borderBottom: "1px solid rgba(255,255,255,.04)",
       }}
     >
-      <span style={{ color: "var(--fb-text-mute)", flexShrink: 0 }}>{label}</span>
-      <span style={{ color: "var(--fb-text-body)", flex: 1, textAlign: "right" }}>
+      <span style={{ color: "var(--fb-text-mute)", flexShrink: 0 }}>
+        {label}
+      </span>
+      <span
+        style={{ color: "var(--fb-text-body)", flex: 1, textAlign: "right" }}
+      >
         {children}
       </span>
     </div>
@@ -505,7 +530,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ color: "var(--fb-text-mute)", fontSize: 12, textAlign: "center" }}>
+    <div
+      style={{
+        color: "var(--fb-text-mute)",
+        fontSize: 12,
+        textAlign: "center",
+      }}
+    >
       {children}
     </div>
   );

@@ -24,7 +24,6 @@ export type InvariantViolation =
   | { kind: "overlap"; trackId: string; clipIds: [string, string] }
   | { kind: "empty-text-content"; clipId: string };
 
-
 export const VIOLATION_ERROR_CODE: Record<
   InvariantViolation["kind"],
   ErrorCode

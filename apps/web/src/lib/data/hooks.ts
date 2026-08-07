@@ -60,8 +60,7 @@ export function useDiffQuery(from: string | null, to: string | null) {
 export function useSaveVersionMutation(branch: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name?: string) =>
-      api.postCommit({ branch, name }, retryHooks),
+    mutationFn: (name?: string) => api.postCommit({ branch, name }, retryHooks),
     onSuccess: (data) => {
       recordHead(branch, data.commitId); // head-tracking.ts
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(branch) });
@@ -284,7 +283,8 @@ export function useAgentSimulateMutation() {
     // writes nothing at all. Show a fixed message rather than the per-code
     // error switch, since "this one edit failed" reads differently from
     // "the whole run was thrown away".
-    onError: () => showToast("Agent run failed — no changes were made.", "error"),
+    onError: () =>
+      showToast("Agent run failed — no changes were made.", "error"),
   });
 }
 

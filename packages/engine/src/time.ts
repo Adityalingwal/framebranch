@@ -1,4 +1,3 @@
-
 export type RationalTime = {
   /** integer tick count */
   value: number;

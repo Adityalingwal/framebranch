@@ -19,7 +19,9 @@ import { TopBar } from "./TopBar";
 const VALID_VIEWS: PanelView[] = ["changes", "merge", "history"];
 
 function parseView(raw: string | null): PanelView {
-  return VALID_VIEWS.includes(raw as PanelView) ? (raw as PanelView) : "history";
+  return VALID_VIEWS.includes(raw as PanelView)
+    ? (raw as PanelView)
+    : "history";
 }
 
 export function Shell() {
@@ -55,7 +57,9 @@ export function Shell() {
   }, []);
 
   const addBranch = useCallback((branch: string) => {
-    setKnownBranches((prev) => (prev.includes(branch) ? prev : [...prev, branch]));
+    setKnownBranches((prev) =>
+      prev.includes(branch) ? prev : [...prev, branch],
+    );
   }, []);
 
   const resetToFreshDemo = useCallback(() => {
@@ -242,7 +246,13 @@ export function Shell() {
           }}
         >
           <div
-            style={{ flex: 1, display: "flex", gap: 12, minHeight: 0, minWidth: 0 }}
+            style={{
+              flex: 1,
+              display: "flex",
+              gap: 12,
+              minHeight: 0,
+              minWidth: 0,
+            }}
           >
             <div
               style={{
@@ -279,13 +289,18 @@ export function Shell() {
               />
             </div>
           </div>
-          <div className="surface-lg" style={{ flexShrink: 0, minWidth: 0, overflow: "hidden" }}>
+          <div
+            className="surface-lg"
+            style={{ flexShrink: 0, minWidth: 0, overflow: "hidden" }}
+          >
             <TimelineView
               timeline={data.timeline}
               selectedClipId={selectedClipId}
               highlightedClipId={highlightedClipId}
               playheadFrame={playheadFrame}
-              onSelectClip={(clip: { id: string }) => setSelectedClipId(clip.id)}
+              onSelectClip={(clip: { id: string }) =>
+                setSelectedClipId(clip.id)
+              }
               onSetPlayhead={setPlayheadFrame}
               onMove={handleMove}
               onTrim={handleTrim}

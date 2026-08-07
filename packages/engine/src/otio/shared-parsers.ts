@@ -1,4 +1,10 @@
-import type { Clip, EngineError, RationalTime, TextClip, TimeRange } from "../types";
+import type {
+  Clip,
+  EngineError,
+  RationalTime,
+  TextClip,
+  TimeRange,
+} from "../types";
 import { convertRate } from "../time";
 import { SCHEMA_WHITELIST } from "./types";
 
@@ -135,5 +141,21 @@ function framebranchMeta(
   return isObject(fb) ? fb : undefined;
 }
 
-export { OtioAbortError, invalid, unsupportedVersion, isObject, rt, rangeEnd, requireSchema, requireObject, requireInteger, requireRate, parseRationalTime, parseTimeRange, convertTimeRange, childrenOf, framebranchMeta };
+export {
+  OtioAbortError,
+  invalid,
+  unsupportedVersion,
+  isObject,
+  rt,
+  rangeEnd,
+  requireSchema,
+  requireObject,
+  requireInteger,
+  requireRate,
+  parseRationalTime,
+  parseTimeRange,
+  convertTimeRange,
+  childrenOf,
+  framebranchMeta,
+};
 export type { AnyClip, SchemaLabel };

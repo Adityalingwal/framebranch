@@ -64,9 +64,26 @@ export function ChangesPanel({
 
   return (
     <div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-        <VersionPicker label="From" commits={commits} value={from} onChange={setFrom} />
-        <VersionPicker label="To" commits={commits} value={to} onChange={setTo} />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 8,
+          marginBottom: 12,
+        }}
+      >
+        <VersionPicker
+          label="From"
+          commits={commits}
+          value={from}
+          onChange={setFrom}
+        />
+        <VersionPicker
+          label="To"
+          commits={commits}
+          value={to}
+          onChange={setTo}
+        />
       </div>
 
       {pendingCount > 0 && (
@@ -93,7 +110,16 @@ export function ChangesPanel({
       ) : diff.data && diff.data.sentences.length === 0 ? (
         <Empty>No changes.</Empty>
       ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 4 }}>
+        <ul
+          style={{
+            margin: 0,
+            padding: 0,
+            listStyle: "none",
+            display: "flex",
+            flexDirection: "column",
+            gap: 4,
+          }}
+        >
           {diff.data?.sentences.map((sentence, i) => {
             const entry = diff.data!.entries[i];
             const clipId =
@@ -135,7 +161,15 @@ function VersionPicker({
   onChange: (commitId: string) => void;
 }) {
   return (
-    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: "var(--fb-text-mute)" }}>
+    <label
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        fontSize: 11,
+        color: "var(--fb-text-mute)",
+      }}
+    >
       <span style={{ width: 32, flexShrink: 0 }}>{label}</span>
       <select
         value={value ?? ""}
@@ -147,7 +181,8 @@ function VersionPicker({
         </option>
         {commits.map((c) => (
           <option key={c.commitId} value={c.commitId}>
-            {c.actor === "agent" ? "🤖" : "👤"} {c.name} — {relativeTime(c.createdAt)}
+            {c.actor === "agent" ? "🤖" : "👤"} {c.name} —{" "}
+            {relativeTime(c.createdAt)}
           </option>
         ))}
       </select>
@@ -157,7 +192,14 @@ function VersionPicker({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 12, color: "var(--fb-text-mute)", textAlign: "center", padding: 20 }}>
+    <div
+      style={{
+        fontSize: 12,
+        color: "var(--fb-text-mute)",
+        textAlign: "center",
+        padding: 20,
+      }}
+    >
       {children}
     </div>
   );

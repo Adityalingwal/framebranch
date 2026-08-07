@@ -62,7 +62,9 @@ export function MergePanel({
   const theirs = useTimelineQuery(attempt?.fromBranch ?? fromBranch);
 
   function finalizeInvalidate() {
-    queryClient.invalidateQueries({ queryKey: queryKeys.timeline(currentBranch) });
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.timeline(currentBranch),
+    });
     queryClient.invalidateQueries({ queryKey: queryKeys.history() });
   }
 
@@ -117,10 +119,17 @@ export function MergePanel({
           }
           // B3.4 — fresh, honest recompute; new conflicts can legitimately
           // appear and are shown immediately, never hidden.
-          setAttempt({ ...attempt, conflicts: data.conflicts, counts: data.counts });
+          setAttempt({
+            ...attempt,
+            conflicts: data.conflicts,
+            counts: data.counts,
+          });
         },
         onError: (error) => {
-          if (error instanceof ApiClientError && error.code === "E_STALE_HEAD") {
+          if (
+            error instanceof ApiClientError &&
+            error.code === "E_STALE_HEAD"
+          ) {
             setStaleHead(
               `"${currentBranch}" changed while you were merging — restart the merge.`,
             );
@@ -222,7 +231,13 @@ export function MergePanel({
           className="surface"
           style={{ padding: 12, marginBottom: 12 }}
         >
-          <p style={{ fontSize: 12, color: "var(--fb-warn)", margin: "0 0 10px" }}>
+          <p
+            style={{
+              fontSize: 12,
+              color: "var(--fb-warn)",
+              margin: "0 0 10px",
+            }}
+          >
             {staleHead}
           </p>
           <button type="button" style={primaryButton} onClick={restartMerge}>
@@ -230,9 +245,17 @@ export function MergePanel({
           </button>
         </div>
       ) : (
-        <p style={{ fontSize: 11, color: "var(--fb-text-mute)", margin: "0 0 12px" }}>
-          {attempt.counts.resolved} resolved · {attempt.counts.remaining} remaining
-          {attempt.counts.total > attempt.counts.resolved + attempt.counts.remaining
+        <p
+          style={{
+            fontSize: 11,
+            color: "var(--fb-text-mute)",
+            margin: "0 0 12px",
+          }}
+        >
+          {attempt.counts.resolved} resolved · {attempt.counts.remaining}{" "}
+          remaining
+          {attempt.counts.total >
+          attempt.counts.resolved + attempt.counts.remaining
             ? "" // never true — counts are always self-consistent (B3.4)
             : ""}
         </p>
@@ -276,7 +299,10 @@ export function MergePanel({
   );
 }
 
-const BUCKET_BUTTONS: Record<1 | 2 | 3, { label: string; choice: MergeChoice }[]> = {
+const BUCKET_BUTTONS: Record<
+  1 | 2 | 3,
+  { label: string; choice: MergeChoice }[]
+> = {
   1: [
     { label: "Keep yours", choice: "ours" },
     { label: "Keep agent's", choice: "theirs" },
@@ -312,16 +338,34 @@ function ConflictCard({
   );
   const clipIds =
     "clipIds" in conflict.participants ? conflict.participants.clipIds : [];
-  const field = "field" in conflict.participants ? conflict.participants.field : null;
+  const field =
+    "field" in conflict.participants ? conflict.participants.field : null;
 
   return (
     <div className="surface" style={{ padding: 10 }}>
-      <p style={{ fontSize: 12, color: "var(--fb-text-body-2)", margin: "0 0 8px" }}>
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--fb-text-body-2)",
+          margin: "0 0 8px",
+        }}
+      >
         {conflict.explanation}
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
-        <SideBar label="Base" tone="muted" note="original — not available to preview" />
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+          marginBottom: 10,
+        }}
+      >
+        <SideBar
+          label="Base"
+          tone="muted"
+          note="original — not available to preview"
+        />
         {clipIds.map((clipId) => (
           <SideBar
             key={`ours-${clipId}`}
@@ -378,7 +422,9 @@ function SideBar({
         ? "var(--fb-accent-to)"
         : "var(--fb-warn)";
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10.5 }}>
+    <div
+      style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 10.5 }}
+    >
       <span style={{ width: 44, flexShrink: 0, color: "var(--fb-text-mute)" }}>
         {label}
       </span>
@@ -392,7 +438,17 @@ function SideBar({
           border: tone === "muted" ? `1px dashed ${color}` : "none",
         }}
       />
-      <span style={{ color: "var(--fb-text-dim)", flexShrink: 0, maxWidth: 130, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={note}>
+      <span
+        style={{
+          color: "var(--fb-text-dim)",
+          flexShrink: 0,
+          maxWidth: 130,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        title={note}
+      >
         {note}
       </span>
     </div>
@@ -417,7 +473,9 @@ function describeClip(
 function describeField(clip: AnyClip, field: string): string {
   switch (field) {
     case "volume":
-      return !isTextClip(clip) ? `Volume ${clip.properties.volume ?? 100}%` : "—";
+      return !isTextClip(clip)
+        ? `Volume ${clip.properties.volume ?? 100}%`
+        : "—";
     case "opacity": {
       const opacity = isTextClip(clip)
         ? (clip.properties?.opacity ?? 100)
@@ -441,7 +499,9 @@ function describeField(clip: AnyClip, field: string): string {
     case "timeline-offset":
       return `at ${formatTimecode(clip.timelineRange.start)}`;
     case "source-offset":
-      return !isTextClip(clip) ? `src ${formatTimecode(clip.sourceRange.start)}` : "—";
+      return !isTextClip(clip)
+        ? `src ${formatTimecode(clip.sourceRange.start)}`
+        : "—";
     default:
       return `${formatTimecode(clip.timelineRange.start)} · ${clip.timelineRange.duration.value}f`;
   }
@@ -449,7 +509,14 @@ function describeField(clip: AnyClip, field: string): string {
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 12, color: "var(--fb-text-mute)", textAlign: "center", padding: 20 }}>
+    <div
+      style={{
+        fontSize: 12,
+        color: "var(--fb-text-mute)",
+        textAlign: "center",
+        padding: 20,
+      }}
+    >
       {children}
     </div>
   );

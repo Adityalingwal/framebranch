@@ -48,7 +48,8 @@ export function PreviewPane({
         >
           <span
             style={{
-              fontFamily: FONT_BY_TEXT_FONT[clip.textStyle.font] ?? "sans-serif",
+              fontFamily:
+                FONT_BY_TEXT_FONT[clip.textStyle.font] ?? "sans-serif",
               fontSize: Math.min(clip.textStyle.size, 64),
               color: clip.textStyle.color,
               textAlign: "center",
@@ -89,14 +90,24 @@ export function PreviewPane({
   if (mediaRef.kind === "audio") {
     return (
       <Frame>
-        <AudioClipMedia url={mediaRef.url} start={start} end={end} volume={volume} />
+        <AudioClipMedia
+          url={mediaRef.url}
+          start={start}
+          end={end}
+          volume={volume}
+        />
       </Frame>
     );
   }
 
   return (
     <Frame>
-      <VideoClipMedia url={mediaRef.url} start={start} end={end} volume={volume} />
+      <VideoClipMedia
+        url={mediaRef.url}
+        start={start}
+        end={end}
+        volume={volume}
+      />
     </Frame>
   );
 }

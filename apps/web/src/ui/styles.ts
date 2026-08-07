@@ -9,7 +9,8 @@
 import type { CSSProperties } from "react";
 
 export const primaryButton: CSSProperties = {
-  background: "linear-gradient(180deg, var(--fb-accent-from), var(--fb-accent-to))",
+  background:
+    "linear-gradient(180deg, var(--fb-accent-from), var(--fb-accent-to))",
   color: "#fff",
   border: "none",
   borderRadius: "var(--fb-radius-pill)",

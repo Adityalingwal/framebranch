@@ -82,7 +82,14 @@ function runChunk(chunkOffset, cases) {
     const chunkTotal = replayCase === undefined ? globalTotal : 1;
     const child = spawn(
       "pnpm",
-      ["exec", "vitest", "run", "tests/fuzz.test.ts", "--testTimeout", "600000"],
+      [
+        "exec",
+        "vitest",
+        "run",
+        "tests/fuzz.test.ts",
+        "--testTimeout",
+        "600000",
+      ],
       {
         cwd: process.cwd(),
         env: {
@@ -177,7 +184,11 @@ async function main() {
   }
 
   const chunkPlan = [];
-  for (let chunkOffset = offset; chunkOffset < offset + totalCases; chunkOffset += chunkSize) {
+  for (
+    let chunkOffset = offset;
+    chunkOffset < offset + totalCases;
+    chunkOffset += chunkSize
+  ) {
     chunkPlan.push({
       chunkOffset,
       cases: Math.min(chunkSize, offset + totalCases - chunkOffset),

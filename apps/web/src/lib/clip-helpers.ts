@@ -59,7 +59,10 @@ export function labelFromMediaUrl(url: string): string {
   return words.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function clipLabel(clip: AnyClip, mediaRef: MediaRef | undefined): string {
+export function clipLabel(
+  clip: AnyClip,
+  mediaRef: MediaRef | undefined,
+): string {
   if (isTextClip(clip)) return clip.textContent || "(empty text)";
   if (mediaRef) return labelFromMediaUrl(mediaRef.url);
   return `Clip ${clip.id}`;

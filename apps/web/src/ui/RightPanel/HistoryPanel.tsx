@@ -40,8 +40,7 @@ export function HistoryPanel({ currentBranch }: { currentBranch: string }) {
           lineHeight: 1.4,
         }}
       >
-        Restoring a version creates a new version — it never rewrites
-        history.
+        Restoring a version creates a new version — it never rewrites history.
       </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {commits.map((commit) => (
@@ -127,17 +126,16 @@ function CommitRow({
           }}
         >
           {commit.importWarnings.map((w, i) => (
-            <li
-              key={i}
-              style={{ fontSize: 10.5, color: "var(--fb-warn)" }}
-            >
+            <li key={i} style={{ fontSize: 10.5, color: "var(--fb-warn)" }}>
               Skipped: {w.count} {w.detail}
             </li>
           ))}
         </ul>
       )}
 
-      <div style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}>
+      <div
+        style={{ marginTop: 8, display: "flex", justifyContent: "flex-end" }}
+      >
         <button
           type="button"
           style={{
@@ -158,7 +156,14 @@ function CommitRow({
 
 function Empty({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ fontSize: 12, color: "var(--fb-text-mute)", textAlign: "center", padding: 20 }}>
+    <div
+      style={{
+        fontSize: 12,
+        color: "var(--fb-text-mute)",
+        textAlign: "center",
+        padding: 20,
+      }}
+    >
       {children}
     </div>
   );

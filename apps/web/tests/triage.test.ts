@@ -1,4 +1,3 @@
-
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -46,7 +45,9 @@ describe("1/6 — tickets.ticket is UNIQUE at the database level (C3 (8))", () =
     expect(data.timeline.tracks.length).toBeGreaterThan(0);
 
     const projectId = (
-      await getDb().execute<{ id: string }>(sql`select id from projects limit 1`)
+      await getDb().execute<{ id: string }>(
+        sql`select id from projects limit 1`,
+      )
     )[0].id;
     const t = ticket();
 

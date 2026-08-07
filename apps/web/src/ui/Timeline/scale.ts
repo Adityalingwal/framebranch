@@ -21,7 +21,8 @@ export function timelineEndFrame(timeline: Timeline): number {
   let end = 0;
   for (const track of timeline.tracks) {
     for (const clip of track.clips as AnyClip[]) {
-      const clipEnd = clip.timelineRange.start.value + clip.timelineRange.duration.value;
+      const clipEnd =
+        clip.timelineRange.start.value + clip.timelineRange.duration.value;
       if (clipEnd > end) end = clipEnd;
     }
   }

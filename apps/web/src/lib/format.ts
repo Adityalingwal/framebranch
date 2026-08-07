@@ -7,7 +7,9 @@
 import type { RationalTime } from "@framebranch/engine";
 
 function pad(n: number, width = 2): string {
-  return String(Math.max(0, Math.trunc(n))).toString().padStart(width, "0");
+  return String(Math.max(0, Math.trunc(n)))
+    .toString()
+    .padStart(width, "0");
 }
 
 /** `{value, rate}` → `mm:ss:ff` (or `hh:mm:ss:ff` past an hour). */

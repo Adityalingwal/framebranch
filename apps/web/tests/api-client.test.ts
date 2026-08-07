@@ -50,7 +50,10 @@ describe("api-client — envelope + error mapping", () => {
 
     await expect(
       postBranch({ name: "main", from: "main" }, hooks),
-    ).rejects.toMatchObject({ code: "E_BRANCH_EXISTS", message: "That name is taken." });
+    ).rejects.toMatchObject({
+      code: "E_BRANCH_EXISTS",
+      message: "That name is taken.",
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(1); // C6: an answer never retries
     expect(hooks.onConnectionLost).not.toHaveBeenCalled();
@@ -81,7 +84,9 @@ describe("api-client — envelope + error mapping", () => {
     // review finding: mutation onError handlers use this to show a
     // toast — regression-guard the two cases it must handle.
     expect(
-      mutationErrorMessage(new ApiClientError("E_BRANCH_EXISTS", "That name is taken.")),
+      mutationErrorMessage(
+        new ApiClientError("E_BRANCH_EXISTS", "That name is taken."),
+      ),
     ).toBe("That name is taken.");
     expect(mutationErrorMessage(new Error("network exploded"))).toBe(
       "Something went wrong.",
@@ -170,7 +175,9 @@ describe("api-client — C6 retry ladder", () => {
     // Attach the rejection handler BEFORE advancing timers, so the retry's
     // rejection (which lands mid-`advanceTimersByTimeAsync`) is never
     // briefly unhandled from Node's point of view.
-    const assertion = expect(postCommit({ branch: "main" }, hooks)).rejects.toMatchObject({
+    const assertion = expect(
+      postCommit({ branch: "main" }, hooks),
+    ).rejects.toMatchObject({
       code: "E_STALE_HEAD",
       message: "This version moved — reload and try again.",
     });

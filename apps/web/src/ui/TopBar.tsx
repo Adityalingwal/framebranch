@@ -172,7 +172,11 @@ export function TopBar({
       />
       <button
         type="button"
-        style={busy || editingPaused ? { ...primaryButton, opacity: 0.5 } : primaryButton}
+        style={
+          busy || editingPaused
+            ? { ...primaryButton, opacity: 0.5 }
+            : primaryButton
+        }
         disabled={busy || editingPaused}
         onClick={() =>
           saveVersion.mutate(versionName.trim() || undefined, {
@@ -255,7 +259,9 @@ export function TopBar({
 
       <button
         type="button"
-        style={editingPaused ? { ...secondaryButton, opacity: 0.5 } : secondaryButton}
+        style={
+          editingPaused ? { ...secondaryButton, opacity: 0.5 } : secondaryButton
+        }
         disabled={editingPaused}
         onClick={() => setResetOpen(true)}
       >

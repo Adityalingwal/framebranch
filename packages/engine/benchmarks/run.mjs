@@ -1,4 +1,3 @@
-
 /* global console, process, performance */
 import { writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -56,9 +55,7 @@ function measure(label, fn) {
   const sorted = [...runs].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   const medianMs =
-    sorted.length % 2 === 0
-      ? (sorted[mid - 1] + sorted[mid]) / 2
-      : sorted[mid];
+    sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 
   return { label, medianMs, runs: sorted };
 }
@@ -139,9 +136,14 @@ for (const [name, { clipCount, seed }] of Object.entries(fixtures)) {
     `  Generating ${name} independent-edits pair (${clipCount} clips, move excluded)...`,
   );
   independentEditsTimelines[name] = {
-    ours: applyRandomEdits(timelines[name], Math.floor(clipCount * 0.05), 1111, {
-      excludeMove: true,
-    }),
+    ours: applyRandomEdits(
+      timelines[name],
+      Math.floor(clipCount * 0.05),
+      1111,
+      {
+        excludeMove: true,
+      },
+    ),
     theirs: applyRandomEdits(
       timelines[name],
       Math.floor(clipCount * 0.05),
@@ -188,7 +190,6 @@ function probeConflictCount(label, fixture) {
   return probe.conflicts.length;
 }
 
-
 for (const scale of ["1k", "10k"]) {
   const base = timelines[scale];
   const { ours, theirs } = editedTimelines[scale];
@@ -198,9 +199,12 @@ for (const scale of ["1k", "10k"]) {
     theirs,
   });
 
-  const result = measure(`startMerge @ ${scale} (${conflictCount} conflicts)`, () => {
-    startMerge({ base, ours, theirs });
-  });
+  const result = measure(
+    `startMerge @ ${scale} (${conflictCount} conflicts)`,
+    () => {
+      startMerge({ base, ours, theirs });
+    },
+  );
   results.push(result);
   console.log(`  ${result.label}: ${formatMs(result.medianMs)}`);
 }
@@ -343,17 +347,14 @@ for (const scale of ["1k", "10k"]) {
   const stepsCount = commands.length;
   const snapshot = JSON.parse(JSON.stringify(baseRestore));
 
-  const restoreResult = measure(
-    `restore replay (${stepsCount} steps)`,
-    () => {
-      // Snapshot restore = deep clone + replay all commands
-      let tl = JSON.parse(JSON.stringify(snapshot));
-      for (const { command } of commands) {
-        const r = applyCommand(tl, command);
-        if (r.ok && !r.noChange) tl = r.timeline;
-      }
-    },
-  );
+  const restoreResult = measure(`restore replay (${stepsCount} steps)`, () => {
+    // Snapshot restore = deep clone + replay all commands
+    let tl = JSON.parse(JSON.stringify(snapshot));
+    for (const { command } of commands) {
+      const r = applyCommand(tl, command);
+      if (r.ok && !r.noChange) tl = r.timeline;
+    }
+  });
   results.push(restoreResult);
   console.log(`  ${restoreResult.label}: ${formatMs(restoreResult.medianMs)}`);
 }
@@ -431,10 +432,7 @@ ${tableRows}
   capacity (V2 Merkle caching, worker offload) are documented, not benchmarked.
 `;
 
-const reportPath = join(
-  dirname(fileURLToPath(import.meta.url)),
-  "REPORT.md",
-);
+const reportPath = join(dirname(fileURLToPath(import.meta.url)), "REPORT.md");
 writeFileSync(reportPath, report, "utf-8");
 
 console.log(`✅ Report written to: ${reportPath}`);

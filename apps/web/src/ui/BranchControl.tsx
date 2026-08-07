@@ -125,7 +125,9 @@ export function BranchControl({
             type="button"
             style={{
               ...primaryButton,
-              ...(trimmed && !nameTaken ? {} : { opacity: 0.45, cursor: "not-allowed" }),
+              ...(trimmed && !nameTaken
+                ? {}
+                : { opacity: 0.45, cursor: "not-allowed" }),
             }}
             disabled={!trimmed || nameTaken}
             onClick={() => {

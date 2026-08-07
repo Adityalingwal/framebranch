@@ -1,4 +1,10 @@
-import type { ApplyOptions, ApplyResult, Command, EngineCommand, Timeline } from "../types";
+import type {
+  ApplyOptions,
+  ApplyResult,
+  Command,
+  EngineCommand,
+  Timeline,
+} from "../types";
 import {
   applyAddMediaClip,
   applyAddTextClip,

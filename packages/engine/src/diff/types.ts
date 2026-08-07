@@ -126,6 +126,5 @@ type SortKey = (number | string)[];
 
 type KeyedEntry = { key: SortKey; entry: DiffEntry };
 
-
 export type { AnyClip, Located, SortKey, KeyedEntry };
 export { isText };

@@ -220,7 +220,9 @@ export type HistoryData = {
 export type DiffData = DiffResult;
 
 export function getTimeline(branch: string): Promise<TimelineData> {
-  return get<TimelineData>(`/api/timeline?branch=${encodeURIComponent(branch)}`);
+  return get<TimelineData>(
+    `/api/timeline?branch=${encodeURIComponent(branch)}`,
+  );
 }
 
 export function getHistory(): Promise<HistoryData> {
@@ -284,10 +286,7 @@ export function postRestore(
 
 export function postDemoReset(hooks: RetryHooks): Promise<{ done: true }> {
   const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/demo/reset", { ticket }),
-    hooks,
-  );
+  return runMutation(() => postJson("/api/demo/reset", { ticket }), hooks);
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +353,12 @@ export function postMergeAbort(
 export function postAgentSimulate(
   input: { branch: string; script: string },
   hooks: RetryHooks,
-): Promise<{ commitId: string; name: string; actor: "agent"; opsApplied: number }> {
+): Promise<{
+  commitId: string;
+  name: string;
+  actor: "agent";
+  opsApplied: number;
+}> {
   const ticket = newTicket();
   return runMutation(
     () => postJson("/api/agent/simulate", { ...input, ticket }),
@@ -367,7 +371,10 @@ export function postImport(
   hooks: RetryHooks,
 ): Promise<{ commitId: string; skippedItems: ImportWarning[] }> {
   const ticket = newTicket();
-  return runMutation(() => postJson("/api/import", { ...input, ticket }), hooks);
+  return runMutation(
+    () => postJson("/api/import", { ...input, ticket }),
+    hooks,
+  );
 }
 
 export function postExport(
@@ -375,5 +382,8 @@ export function postExport(
   hooks: RetryHooks,
 ): Promise<{ otioJson: unknown; commitId: string; name: string }> {
   const ticket = newTicket();
-  return runMutation(() => postJson("/api/export", { ...input, ticket }), hooks);
+  return runMutation(
+    () => postJson("/api/export", { ...input, ticket }),
+    hooks,
+  );
 }
