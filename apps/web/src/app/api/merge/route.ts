@@ -97,7 +97,7 @@ export async function POST(request: Request): Promise<Response> {
           // participants are deliberately NOT in it.
           draftTimeline: result.timeline,
           conflicts: result.conflicts,
-          // The parchi starts as the engine gave it (empty at start).
+          // Choices start exactly as the engine returned them.
           choices: result.choices,
           status: MERGE_ATTEMPT_OPEN,
         })

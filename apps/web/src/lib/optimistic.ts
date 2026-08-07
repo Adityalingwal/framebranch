@@ -22,9 +22,9 @@
  * arrives — the browser cannot predict it. An optimistic add would show a
  * clip under a client-guessed id that the server's real id will never match,
  * which is exactly the "client guessed, server did something else" failure
- * mode rule (b) exists to rule out. addClip is out of scope for M8b anyway
- * (brief §5: "not needed for the 9-step demo; build only if it costs
- * nothing") — it was not built at all (see findings).
+ * mode rule (b) exists to rule out. addClip mints ids server-side — the
+ * browser cannot predict them, so optimistic add would be the same
+ * "client guessed, server did something else" failure.
  */
 
 import { applyCommand } from "@framebranch/engine";

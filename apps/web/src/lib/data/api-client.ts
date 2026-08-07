@@ -1,5 +1,5 @@
 /**
- * api-client.ts — the ONE module that talks to the API (brief §7).
+ * api-client.ts — the single module that talks to the API.
  *
  * Free of React: every function here is plain async code, so the envelope
  * handling, the error-code switch and the C6 retry ladder can each be unit
@@ -59,7 +59,7 @@ export function mutationErrorMessage(error: unknown): string {
 }
 
 /**
- * C4 (5) error-code switch, in one place, per brief §7. Anything not listed
+ * Error-code → message switch, in one place. Anything not listed
  * falls back to the server's own `message` — never a raw code to the user.
  */
 const FRIENDLY_MESSAGES: Partial<Record<string, string>> = {
@@ -73,7 +73,7 @@ const FRIENDLY_MESSAGES: Partial<Record<string, string>> = {
 
 function friendlyMessage(code: string, serverMessage: string): string {
   if (code === "E_TICKET_REUSED") {
-    // A bug in us, per brief §7 — log it, don't scare the user with it.
+    // A bug in us — log it, don't scare the user with it.
     console.error("[framebranch] E_TICKET_REUSED (client bug)", serverMessage);
     return "Something went wrong — please try again.";
   }

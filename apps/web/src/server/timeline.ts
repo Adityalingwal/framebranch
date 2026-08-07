@@ -68,7 +68,7 @@ export async function loadCommitTimeline(
       .where(
         and(
           eq(snapshots.commitId, cursor),
-          eq(snapshots.projectId, projectId), // HLD #14: always project-scoped
+          eq(snapshots.projectId, projectId), // always project-scoped
         ),
       )
       .limit(1);
