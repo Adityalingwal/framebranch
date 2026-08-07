@@ -1,14 +1,7 @@
 /**
- * FrameBranch engine — public API entry point ("public darwaza", docs/11 C7).
- *
- * Milestones 2-5 complete the locked 7-function API: applyCommand (1),
- * computeDiff (2), startMerge/applyChoice/finalizeCheck (3-5), and
- * importOtio/exportOtio (6-7, M5). Nothing else is public.
- *
- * apps/web will import ONLY from this index (small door = free internal
- * refactoring). Pure core: no DB / network / UI imports, ever.
+ * Public entry point — the only file apps/web (or any external code) may import from.
+ * No DB, network, or UI imports are allowed inside the engine, ever.
  */
-
 export { applyCommand } from "./verbs";
 export { computeDiff } from "./diff";
 export { applyChoice, finalizeCheck, startMerge } from "./merge";

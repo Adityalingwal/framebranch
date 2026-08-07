@@ -1,19 +1,4 @@
-/**
- * Keep each Vitest worker below its 60-second RPC window while preserving one
- * deterministic seed/case universe for the package-level T3 command.
- *
- * [AMENDED 2026-08-04, CI speed optimization] Chunks now run CONCURRENTLY
- * (bounded by FRAMEBRANCH_FUZZ_CONCURRENCY / core count) instead of one at a
- * time via spawnSync. Determinism is preserved by construction: each case's
- * RNG seed is caseSeed(masterSeed, globalIndex), where globalIndex =
- * OFFSET + i — identical no matter which chunk or shard runs it, and no
- * matter the finish order of concurrent chunks. See docs/12 T5 amendment
- * (2026-08-04) and IMPLEMENTATION-NOTES.md for the concurrency-default and
- * output-ordering assumptions.
- */
-
 /* global console, process */
-
 import { spawn } from "node:child_process";
 import os from "node:os";
 

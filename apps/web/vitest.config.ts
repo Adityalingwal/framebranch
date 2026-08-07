@@ -1,17 +1,3 @@
-/**
- * Server tests run against a REAL Postgres (M7 lock B): a fake/in-memory
- * DB would prove nothing, because the G-group tests are precisely about
- * what the database itself does (unique register, one transaction, CAS).
- *
- * They call the route handlers DIRECTLY — real DB, no network, no port, no
- * running server — so the files share one database and must not run in
- * parallel with each other.
- *
- * The tiny .env reader below exists so that a plain `pnpm test` at the
- * repo root works locally (apps/web/.env is gitignored — see
- * .env.example). It never overrides a variable that is already set, so
- * CI's service-container DATABASE_URL always wins.
- */
 
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";

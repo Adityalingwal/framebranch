@@ -1,20 +1,5 @@
-/**
- * T4 — Benchmark runner for FrameBranch engine.
- *
- * Measures: computeDiff (1k/10k), startMerge (1k/10k + split-heavy),
- * single-verb applyCommand, and snapshot+replay restore round-trip.
- *
- * Method (docs/12-test-benchmark-plan.md T4 locked spec):
- *   - 3 warm-up runs (discarded — V8 JIT compilation noise)
- *   - 10 measurement runs per metric
- *   - Final number = MEDIAN (not average — GC spike resistant)
- *   - Report: benchmarks/REPORT.md with machine/Node/fixture metadata
- *
- * Run: pnpm --filter engine benchmark
- */
 
 /* global console, process, performance */
-
 import { writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -153,13 +138,6 @@ for (const [name, { clipCount, seed }] of Object.entries(fixtures)) {
   console.log(
     `  Generating ${name} independent-edits pair (${clipCount} clips, move excluded)...`,
   );
-  // A genuine low(er)-conflict baseline (follow-up, 2026-08-05): standard
-  // timeline, independent random edits on each side like the existing
-  // `editedTimelines` pair, but with `move` excluded (overlap-safe atoms
-  // only — same reasoning as generateConflictingPair). Fresh seeds, not
-  // reusing 101/202/301/402/909. Two independent random pickers CAN still
-  // coincidentally land on the same clip + atom, so this is not guaranteed
-  // conflict-free — the real measured count goes in the row label.
   independentEditsTimelines[name] = {
     ours: applyRandomEdits(timelines[name], Math.floor(clipCount * 0.05), 1111, {
       excludeMove: true,
@@ -194,11 +172,7 @@ for (const scale of ["1k", "10k"]) {
 }
 
 /**
- * Untimed probe: proves the fixture is valid (startMerge returns ok: true —
- * checkInvariants is not part of the public engine API, so this is the
- * brief's documented fallback) and returns the REAL conflict count. Every
- * merge row's label carries this number (2026-08-05 follow-up lock) — a
- * merge timing without its conflict count is not interpretable.
+ * Probes the real conflict count for a fixture by running startMerge once (untimed).
  *
  * @param {string} label
  * @param {{ base: unknown, ours: unknown, theirs: unknown }} fixture
@@ -214,14 +188,7 @@ function probeConflictCount(label, fixture) {
   return probe.conflicts.length;
 }
 
-// --- 2. startMerge (standard) ---
-// Independent random edits on each side (including `move`) — NOT a
-// conflict-free baseline: with editType chosen randomly per clip, both
-// sides occasionally land on the same clip AND the same atom (a genuine
-// value conflict), and `move` can additionally create bucket-3 overlap
-// conflicts against an unedited neighbour. See docs/07 for the measured
-// bucket breakdown. Fixture/seeds/position unchanged from the original
-// implementation (Option A lock) — only the label gained the real count.
+
 for (const scale of ["1k", "10k"]) {
   const base = timelines[scale];
   const { ours, theirs } = editedTimelines[scale];
@@ -238,12 +205,6 @@ for (const scale of ["1k", "10k"]) {
   console.log(`  ${result.label}: ${formatMs(result.medianMs)}`);
 }
 
-// --- 3. startMerge (split-heavy variant) ---
-// Same independent-random-edit fixture shape as above, applied to the
-// split-heavy base timeline (many lineage-connected piece families) —
-// exercises the merge engine's refinement/common-cut code paths. Fixture/
-// seeds/position unchanged (Option A lock) — only the label gained the
-// real count.
 for (const scale of ["1k", "10k"]) {
   const base = splitHeavyTimelines[scale];
   const { ours, theirs } = editedSplitHeavyTimelines[scale];
@@ -262,12 +223,6 @@ for (const scale of ["1k", "10k"]) {
   console.log(`  ${result.label}: ${formatMs(result.medianMs)}`);
 }
 
-// --- 3b. startMerge (conflict-heavy variant, T4 "conflict fixtures") ---
-// Uses the STANDARD timeline as base (not split-heavy) at 1k/10k. Both sides
-// edit the SAME clips on the SAME atom with DIFFERENT values (Option A1,
-// 2026-08-05 lock) — every edited clip is a guaranteed Bucket-1 conflict.
-// The existing `startMerge @ 1k/10k` rows above STAY unchanged (Option A,
-// same lock): this is an ADDITIONAL worst-case row, not a replacement.
 for (const scale of ["1k", "10k"]) {
   const base = timelines[scale];
   const { ours, theirs, expectedConflicts } = conflictingPairs[scale];
@@ -292,14 +247,6 @@ for (const scale of ["1k", "10k"]) {
   console.log(`  ${result.label}: ${formatMs(result.medianMs)}`);
 }
 
-// --- 3c. startMerge (independent-edits variant — genuinely low-conflict
-// baseline, 2026-08-05 follow-up) ---
-// Standard timeline, independent random edits on each side with `move`
-// excluded (overlap-safe atoms only). This is NOT guaranteed conflict-free
-// — two independent random pickers can still coincidentally hit the same
-// clip and atom — so the row reports whatever the real count turns out to
-// be, not a tuned/forced number. Position: appended after the other three
-// merge variants; none of their fixtures/seeds/position were touched.
 for (const scale of ["1k", "10k"]) {
   const base = timelines[scale];
   const { ours, theirs } = independentEditsTimelines[scale];

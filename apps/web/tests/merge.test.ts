@@ -1,14 +1,5 @@
-/**
- * Merge endpoints — POST merge / merge/resolve / merge/abort (docs/11 C4 (4)
- * + F6), including **G4**, the one G-group test M7a left for M7b
- * (docs/12 T2, F11 amendment): merge finalize when a head has moved →
- * E_STALE_HEAD and no half-merge commit.
- *
- * Real Postgres, handlers called directly. The heads are moved by REAL
- * commits through the normal path, not by touching rows behind the code's
- * back — a CAS test that fakes the race proves nothing.
- */
-
+// Merge endpoint tests (POST merge/resolve/abort) + G4: merge finalize when head has moved → E_STALE_HEAD.
+// Real Postgres. Heads moved through the normal commit path — a faked race proves nothing.
 import { eq, isNotNull } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 

@@ -1,10 +1,5 @@
-/**
- * Group H — OTIO import/export goldens (docs/12 "M5 (OTIO) test
- * additions", locks O1-O10 in docs/11). Names carry their lock-ID prefix
- * per the docs/12 T1 convention.
- *
- * Warning assertions are on `code` ONLY — never on English prose (O8).
- */
+// OTIO import/export golden tests.
+// Warning assertions match on `code` only — never on English message text.
 
 import { describe, expect, it } from "vitest";
 import { applyCommand } from "../src/verbs";

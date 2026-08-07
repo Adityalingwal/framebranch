@@ -1,11 +1,4 @@
-/**
- * M8a — the C6 retry ladder + envelope/error mapping, unit-tested exactly
- * as tickets.test.ts's docblock says they should be ("client behaviour,
- * belongs to the UI milestone"). No DB, no network, no browser (docs/12
- * T1: E2E is out) — `global.fetch` is mocked and timers are faked so the
- * 1s/3s C6 delays run instantly.
- */
-
+// Retry ladder and envelope/error mapping — global.fetch is mocked, timers are faked (retries run instantly).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {

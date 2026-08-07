@@ -1,28 +1,4 @@
-# FrameBranch CI — docs/12 T5 lock (2026-08-03), amended 2026-08-04 for CI
-# speed:
-#   T5 required set (unchanged): (1) typecheck (2) lint (3) unit+golden+
-#   integration tests (4) fuzz 10k (seed-print) (5) coverage + lock-ID
-#   gap-script. All five stay merge-blocking; the amendment is that they no
-#   longer run as one strict sequence — `gate` (1-3) and `fuzz` (4) now run
-#   IN PARALLEL as separate jobs, fanned out further into fuzz shards.
-#   Sequence was never the point of the T5 lock, completeness was — see the
-#   docs/12 T5 amendment block for the full reasoning.
-#   Benchmarks are intentionally NOT in CI (T5 lock: CI hardware inconsistent
-#   -> local script + committed report).
-#
-# M7a (2026-08-05): step 3's "integration" half now includes the G-group
-#   server tests, which run against a REAL Postgres (M7 lock B: a fake DB
-#   proves nothing about a unique index, a transaction or a CAS). `gate`
-#   therefore gains a Postgres SERVICE CONTAINER — GitHub's own, so no
-#   secret is involved — and one migration step before the tests. Job
-#   structure is untouched: `gate` and `fuzz` still run in parallel, `fuzz`
-#   is still not `needs: gate`, `main` is still never auto-cancelled, and a
-#   docs-only commit still skips only `fuzz`.
-#
-# M7b (2026-08-05): T5 step 5 is now LIVE inside `gate` — the coverage
-#   report (report-only, no threshold) and the lock-ID gap-script
-#   (fail-blocking). The TODO(M7b) marker is gone. Job structure, triggers
-#   and the 10,000-case fuzz floor are all unchanged.
+
 name: CI
 
 on:
@@ -38,9 +14,6 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
-  # The only job that thinks: decides whether this run is a no-op (duplicate
-  # of an open PR's run), whether it's docs-only, and how deep the fuzz job
-  # should go. Every downstream job just reads these outputs.
   plan:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -56,11 +29,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # A bare `on: push` + `on: pull_request` makes GitHub run the whole
-      # pipeline TWICE for every PR-branch commit (once for push, once for
-      # pull_request). When this is a push on a non-main branch AND an open
-      # PR already exists for that branch, the PR run covers it — skip.
-      # Fail open: a lookup error must not silently skip real CI.
       - name: Decide skip_all (duplicate-of-open-PR push)
         id: skip
         env:
@@ -81,9 +49,7 @@ jobs:
             echo "skip_all=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # docs-only: every changed file matches *.md or docs/**. A commit
-      # touching docs AND code is NOT docs-only. Fail open (not-docs-only)
-      # when the diff base can't be determined (new branch / force push).
+
       - name: Decide docs_only
         id: docs
         run: |
@@ -110,14 +76,6 @@ jobs:
             echo "docs_only=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Trigger ladder (docs/12 T5 amendment decision 7): pull_request and
-      # push-to-main get the full 10k, 5 shards x 2,000; everything else
-      # (feature-branch push with no open PR) gets a 500-case smoke, 1 shard.
-      #
-      # The matrix carries the shards' START OFFSETS, not shard indexes:
-      # GitHub Actions expressions have no arithmetic operators (`*` is a
-      # parse error), so `shard * cases_per_shard` cannot be computed in the
-      # workflow. Emitting the offsets here keeps the arithmetic in bash.
       - name: Decide fuzz depth
         id: depth
         run: |
@@ -136,9 +94,6 @@ jobs:
     if: needs.plan.outputs.skip_all != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # The G-group server tests need a real database (M7 lock B). This is an
-    # ephemeral service container that lives and dies with the job; the
-    # credentials below are not secrets and are not reused anywhere.
     services:
       postgres:
         image: postgres:16
@@ -186,18 +141,9 @@ jobs:
       - name: Tests — unit + golden + integration (T5 step 3)
         run: pnpm test
 
-      # T5 step 5, half one: coverage is REPORT-ONLY (owner-locked
-      # 2026-08-05). The summary is printed in the log so a forgotten corner
-      # is visible; there is deliberately NO threshold and no failing on a
-      # percentage — a number gate blocks honest PRs while the report still
-      # does its real job.
       - name: Coverage report (T5 step 5, report-only)
         run: pnpm coverage
 
-      # T5 step 5, half two: the lock-ID gap-script is FAIL-BLOCKING. It
-      # cross-checks docs/11's lock ids (+ docs/12's G/H ids) against the
-      # test names and exits non-zero when an implemented lock has no test
-      # (docs/12 T1's first "missing test" guard).
       - name: Lock-ID gap-script (T5 step 5, fail-blocking)
         run: pnpm gap-check
 
@@ -231,13 +177,8 @@ jobs:
           FRAMEBRANCH_FUZZ_CASES: ${{ needs.plan.outputs.fuzz_cases_per_shard }}
           FRAMEBRANCH_FUZZ_OFFSET: ${{ matrix.offset }}
           FRAMEBRANCH_FUZZ_TOTAL: ${{ needs.plan.outputs.fuzz_total }}
-        # Seed intentionally NOT set — the harness default (1295277908) stays
-        # in force, matching the docs/07 / docs/11 M4 evidence seed.
         run: pnpm --filter @framebranch/engine fuzz
 
-  # Single aggregate check for branch protection. Succeeds only when both
-  # `gate` and `fuzz` ended success-or-skipped; fails on any cancelled/failed
-  # job (including plan itself).
   ci-success:
     needs: [plan, gate, fuzz]
     if: always()

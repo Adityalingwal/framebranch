@@ -1,10 +1,5 @@
-/**
- * The remaining M7b doors: POST restore / import / export / agent-simulate /
- * demo-reset and GET diff (docs/11 C4 (2) + (4) + F6).
- *
- * Real Postgres, handlers called directly, one project per test.
- */
-
+// API route tests: POST restore/import/export/agent-simulate/demo-reset and GET diff.
+// Real Postgres, route handlers called directly.
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 

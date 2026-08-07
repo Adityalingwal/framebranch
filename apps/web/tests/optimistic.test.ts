@@ -1,16 +1,5 @@
-/**
- * The brief's LOCKED test (§4): "for the same command, the optimistic
- * result equals the server result." Both sides are literally the same call
- * — `apps/web/src/app/api/ops/route.ts` calls `applyCommand(view.timeline,
- * body.command, {mintId})` on the server; `computeOptimisticResult` (src/
- * lib/optimistic.ts) calls the SAME `applyCommand` on the client — so this
- * test is rule (b)'s guard: it fails the moment anyone replaces
- * `computeOptimisticResult`'s body with a hand-written shortcut that
- * diverges from the engine's own answer.
- *
- * Plain unit test, no browser, no React, no DB (docs/12 T1: E2E is out).
- */
-
+// Guard: optimistic result (client) must equal the server result for the same command.
+// Fails if computeOptimisticResult diverges from the engine's own applyCommand.
 import { describe, expect, it } from "vitest";
 
 import { applyCommand } from "@framebranch/engine";

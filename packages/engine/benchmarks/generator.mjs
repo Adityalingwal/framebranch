@@ -308,23 +308,8 @@ export function applyRandomEdits(
 }
 
 /**
- * Build a guaranteed-conflicting pair of divergent timelines (T4 "conflict
- * fixtures" / Option A1 lock, 2026-08-05).
- *
- * Both sides edit the SAME set of clips on the SAME atom (property change or
- * trim-end — never `move`, which could create an overlap) with DIFFERENT
- * values, so every edited clip yields a guaranteed Bucket-1 value conflict.
- *
- * Atom choice per clip (in priority order, so every eligible clip gets
- * exactly one edit):
- *   1. `volume` property change (video clips carry it).
- *   2. `opacity` property change (video/image clips carry it).
- *   3. Trim-end shorten (any clip with sourceRange/lineage, duration > 3 so
- *      both a 1-frame and a 2-frame shorten stay positive). Text clips have
- *      no `properties`, so they fall through to this branch.
- * A clip that qualifies for neither (e.g. too short to trim, no properties)
- * is skipped — `expectedConflicts` reports the real count actually applied,
- * not the requested `editCount`.
+ * Builds a conflicting pair of timelines where both sides edit the same clips
+ * to different values, guaranteeing a value conflict on every edited clip.
  *
  * @param {import('../src/types.js').Timeline} timeline
  * @param {number} editCount - target number of conflicting clips (upper bound)

@@ -1,46 +1,5 @@
 #!/usr/bin/env node
-/**
- * lock-id-gap-check.mjs — docs/12 T1's first "missing test" guard, and the
- * fail-blocking half of T5 step 5.
- *
- * WHAT IT DOES
- *   Reads the LOCK IDs out of the canonical docs and cross-checks them
- *   against the names of the tests in this repo. A lock that is in scope and
- *   has no test anywhere is printed as `BC.4 has no test` and the script
- *   exits 1, which fails CI. (T1: "Aditya tests PADHEGA nahi — system report
- *   karega".)
- *
- * WHERE THE IDS COME FROM
- *   docs/11 — every locked outcome is written as a list item that starts
- *             `- **<ID> …`; that is the whole extraction rule.
- *   docs/12 — the G-group (5 server/state tests) and the H-group (11 OTIO
- *             goldens) from the F11 amendment and the M5 test additions.
- *
- * WHICH LOCKS ARE IN SCOPE (T5's activation clarification, 2026-08-04)
- *   The gap-script runs now because M2–M7's lock universe is implemented.
- *   Locks belonging to a milestone that is not built yet must not be
- *   reported as missing. Deciding that needed NO milestone-aware machinery
- *   here, because of a fact about the docs themselves: every lock ID in
- *   docs/11 and every G/H id in docs/12 belongs to the engine (M2–M6) or the
- *   server (M7), all of which are now implemented. The only locks for a
- *   future milestone are M8's UI decisions, and those live in docs/07's
- *   prose — a document this script does not read. So the in-scope list is
- *   "everything the two files above yield", minus the explicit, reasoned
- *   EXCLUSIONS below.
- *
- * HOW A LOCK COUNTS AS TESTED
- *   Its id appears as a whole token inside a `describe(…)`, `it(…)`,
- *   `it.each(…)(…)` or `test(…)` name (T1: names carry a LOCK-ID PREFIX, and
- *   combined names like "A2.1/H5" or "A3.1 (F4)" are normal). A `-` before
- *   the id does NOT count: `T2-C5` is a golden-list number from docs/12's
- *   T2 groups, not lock C5.
- *
- * Plain Node, no dependencies, deterministic — like
- * packages/engine/tests/run-fuzz.mjs.
- */
-
 /* global console, process */
-
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -52,11 +11,7 @@ const TEST_DIRS = [
   join(ROOT, "apps", "web", "tests"),
 ];
 
-/**
- * Locks that CANNOT have a test of their own, each with the reason. This
- * list is the only place a lock may be skipped, and every entry must say
- * why — an empty reason is not allowed (checked below).
- */
+// Every exclusion must include a reason — an empty reason string is rejected below.
 const EXCLUDED = {
   A3: "meta-lock: the FORMAT every verb contract is written in (5 questions), not behaviour. Its content is A3.1-A3.8, which are all tested.",
   "A2.2":

@@ -1,22 +1,15 @@
 /**
- * invariants.ts — B2.3: THE single invariant list.
+ * The single shared invariant list — called by both the edit door (verbs.ts)
+ * and the post-merge sweep after a merge.
  *
- * Both doors call this ONE function (DRY, locked):
- *  - edit door: every verb builds its candidate state and rejects the
- *    command if the candidate violates the list (verbs.ts),
- *  - join door: the post-merge sweep (arrives in M4) runs the same list
- *    over the combined state.
- *
- * The list — exactly what the docs lock, nothing more:
- *  1. no-overlap-same-track            (A2.3)
- *  2. source-range-in-file             (A2.3, Clip vs MediaRef.durationInSource;
- *     O1: skipped when durationInSource is null — an image is unbounded)
- *  3. duration > 0 for every TimeRange (A2.3)
- *  4. timeline start >= 0              (A3 preconditions)
- *  5. sourceRange.duration === timelineRange.duration for media clips (BC.4)
- *  6. text content non-empty           (A3.6 / N2)
+ * All 6 invariants:
+ *  1. No two clips overlap on the same track
+ *  2. Clip source-range is within MediaRef.durationInSource (skipped for images — null = unbounded)
+ *  3. Every TimeRange has duration > 0
+ *  4. Timeline start >= 0
+ *  5. sourceRange.duration === timelineRange.duration for media clips
+ *  6. Text clip content is non-empty
  */
-
 import type { Clip, ErrorCode, MediaRef, TextClip, Timeline } from "./types";
 
 export type InvariantViolation =
@@ -26,17 +19,12 @@ export type InvariantViolation =
       range: "sourceRange" | "timelineRange";
     }
   | { kind: "negative-start"; clipId: string }
-  | { kind: "source-timeline-duration-mismatch"; clipId: string } // BC.4
+  | { kind: "source-timeline-duration-mismatch"; clipId: string }
   | { kind: "source-out-of-file"; clipId: string }
   | { kind: "overlap"; trackId: string; clipIds: [string, string] }
   | { kind: "empty-text-content"; clipId: string };
 
-/**
- * Typed-error mapping for the edit door (verbs map the first relevant
- * violation of a candidate state to its locked error code). BC.4 has no
- * dedicated code in the official C4 list — it reports as E_INVALID_RANGE
- * (see IMPLEMENTATION-NOTES).
- */
+
 export const VIOLATION_ERROR_CODE: Record<
   InvariantViolation["kind"],
   ErrorCode
@@ -94,7 +82,7 @@ export function checkInvariants(timeline: Timeline): InvariantViolation[] {
           });
         }
 
-        // 5. BC.4 — 1:1 source/timeline duration (no speed-change in V1)
+        // 5. sourceRange.duration === timelineRange.duration (no speed-change in V1)
         if (src.duration.value !== tl.duration.value) {
           violations.push({
             kind: "source-timeline-duration-mismatch",

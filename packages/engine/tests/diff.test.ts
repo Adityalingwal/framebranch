@@ -1,20 +1,10 @@
 /**
- * diff.test.ts — C1 diff engine goldens (T1 structure, T2 group F +
- * the DIFF-level parts of the T2 group A split goldens).
+ * computeDiff golden tests.
  *
- * Base fixture (see fixtures.ts):
- *   v1 (video): A tl [10,20) src [5,15) volume 80 / B tl [30,35) /
- *               IM tl [50,55) image
- *   a1 (audio): AU tl [0,8)
- *   x1 (text):  TX tl [0,4) "Welcome" / TX2 tl [10,15) "Bye"
- *
- * NOTE (T2-F): the "A3.8 errors" golden is already covered by M2's
- * verbs.test.ts (E_SPLIT_AT_BOUNDARY / E_SPLIT_OUT_OF_RANGE /
- * E_CLIP_NOT_FOUND / E_RATE_MISMATCH) — recorded in
- * IMPLEMENTATION-NOTES, not duplicated here. The "import skip-warnings"
- * golden is M5 (otio) — deliberately absent.
+ * Base fixture: v1 (video): A tl[10,20) src[5,15) / B tl[30,35) / IM tl[50,55) image
+ *               a1 (audio): AU tl[0,8)
+ *               x1 (text):  TX tl[0,4) "Welcome" / TX2 tl[10,15) "Bye"
  */
-
 import { describe, expect, it } from "vitest";
 import { computeDiff } from "../src/diff";
 import type { DiffResult } from "../src/diff";

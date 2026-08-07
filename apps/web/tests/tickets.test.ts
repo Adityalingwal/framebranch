@@ -1,16 +1,4 @@
-/**
- * C6 — the idempotency register's exact numbers (docs/11 C6, docs/09 #16).
- *
- * The register's BEHAVIOUR is G1/G2's subject (replay, and the
- * different-endpoint refusal). What is checked here is the part of C6 that
- * only shows up over time and at the door:
- *   C6 (1) the ticket is a browser `crypto.randomUUID()`;
- *   C6 (4) rows have a 24h per-row TTL, swept inline — no scheduler, and
- *          the table is never emptied wholesale.
- * The two silent auto-retries and the banner (C6 (2)/(3)) are client
- * behaviour and belong to the UI milestone.
- */
-
+// Idempotency register: ticket UUID format and 24h per-row TTL (swept inline, no background scheduler).
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 

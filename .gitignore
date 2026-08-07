@@ -1,29 +1,12 @@
-# Dependencies
 node_modules/
-
-# Build output
 dist/
 *.tsbuildinfo
-
-# Test / coverage output
 coverage/
-
-# Environment
 .env
 .env.*
-# ...except the documented template, which carries no real credential.
-!.env.example
-
-# Next.js build output
 .next/
 next-env.d.ts
-
-# Editor / OS noise
 .DS_Store
 *.log
-
-# Deployment
 .vercel/
-
-# Agent handoff briefs (local only, never pushed)
 briefs/
