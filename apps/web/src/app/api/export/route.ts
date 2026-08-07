@@ -1,21 +1,10 @@
 /**
- * POST /api/export — docs/11 C4 (4) + F6 + F5(a), a BOUNDARY door.
+ * POST /api/export — a boundary door. May create a commit (auto-seal) if the
+ * branch is dirty, tying the exported file to an exact version.
  *
- * req:  { branch, ticket }
- * data: { otioJson, commitId, name }
- *
- * Export is a POST, not a GET (docs/09 #4): it may create a commit. If the
- * branch is dirty it is sealed first with the name that lock fixes verbatim
- * — "Auto — before export" — and the exported file is then tied to exactly
- * one version, which is the traceability the POST buys.
- *
- * `mediaWarnings` is optional in the locked shape and is OMITTED here. It
- * would mean "these media refs did not resolve", but `exportOtio` returns
- * only `OtioJson`, and V1 media are deployment URL fixtures with no runtime
- * resolution check at all (docs/09 #12/#13). There is no honest signal to
- * fill the field with, and neither a fabricated warning nor a network fetch
- * to manufacture one would be. Export always succeeds (#13(e)) — OTIO
- * carries pointers, never bytes.
+ * mediaWarnings is omitted — V1 media are deployment URL fixtures with no
+ * runtime resolution check, so there's no honest signal to fill the field.
+ * Export always succeeds (OTIO carries pointers, never bytes).
  */
 
 import { exportOtio } from "@framebranch/engine";

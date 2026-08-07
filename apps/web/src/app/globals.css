@@ -1,10 +1,6 @@
 /**
- * globals.css — the M8 visual design lock (docs/07 "M8 (UI) VISUAL DESIGN —
- * LOCKED"), implemented literally: the token list, the three depth
- * techniques as reusable utilities (.surface / .surface-lg / .lane-sunken),
- * dark-only, weights 400/500 only, Geist.
- *
- * Values are copied verbatim from the lock, not re-derived.
+ * globals.css — the visual design tokens: dark-only, weights 400/500 only,
+ * Geist font, reusable depth utilities (.surface/.surface-lg/.lane-sunken).
  */
 
 @import "tailwindcss";

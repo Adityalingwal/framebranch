@@ -1,18 +1,14 @@
 "use client";
 
 /**
- * hooks.ts — TanStack Query wiring over api-client.ts (brief §7).
+ * hooks.ts — TanStack Query wiring over api-client.ts.
  *
- * Invalidation rules, exactly as locked:
+ * Invalidation rules:
  *  - after a commit          → invalidate timeline + history.
  *  - after branch create/switch → invalidate timeline (+ history if a seal
- *    happened, i.e. `sealedCommitId` came back).
+ *    happened).
  *  - after restore           → both.
  *  - after demo reset        → invalidate everything.
- *
- * Every mutation also gets a shared `onError`: a designed `{ok:false}`
- * answer (e.g. E_BRANCH_EXISTS) never goes through the C6 retry ladder, so
- * without this the UI would just... do nothing (M8a review finding).
  */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -145,7 +141,7 @@ export function useDemoResetMutation() {
 }
 
 // ---------------------------------------------------------------------------
-// M8b — the optimistic mutation wrapper (brief §4). ONE hook, every one of
+// The optimistic mutation wrapper. ONE hook, every one of
 // the 8 edit verbs goes through it (rule c: rollback/refetch/E_STALE_REV
 // handling live here once).
 // ---------------------------------------------------------------------------
@@ -160,11 +156,10 @@ type MutateContext = { previous: TimelineData | undefined };
  *   (rule b) and paint it into the cache immediately (rule a's default is
  *   the ABSENCE of this branch, not a flag to check per call site).
  * - `onError`: always roll back to the snapshot taken in `onMutate`.
- *   `E_STALE_REV` gets the locked silent treatment (docs/11 C4: "UI
- *   chupchaap refresh") — a quiet toast, then a fresh GET, no scary dialog.
- *   Any other designed error shows the human sentence the C4(5) switch
- *   already produced (never the code).
- * - `onSuccess`: F9 — a `noChange` answer touches nothing. Otherwise the
+ *   E_STALE_REV gets silent treatment — invalidate timeline and do a quiet
+ *   toast, then a fresh GET. Any other designed error shows the human
+ *   sentence the error-code switch already produced.
+ * - `onSuccess`: a `noChange` answer touches nothing. Otherwise the
  *   server's `workingRev`/`pendingCount` are written straight from its
  *   answer (never invented/incremented locally), and the timeline query is
  *   invalidated so a fresh `GET /api/timeline` becomes the final truth
@@ -270,7 +265,7 @@ export function useMergeAbortMutation() {
 }
 
 // ---------------------------------------------------------------------------
-// M8b — agent / import / export (all boundary/server-first, brief §4/§8).
+// Agent / import / export (all boundary/server-first).
 // ---------------------------------------------------------------------------
 
 export function useAgentSimulateMutation() {
@@ -285,12 +280,10 @@ export function useAgentSimulateMutation() {
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.history() });
     },
-    // docs/09 Item 10(2) LOCKED copy for an agent-run failure: the run is
-    // all-or-nothing (a verb failing mid-script writes nothing at all — the
-    // server's transaction guarantees that), so the generic per-code C4(5)
-    // message would be misleading here ("this one edit failed" reads very
-    // differently from "the whole run was thrown away"). [Retry] is simply
-    // pressing the same button again — it stays enabled/visible either way.
+    // An agent-run failure is all-or-nothing — one verb failing mid-script
+    // writes nothing at all. Show a fixed message rather than the per-code
+    // error switch, since "this one edit failed" reads differently from
+    // "the whole run was thrown away".
     onError: () => showToast("Agent run failed — no changes were made.", "error"),
   });
 }
@@ -316,7 +309,7 @@ export function useExportMutation() {
   return useMutation({
     mutationFn: (branch: string) => api.postExport({ branch }, retryHooks),
     onSuccess: (_data, branch) => {
-      // Export is a boundary endpoint (docs/09 6a(4)): a dirty branch is
+      // Export is a boundary endpoint — auto-seal if dirty.
       // auto-sealed first. The locked response shape carries no
       // `sealedCommitId` for export (unlike branch/switch), so there is no
       // signal telling the UI whether that happened — invalidating both

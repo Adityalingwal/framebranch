@@ -1,16 +1,5 @@
 /**
- * schema.ts — the 8 locked tables, exactly as docs/11 C3 specifies
- * (+ the F1 amendment: ops / snapshots / working_state each carry
- * `project_id` too, because HLD #14's rule is "every row carries
- * project_id").
- *
- * The table count is LOCKED at 8 (HLD #16). Nothing here may grow a ninth
- * table or a column C3 does not name.
- *
- * Locked indexes (C3): project_id on every table;
- * branches(project_id, name) unique; ops(commit_id, seq) unique;
- * snapshots(commit_id) unique; working_state(branch_id) unique;
- * tickets(project_id, endpoint, ticket) unique.
+ * schema.ts — the 8 table schema.
  */
 
 import {

@@ -1,18 +1,8 @@
 /**
- * POST /api/branch — docs/11 C4 F5(c) + F6, a BOUNDARY door.
- *
- * req:  { name, from, ticket }
- * data: { branchId, name, headCommitId }  (+ sealedCommitId if a seal ran)
- *
- * Create AND switch: the new branch starts at `from`'s current head. If
- * `from` is dirty, it is auto-sealed FIRST — that is docs/09 Item 6a(4)'s
- * pre-existing rule (six boundary endpoints seal when dirty); this
- * endpoint is only its doorbell. Seal + create + working record are one
- * transaction (#16(1)).
- *
- * "Switch" needs no server-side state: F5 locked that the server never
- * remembers a current branch, so creating the branch IS the switch — the
- * client simply starts sending this name.
+ * POST /api/branch — a boundary door. Creates a branch starting at the
+ * source branch's current head, and returns its working view. If the source
+ * is dirty it is auto-sealed first. Create + working record are one
+ * transaction.
  */
 
 import { branches, workingState } from "../../../db/schema";
@@ -41,11 +31,9 @@ export async function POST(request: Request): Promise<Response> {
         const source = await loadBranchView(tx, project.id, body.from, true);
 
         if (await findBranch(tx, project.id, body.name)) {
-          // E_BRANCH_EXISTS [ADDED 2026-08-05, M7a owner triage]. The locked
-          // branches(project_id, name) unique index already made this real;
-          // C4 simply never named its code. Behaviour is unchanged — the
-          // branch is still not created — but the UI can now say "that name
-          // is taken" instead of a generic "invalid value".
+          // The unique branches(project_id, name) index makes duplicate
+          // names real and detectable. E_BRANCH_EXISTS lets the UI say
+          // "that name is taken" instead of a generic error.
           throw new ApiError(
             "E_BRANCH_EXISTS",
             `a branch named "${body.name}" already exists`,

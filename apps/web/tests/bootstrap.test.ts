@@ -1,6 +1,5 @@
 /**
- * Bootstrap + seed tests (HLD #14/#15, docs/11 C8 step 1, Q1, A1.2).
- * Ordinary tests, not G-group.
+ * Bootstrap and seed tests — project creation, demo fixture import, project rate.
  */
 
 import { eq } from "drizzle-orm";
@@ -50,8 +49,8 @@ describe("C8 step 1 — the demo.otio fixture", () => {
   });
 });
 
-describe("HLD #14 — first visit bootstrap", () => {
-  it("HLD#14: a first request with no cookie creates a project, seeds it, and sets an HttpOnly cookie", async () => {
+describe("first visit bootstrap", () => {
+  it("a first request with no cookie creates a project, seeds it, and sets an HttpOnly cookie", async () => {
     const session: Session = { token: null };
     const call = await get(getTimeline, "/api/timeline?branch=main", session);
     const data = expectOk(call) as {
@@ -70,7 +69,7 @@ describe("HLD #14 — first visit bootstrap", () => {
     expect(data.pendingCount).toBe(0);
   });
 
-  it("A1.2: project_rate comes from the imported OTIO, not a hardcoded default", async () => {
+  it("project_rate comes from the imported OTIO, not a hardcoded default", async () => {
     await get(getTimeline, "/api/timeline?branch=main");
     const rows = await getDb().select().from(projects);
     expect(rows).toHaveLength(1);
@@ -80,7 +79,7 @@ describe("HLD #14 — first visit bootstrap", () => {
     expect(rows[0].projectRate).toBe(imported.timeline.projectRate);
   });
 
-  it("Q1: the import commit is a full snapshot with snapshot_distance 0, and F7 stores its warning list", async () => {
+  it("the import commit is a full snapshot and stores its warning list", async () => {
     await get(getTimeline, "/api/timeline?branch=main");
     const commitRows = await getDb().select().from(commits);
     expect(commitRows).toHaveLength(1);
@@ -121,8 +120,8 @@ describe("HLD #14 — first visit bootstrap", () => {
   });
 });
 
-describe("HLD #15 — 100-project cap", () => {
-  it("HLD#15: creating projects past the cap deletes the oldest and leaves no orphan rows", async () => {
+describe("100-project cap", () => {
+  it("creating projects past the cap deletes the oldest and leaves no orphan rows", async () => {
     const db = getDb();
     for (let i = 0; i < 103; i += 1) {
       await bootstrapProject(db);

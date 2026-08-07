@@ -1,22 +1,9 @@
 /**
- * POST /api/ops — docs/11 C4 (3), the EDIT door. One endpoint for all
- * eight verbs (docs/09 Item 3: the command is first-class data).
+ * POST /api/ops — the edit door. One endpoint for all eight verbs.
  *
- * req:  { branch, workingRev, ticket, command }
- * data: { workingRev, pendingCount }
- *       or, for a no-change command (A4 / F9):
- *       { noChange: true, workingRev: UNCHANGED, pendingCount: UNCHANGED }
- *
- * Locked details:
- *  - The ENGINE decides. The server validates the command's shape, hands it
- *    to `applyCommand`, and stores whatever comes back. Verb errors
- *    (E_OVERLAP, E_CLIP_NOT_FOUND, …) propagate with their own codes.
- *  - workingRev is a compare-and-swap (docs/09 triage #6): a stale rev is
- *    rejected with E_STALE_REV and the UI silently refreshes.
- *  - F9: a no-change command must NOT bump the counter. Bumping it would
- *    desync client and server and cause spurious E_STALE_REV. A4 also says
- *    it must not be recorded — nothing happened, so the log stays clean.
- *  - working_rev is monotonic and never resets (C3).
+ * workingRev is a compare-and-swap: a stale rev is rejected with E_STALE_REV
+ * and the UI silently refreshes. A no-change command (e.g. same-position move)
+ * must not bump the counter or be recorded — nothing happened.
  */
 
 import { randomUUID } from "node:crypto";

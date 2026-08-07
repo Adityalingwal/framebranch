@@ -1,22 +1,15 @@
 /**
- * tickets.ts — idempotency (docs/09 Item 14 + #16, docs/11 C3/C6).
+ * tickets.ts — idempotency. Every mutating endpoint carries a browser-
+ * generated UUID ticket; reads never do. The whole composite (auto-commit
+ * + the work + storing the result) is one transaction.
  *
- * LOCKED behaviour:
- *  - every MUTATING endpoint carries a browser-generated UUID ticket (C6);
- *    reads never do (they change nothing).
- *  - the whole composite — auto-commit + the work + storing the result —
- *    is ONE transaction (#16(1)).
- *  - retry with the SAME ticket + SAME endpoint → the STORED result comes
- *    back and the work is done ZERO extra times (#16(2), test G1).
- *  - same ticket + a DIFFERENT endpoint → explicit E_TICKET_REUSED
- *    (#16(3), test G2). F2 cut payload comparison entirely: the original
- *    payload is not stored, so there is no fingerprint column and no
- *    same-endpoint-different-payload check.
- *  - rows have a 24h per-row TTL (C6(4)) — swept inline, no scheduler.
+ * - Same ticket + same endpoint → stored result returned, work done zero
+ *   extra times.
+ * - Same ticket + different endpoint → E_TICKET_REUSED.
+ * - Rows have a 24h per-row TTL, swept inline.
  *
- * A ticket is only recorded when the work SUCCEEDED. A failure throws, the
- * transaction rolls back, and the ticket row rolls back with it — so a
- * retry of a failed call is a real retry, not a replay of an error.
+ * A ticket is only recorded when the work succeeded — a failure rolls the
+ * transaction back, so a retry is a real retry, not a replay of an error.
  */
 
 import { and, eq, lt, sql } from "drizzle-orm";
@@ -27,7 +20,7 @@ import { ApiError } from "./envelope";
 import type { TicketEndpoint } from "./types";
 import type { Tx } from "./tx";
 
-/** C6(4) — per-row TTL. */
+/** Per-row TTL — inline cleanup, no scheduler. */
 export const TICKET_TTL_HOURS = 24;
 
 export async function runWithTicket<T>(
@@ -51,16 +44,13 @@ export async function runWithTicket<T>(
           `ticket already used for "${existing[0].endpoint}", cannot reuse it for "${endpoint}"`,
         );
       }
-      // Response-lost retry (HLD #16 Scene-B): hand back what the first
-      // attempt produced. Nothing runs again.
+      // Response-lost retry: hand back what the first attempt produced.
       return existing[0].result as T;
     }
 
     const result = await work(tx);
 
-    // Cheap inline maintenance: drop this project's expired rows while we
-    // are already writing here (C6(4)); the table never has to be emptied
-    // wholesale and no scheduler exists.
+    // Inline cleanup: drop this project's expired rows on every write.
     await tx
       .delete(tickets)
       .where(

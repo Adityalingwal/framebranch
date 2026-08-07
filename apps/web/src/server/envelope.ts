@@ -1,20 +1,14 @@
 /**
- * envelope.ts — docs/11 C4 (1): EVERY response has the same outer shape.
+ * envelope.ts — every response has the same outer shape:
  *
  *   success → { ok: true,  data: {...} }
  *   failure → { ok: false, error: { code, message } }
  *
- * `code` is the machine contract (the UI switches on it), `message` is for
- * a human. Per-endpoint custom shapes were explicitly rejected.
- *
- * The error CODES below are exactly C4 point (5) + its F8 amendment + the
- * 2026-08-05 M7a amendment (three transport codes: E_BAD_REQUEST,
- * E_BRANCH_EXISTS, E_INTERNAL) — the official list, nothing else.
- * `E_ID_COLLISION` is absent on purpose (F8 removed it: unreachable by
- * design).
+ * code is the machine contract (the UI switches on it), message is for a
+ * human. Per-endpoint custom shapes were explicitly rejected.
  */
 
-/** C4 (5) — Phase A verb codes. Mirrors the engine's own `ErrorCode`. */
+/** Phase A verb codes. Mirrors the engine's own ErrorCode union. */
 const VERB_CODES = [
   "E_CLIP_NOT_FOUND",
   "E_TRACK_NOT_FOUND",

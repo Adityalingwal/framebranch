@@ -1,15 +1,8 @@
 /**
- * POST /api/merge/abort — docs/11 C4 (4) + F6, the DISCARD category
- * (docs/09 #5, the category merge/abort and demo/reset created).
+ * POST /api/merge/abort — discard category. Deletes the draft row only.
  *
- * req:  { attemptId, ticket }
- * data: { aborted: true }
- *
- * The draft row is deleted and NOTHING else happens: no commit is created
- * (the whole intent is to throw the merge work away) and both branches'
- * timelines are bit-for-bit untouched — abort never touched them in the
- * first place, because a merge only ever wrote to `merge_attempts` until
- * finalize.
+ * No commit is created. Both branches' timelines are untouched — a merge
+ * only writes to merge_attempts until finalize.
  */
 
 import { and, eq } from "drizzle-orm";

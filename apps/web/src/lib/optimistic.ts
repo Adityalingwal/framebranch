@@ -1,13 +1,12 @@
 /**
- * optimistic.ts — the ONE opt-in list + the ONE computation call site for
- * the hybrid optimistic wrapper (brief §4, docs/07 M8 lock 5).
+ * optimistic.ts — the one opt-in list and computation call site for the
+ * hybrid optimistic wrapper.
  *
- * Framework-free on purpose (no React import here): the locked test —
- * "for the same command, the optimistic result equals the server result" —
- * is written as a plain unit test against this file (tests/optimistic.test.ts),
- * no browser, no React, no DOM.
+ * Framework-free on purpose (no React): the locked test — "for the same
+ * command, the optimistic result equals the server result" — is a plain unit
+ * test against this file.
  *
- * Robustness rule (a): default = server-first. `OPTIMISTIC_VERBS` is the
+ * Default = server-first. OPTIMISTIC_VERBS is the
  * single opt-in list; a verb absent from it silently falls back to
  * server-first (the mutation still succeeds — it just doesn't jump the gun
  * on screen). Forgetting to add a new verb here can never make it dangerous.

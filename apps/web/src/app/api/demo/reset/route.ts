@@ -1,25 +1,9 @@
 /**
- * POST /api/demo/reset — docs/11 C4 (4) + F6, the DISCARD category
- * (docs/09 #5). No commit is created: the whole intent is to throw the
- * current state away.
+ * POST /api/demo/reset — discard category. Resets this project's state to
+ * the demo fixture without deleting the project row, owner token, or cookie.
  *
- * req:  { ticket }
- * data: { done: true }
- *
- * This project's state is reset IN PLACE: its rows in branches / commits /
- * ops / snapshots / working_state / merge_attempts are deleted and the
- * project is re-seeded from `demo.otio` through the SAME function the
- * first-visit bootstrap uses (server/project.ts `seedProjectFromDemo`) —
- * including `project_rate` refreshed from the imported OTIO (A1.2).
- *
- * What deliberately SURVIVES, and why:
- *  - the `projects` row, its `owner_token` and therefore the cookie: docs/09
- *    #5 asks for a fresh project STATE, not a new identity;
- *  - the `tickets` rows: every other table hangs off `projects` with ON
- *    DELETE CASCADE, so deleting the project row would take the ticket row
- *    that `runWithTicket` is about to write for THIS call with it — and the
- *    endpoint could then never be idempotent, which is locked for every
- *    mutating endpoint (docs/09 #16).
+ * Tickets survive so the endpoint stays idempotent — deleting the project
+ * row would cascade to the ticket row runWithTicket is about to write.
  */
 
 import { eq } from "drizzle-orm";
@@ -50,9 +34,8 @@ export async function POST(request: Request): Promise<Response> {
       "demo-reset",
       body.ticket,
       async (tx) => {
-        // Deleted explicitly and in FK order (children first) rather than
-        // relying on cascades, so the statement list reads as exactly what
-        // #5 promises. Every WHERE is project-scoped (HLD #14 + F1).
+        // Explicit deletes in FK order (children first). Every WHERE
+        // is project-scoped.
         await tx
           .delete(mergeAttempts)
           .where(eq(mergeAttempts.projectId, project.id));

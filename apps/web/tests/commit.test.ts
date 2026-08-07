@@ -1,5 +1,5 @@
 /**
- * POST /api/commit tests — C4 (4) + docs/09 #9 snapshot cadence + Q1.
+ * POST /api/commit tests — snapshot cadence and no-op behaviour.
  */
 
 import { asc, eq } from "drizzle-orm";
@@ -94,7 +94,7 @@ describe("C4 (4) — POST commit", () => {
     expect(view.workingRev).toBe(rev);
   });
 
-  it("docs/09 #7: committing with nothing pending is an already-saved no-op", async () => {
+  it("committing with nothing pending is an already-saved no-op", async () => {
     const s = await session();
     const first = expectOk(
       await post(
@@ -109,7 +109,7 @@ describe("C4 (4) — POST commit", () => {
     expect(first.commitId).toBe(rows[0].id);
   });
 
-  it("docs/09 #9: every 10th commit carries a snapshot; snapshot_distance tracks the distance", async () => {
+  it("every 10th commit carries a snapshot; snapshot_distance tracks the distance", async () => {
     const s = await session();
     let rev = 0;
     const created: string[] = [];

@@ -1,22 +1,15 @@
 /**
- * agent-scripts.ts — the SIMULATED agent (docs/11 C8).
+ * agent-scripts.ts — the simulated agent. POST agent/simulate takes a script
+ * NAME, not a payload of commands — the scripted edits are server-side
+ * fixtures.
  *
- * `POST agent/simulate` takes a script NAME, not a payload of commands: the
- * scripted edits are a server-side fixture. The evidence for "name" is C3's
- * branch template, which is literally `agent/<script>-N`, and C8, which
- * writes the edits out itself.
+ * The agent uses the same eight verbs through the same applyCommand the
+ * human path uses. Differences: a whole run is one request and every op
+ * carries actor "agent" (the 🤖 badge).
  *
- * The agent is not special. It uses the SAME eight verbs through the SAME
- * `applyCommand` the human path uses (docs/09 triage #3: "same verbs, same
- * provenance, different batching") — the only differences are that a whole
- * run is one request and every op carries `actor: "agent"` (that is what the
- * 🤖 badge reads).
- *
- * A script is a FUNCTION of the timeline, not a frozen list, because ids are
- * minted at import time: the fixture's clips are `clip-1`… only in a
- * freshly-seeded project, and the agent must work on whatever the branch
- * actually holds. It resolves its targets positionally — the same way the
- * choreography describes them ("A", "B", "the caption").
+ * A script is a function of the timeline, not a frozen list, because clip
+ * ids are minted at import time. It resolves targets positionally — the
+ * same way the choreography describes them.
  */
 
 import type {
@@ -93,8 +86,7 @@ const frames = (seconds: number, rate: number): number => seconds * rate;
  * (source 5s === timeline 5s).
  *
  * The B end-trim's SIZE is the one number C8 does not fix; 2s is used (a
- * real shortening, small enough to stay inside the clip). Recorded in
- * IMPLEMENTATION-NOTES.md.
+ * real shortening, small enough to stay inside the clip).
  */
 const tightenIntro: AgentScript = {
   name: "tighten-intro",

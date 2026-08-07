@@ -1,17 +1,11 @@
 /**
- * merge.ts — the DB/HTTP side of the three-way merge. The merge ITSELF is
- * the engine's (`startMerge` / `applyChoice` / `finalizeCheck`, C7); nothing
- * here re-implements a merge rule. What lives here is the part the engine
- * deliberately does not do (C7: "DB commit M7 ka kaam"):
+ * merge.ts — the DB/HTTP side of the three-way merge. The engine does the
+ * actual merge computation; this file handles storage concerns:
  *
- *  - finding the merge BASE in the commit DAG,
- *  - materializing base / ours / theirs out of storage,
- *  - the finalize: the both-parents CAS (docs/09 #8), the two-parent
- *    always-snapshot merge commit (C3 + #9 + Q1), and deleting the draft row
- *    in the SAME transaction (docs/09 triage #1 + C3).
- *
- * `POST merge` and `POST merge/resolve` both end here, which is why the
- * finalize exists exactly once.
+ *  - finding the merge base in the commit DAG,
+ *  - materializing base / ours / theirs from storage,
+ *  - the finalize: both-parent CAS, always-full-snapshot merge commit with
+ *    two parents, and deleting the draft row in the same transaction.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -28,12 +22,9 @@ import { loadCommitTimeline } from "./timeline";
 import type { Tx } from "./tx";
 
 /**
- * C3 gives `merge_attempts` a `status` text column. The locked vocabulary is
- * ONE value, `"open"`, because C3 also says the row is DELETED on finalize
- * and on abort ("finalize/abort par YE ROW delete, table nahi"). A stored
- * row can therefore only ever be in one state: awaiting resolution. Adding
- * "resolved"/"aborted" values would be a soft delete, which docs/09 triage
- * #1 explicitly rejected (it duplicates the provenance).
+ * merge_attempts.status has exactly one value: "open". The row is deleted on
+ * finalize and on abort — a stored row can only ever be awaiting resolution.
+ * Adding "resolved"/"aborted" values would be a soft delete.
  */
 export const MERGE_ATTEMPT_OPEN = "open";
 
@@ -47,9 +38,8 @@ export type MergeSides = {
 type ParentMap = Map<string, string[]>;
 
 async function loadParentMap(tx: Tx, projectId: string): Promise<ParentMap> {
-  // Project-scoped, like every query (HLD #14 + F1). One read of this
-  // project's commit graph: the demo-scale DAG is tiny and this keeps the
-  // walk below pure and obviously terminating.
+  // Project-scoped, like every query. One read of this project's commit
+  // graph — the demo-scale DAG is tiny and this keeps the walk pure.
   const rows = await tx
     .select({
       id: commits.id,
@@ -165,8 +155,8 @@ export type FinalizeInput = {
 
 /**
  * The finalize, shared by `POST merge` (zero conflicts → immediate) and
- * `POST merge/resolve` (last conflict answered → automatic; docs/09 6d:
- * no extra "Confirm merge?" screen).
+ * `POST merge/resolve` (last conflict answered → automatic, no extra
+ * confirmation screen).
  *
  * Everything below is one transaction. Any throw rolls the WHOLE thing back
  * — that is the mechanism by which "E_STALE_HEAD → no commit, nothing
@@ -193,10 +183,9 @@ export async function finalizeMerge({
     throw new ApiError("E_MERGE_PRECONDITION", check.error.message);
   }
 
-  // docs/09 #8 — CAS on BOTH parents. The draft recorded the two head ids it
-  // started from; either one moving means the merge was computed against a
-  // history that no longer exists, and silently committing it would be the
-  // "ghost loss" that lock exists to prevent. The user restarts the merge.
+  // Both-parent CAS. The draft recorded the two head ids it started from;
+  // either one moving means the merge was computed against a history that
+  // no longer exists. The user restarts the merge.
   const into = await loadBranchById(tx, projectId, intoBranchId);
   const from = await loadBranchById(tx, projectId, fromBranchId);
   if (into.headCommitId !== headInto || from.headCommitId !== headFrom) {
@@ -208,13 +197,9 @@ export async function finalizeMerge({
 
   const working = await loadWorkingState(tx, projectId, into.id, true);
   if (working.pendingOps.length > 0 || working.baseCommitId !== headInto) {
-    // Unsaved edits made on `into` AFTER the merge started. They do not move
-    // the head, so the CAS above cannot see them — but committing the merge
-    // would reset the working record and take them with it, which is the
-    // same silent loss #8 forbids. Same code, same remedy (restart), because
-    // the cause is the same: the branch changed under an open merge.
-    // [ASSUMPTION — reported: the docs answer the head case explicitly and
-    // this one only by its reasoning.]
+    // Unsaved edits made on `into` AFTER the merge started don't move the
+    // head, so the CAS above cannot see them — but committing the merge
+    // would reset the working record. Same code, same remedy: restart.
     throw new ApiError(
       "E_STALE_HEAD",
       `branch "${into.name}" has unsaved changes made after this merge started — save or discard them, then restart the merge`,
@@ -229,17 +214,17 @@ export async function finalizeMerge({
     timeline: check.timeline,
     name: mergeCommitName(from.name, into.name),
     actor: "user",
-    // C3: the second parent exists ONLY here.
+    // The second parent exists ONLY on merge commits (in the commits table,
+    // parent2Id is non-null only here).
     parent2Id: headFrom,
-    // docs/09 #9 + Q1: a merge commit is ALWAYS a full snapshot (the cadence
-    // is skipped) — a merge is not expressible as ops, and the two-parent
-    // replay ambiguity is exactly what the snapshot removes.
+    // Merge commits are always full snapshots — a merge is not expressible
+    // as ops, and a snapshot removes two-parent replay ambiguity.
     forceSnapshot: true,
   });
 
   if (attemptId !== undefined) {
-    // C3: the ROW goes on finalize (and on abort), in the same transaction
-    // that creates the commit — a wrong-moment delete is impossible.
+    // The draft row is deleted in the same transaction that creates the
+    // merge commit — wrong-moment delete is impossible.
     await tx
       .delete(mergeAttempts)
       .where(
@@ -257,13 +242,10 @@ export async function finalizeMerge({
 export type MergeAttemptRow = typeof mergeAttempts.$inferSelect;
 
 /**
- * Load a merge draft, project-scoped and locked.
+ * Load a merge draft, project-scoped and row-locked.
  *
- * ⚠ There is no "attempt not found" error code in C4 and one is not being
- * invented. `E_MERGE_PRECONDITION` is the code C7 gives for "real boundary
- * misuse" of the merge API, and asking to resolve/abort a draft that does
- * not exist (wrong id, or already finalized/aborted) is exactly that.
- * Reported as a choice.
+ * E_MERGE_PRECONDITION is used for unknown/closed drafts — the engine reports
+ * real boundary misuse of the merge API the same way.
  */
 export async function loadMergeAttempt(
   tx: Tx,

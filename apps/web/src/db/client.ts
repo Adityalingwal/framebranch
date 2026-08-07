@@ -1,15 +1,12 @@
 /**
- * client.ts — the single shared Postgres connection (docs/09 Item 4c:
- * Postgres; M7 lock A: Drizzle).
+ * client.ts — the single shared Postgres connection.
  *
- * The connection string comes from `DATABASE_URL` and NOTHING here is
- * Neon-specific or Homebrew-specific: production is Neon, local is Homebrew
- * Postgres, and the same URL shape drives both (`?sslmode=require` is what
- * Neon adds, and postgres.js reads it off the URL itself).
+ * The connection string comes from DATABASE_URL. Nothing is Neon-specific
+ * or Homebrew-specific — the same URL shape drives both.
  *
- * The client is created lazily so that importing this module (during a
- * Next.js build, or in a test that never touches the DB) does not require
- * the env var to exist.
+ * The client is created lazily: importing this module without a running
+ * database (during a build, or a test that never touches the DB) should
+ * not fail.
  */
 
 import { drizzle } from "drizzle-orm/postgres-js";

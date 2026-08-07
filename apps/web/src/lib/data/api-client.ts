@@ -9,9 +9,9 @@
  * It owns three things:
  *  1. Envelope handling — `{ ok:false }` becomes a typed `ApiClientError`
  *     carrying `code` + a human `message`; never a thrown string, never a
- *     raw `Response` (docs/11 C4 (1)).
- *  2. The error-code → message switch, in one place (brief §7).
- *  3. The C6 retry ladder for mutations: 2 silent retries (1s, then 3s),
+ *     raw Response (the standard envelope).
+ *  2. The error-code → message switch, in one place.
+ *  3. The retry ladder for mutations: 2 silent retries (1s, then 3s),
  *     same ticket every time; after that, the caller is told via
  *     `RetryHooks.onConnectionLost` and gets a `retry()` closure that keeps
  *     reusing the SAME ticket for as long as the user keeps pressing it.
@@ -291,15 +291,13 @@ export function postDemoReset(hooks: RetryHooks): Promise<{ done: true }> {
 }
 
 // ---------------------------------------------------------------------------
-// M8b — editing, merge, agent, import/export (brief §3)
+// Editing, merge, agent, import/export
 // ---------------------------------------------------------------------------
 
 /**
- * POST /api/ops success shape (docs/11 C4(3) + F9): `{workingRev,
- * pendingCount}` for a real edit, or the SAME shape with `noChange:true` and
- * both fields unchanged for an A4 no-op. Modelled as one type with an
- * optional flag rather than a union — the two amount to "read these two
- * fields, then check the flag", and every call site does exactly that.
+ * POST /api/ops success shape: {workingRev, pendingCount} for a real
+ * edit, or the same with noChange:true for a no-op. Modelled as one type
+ * with an optional flag.
  */
 export type OpsResult = {
   workingRev: number;
