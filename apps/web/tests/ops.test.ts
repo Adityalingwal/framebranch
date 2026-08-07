@@ -1,6 +1,4 @@
-/**
- * POST /api/ops tests — C4 (3) + the F9 amendment + A4.
- */
+
 
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -126,7 +124,7 @@ describe("C4 (3) — POST ops", () => {
     expect(after.pendingCount).toBe(0);
   });
 
-  it("docs/09 #6: a stale workingRev is rejected with E_STALE_REV", async () => {
+  it("rejects a stale workingRev with E_STALE_REV", async () => {
     const { session } = await seeded();
     const call = await post(
       postOps,
@@ -201,7 +199,7 @@ describe("C4 (3) — POST ops", () => {
     expect(first.timeline.tracks[2].clips).toHaveLength(2);
   });
 
-  it("docs/09 Item 12: a malformed body never reaches the engine", async () => {
+  it("rejects a malformed body before it reaches the engine", async () => {
     const { session } = await seeded();
     const call = await post(
       postOps,

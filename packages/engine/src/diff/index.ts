@@ -87,9 +87,9 @@ function renderEntry(e: DiffEntry): string {
   }
 }
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Public API #2 of 7 — computeDiff
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /**
  * Compute the deterministic semantic diff of two timelines: what changed
@@ -100,7 +100,7 @@ function renderEntry(e: DiffEntry): string {
 export function computeDiff(a: Timeline, b: Timeline): DiffResult {
   const keyed: KeyedEntry[] = [];
 
-  // Timeline-level #16 (out-of-family: engine is single-rate, A1.2).
+  // Timeline-level #16 (out-of-family: engine is single-rate, ).
   if (a.projectRate !== b.projectRate) {
     keyed.push({
       key: [Number.NEGATIVE_INFINITY, 0, 0, "", 0, "", KHAANA_ORDER[16]],
@@ -117,8 +117,8 @@ export function computeDiff(a: Timeline, b: Timeline): DiffResult {
     });
   }
 
-  // Track order: a's tracks first, then b-only tracks (V1 has no track
-  // verbs — a differing track set is out-of-family, reported via #16).
+  // Track order: a's tracks first, then b-only tracks. Track add/delete is
+  // out of scope, so a differing track set is reported as a fallback diff.
   const trackIndexById = new Map<string, number>();
   for (const t of a.tracks) trackIndexById.set(t.id, trackIndexById.size);
   for (const t of b.tracks) {
@@ -165,7 +165,7 @@ export function computeDiff(a: Timeline, b: Timeline): DiffResult {
     }
   }
 
-  // MATCH — ID-only + khandaan grouping (B3.1 + B1.1).
+  // MATCH — ID-only + khandaan grouping.
   const aClips = indexClips(a, trackIndexById);
   const bClips = indexClips(b, trackIndexById);
 

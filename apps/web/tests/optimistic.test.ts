@@ -1,16 +1,5 @@
-/**
- * The brief's LOCKED test (§4): "for the same command, the optimistic
- * result equals the server result." Both sides are literally the same call
- * — `apps/web/src/app/api/ops/route.ts` calls `applyCommand(view.timeline,
- * body.command, {mintId})` on the server; `computeOptimisticResult` (src/
- * lib/optimistic.ts) calls the SAME `applyCommand` on the client — so this
- * test is rule (b)'s guard: it fails the moment anyone replaces
- * `computeOptimisticResult`'s body with a hand-written shortcut that
- * diverges from the engine's own answer.
- *
- * Plain unit test, no browser, no React, no DB (docs/12 T1: E2E is out).
- */
-
+// Guard: optimistic result (client) must equal the server result for the same command.
+// Fails if computeOptimisticResult diverges from the engine's own applyCommand.
 import { describe, expect, it } from "vitest";
 
 import { applyCommand } from "@framebranch/engine";
@@ -82,7 +71,7 @@ function fixtureTimeline(): Timeline {
   };
 }
 
-/** One command per opt-in verb, table-driven per docs/12 T1's pattern. */
+/** One command per opt-in verb, table-driven for readability. */
 const COMMANDS: { name: string; command: Command }[] = [
   { name: "move", command: { op: "move", clipId: "B", newStart: t(200) } },
   {
@@ -114,7 +103,7 @@ const COMMANDS: { name: string; command: Command }[] = [
   },
 ];
 
-describe("optimistic.ts — optimistic result == server result (brief §4 locked test)", () => {
+describe("optimistic.ts — optimistic result == server result", () => {
   it.each(COMMANDS)(
     "$name: computeOptimisticResult(tl, cmd) equals applyCommand(tl, cmd)",
     ({ command }) => {
@@ -128,7 +117,7 @@ describe("optimistic.ts — optimistic result == server result (brief §4 locked
     },
   );
 
-  it("every opt-in verb is one of the 8 locked verbs; addClip is excluded on purpose (id-minting, see optimistic.ts header)", () => {
+  it("every opt-in verb is supported; addClip is excluded on purpose because it mints ids", () => {
     expect([...OPTIMISTIC_VERBS].sort()).toEqual(
       [
         "deleteClip",

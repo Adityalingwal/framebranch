@@ -1,20 +1,10 @@
 /**
- * diff.test.ts — C1 diff engine goldens (T1 structure, T2 group F +
- * the DIFF-level parts of the T2 group A split goldens).
+ * computeDiff golden tests.
  *
- * Base fixture (see fixtures.ts):
- *   v1 (video): A tl [10,20) src [5,15) volume 80 / B tl [30,35) /
- *               IM tl [50,55) image
- *   a1 (audio): AU tl [0,8)
- *   x1 (text):  TX tl [0,4) "Welcome" / TX2 tl [10,15) "Bye"
- *
- * NOTE (T2-F): the "A3.8 errors" golden is already covered by M2's
- * verbs.test.ts (E_SPLIT_AT_BOUNDARY / E_SPLIT_OUT_OF_RANGE /
- * E_CLIP_NOT_FOUND / E_RATE_MISMATCH) — recorded in
- * IMPLEMENTATION-NOTES, not duplicated here. The "import skip-warnings"
- * golden is M5 (otio) — deliberately absent.
+ * Base fixture: v1 (video): A tl[10,20) src[5,15) / B tl[30,35) / IM tl[50,55) image
+ *               a1 (audio): AU tl[0,8)
+ *               x1 (text): TX tl[0,4) "Welcome" / TX2 tl[10,15) "Bye"
  */
-
 import { describe, expect, it } from "vitest";
 import { computeDiff } from "../src/diff";
 import type { DiffResult } from "../src/diff";
@@ -22,9 +12,9 @@ import { applyCommand } from "../src/verbs";
 import type { Clip, Command, Timeline } from "../src/types";
 import { baseTimeline, EMPTY_TIMELINE, range, t } from "./fixtures";
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // helpers
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /** Apply a public command; throw on any error (goldens use valid edits). */
 function apply(tl: Timeline, cmd: Command, mintedId?: string): Timeline {
@@ -54,9 +44,9 @@ function clone<T>(x: T): T {
   return JSON.parse(JSON.stringify(x)) as T;
 }
 
-// ---------------------------------------------------------------------------
-// C1 — the 15 rules, table-driven (T2-F "15-rules table" golden)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// the 15 rules, table-driven (-F "15-rules table" golden)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 type RuleRow = {
   name: string;
@@ -222,9 +212,9 @@ describe("C1: the 15 classify+render rules (table-driven)", () => {
   }
 });
 
-// ---------------------------------------------------------------------------
-// C1 — multi-change clip → multiple sentences (T2-F golden)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// multi-change clip → multiple sentences (-F golden)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C1: multi-change clip = multiple sentences", () => {
   it("C1: move + end-trim + volume on one clip → 3 sentences, khaana order", () => {
@@ -260,9 +250,9 @@ describe("C1: multi-change clip = multiple sentences", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// C1 — rippleDelete renders as #14 + N×#1 (net-state truth; T2-F golden)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// rippleDelete renders as #14 + N×#1 (net-state truth; -F golden)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C1: rippleDelete diff = #14 + N×#1", () => {
   it("C1: ripple delete A → 'removed' + a 'moved' sentence per shifted clip", () => {
@@ -275,7 +265,7 @@ describe("C1: rippleDelete diff = #14 + N×#1", () => {
       "Clip IM moved from frame 50 to frame 40",
     ]);
     expect(rules(d)).toEqual([14, 1, 1]);
-    // machine form (structured entries — M4 composes on these)
+    // machine form (structured entries — composes on these)
     expect(d.entries).toEqual([
       {
         rule: 14,
@@ -305,9 +295,9 @@ describe("C1: rippleDelete diff = #14 + N×#1", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// C1 #16 — catch-all (T2-F golden): truthful raw values, never crash/skip
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// #16 — catch-all (-F golden): truthful raw values, never crash/skip
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C1 #16: catch-all on out-of-family states", () => {
   it("C1 #16: artificially corrupted sourceRange duration → the exact raw sentence from the C1 lock", () => {
@@ -350,9 +340,9 @@ describe("C1 #16: catch-all on out-of-family states", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// C1 + B3.1 — empty diff (T2-F golden; PRD invariant diff(A,A) = ∅)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// — empty diff (-F golden; PRD invariant diff(A,A) = ∅)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C1/B3.1: empty diff", () => {
   it("C1: diff(A, A) = empty (same reference)", () => {
@@ -396,9 +386,9 @@ describe("C1/B3.1: empty diff", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// B1.1 — split khandaan matching (T2 group A, DIFF-level parts only)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// split khandaan matching ( group A, DIFF-level parts only)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("B1.1: split khandaan — descendants matched to base, rule #15", () => {
   it("B1.1: simple split → ONLY the #15 sentence (descendants matched, no added/removed/trim noise)", () => {
@@ -541,9 +531,9 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
   });
 });
 
-// ---------------------------------------------------------------------------
-// B3.1 — matching is ID-only, never by shape
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// matching is ID-only, never by shape
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("B3.1: ID-only matching", () => {
   it("B3.1: delete + recreate an identical-looking clip = removed + added (never a silent match)", () => {
@@ -569,9 +559,9 @@ describe("B3.1: ID-only matching", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// C1 — deterministic output order (documented in diff.ts)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// deterministic output order (documented in diff.ts)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C1: deterministic ordering", () => {
   it("C1: kitab-order — track order, then B3.1 clip sort key, then khaana order; stable across runs", () => {
@@ -603,9 +593,9 @@ describe("C1: deterministic ordering", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Machine form — every sentence derived from a structured entry (1:1)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C1: machine form ↔ sentences", () => {
   it("C1: entries and sentences are strictly 1:1 and every entry names its clip in its sentence", () => {
@@ -613,7 +603,7 @@ describe("C1: machine form ↔ sentences", () => {
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "move", clipId: "A@5", newStart: t(60) });
     b = apply(b, { op: "deleteClip", clipId: "B" });
-    // O3 (2026-08-04): slip is not applicable to an image, so the #6
+    // (2026-08-04): slip is not applicable to an image, so the #6
     // sentence is taken on the audio clip instead of the image clip IM.
     b = apply(b, { op: "slip", clipId: "AU", delta: t(2) });
     const d = computeDiff(a, b);

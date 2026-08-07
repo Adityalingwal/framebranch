@@ -14,7 +14,7 @@ const timeRangeJson = (r: TimeRange): OtioJson => ({
   duration: rationalTimeJson(r.duration),
 });
 
-/** O4 — every empty stretch becomes a real `Gap.1` item ("Filler"). */
+/** Every empty stretch becomes a real `Gap.1` item ("Filler"). */
 const gapJson = (duration: number, rate: number): OtioJson => ({
   OTIO_SCHEMA: "Gap.1",
   name: "Filler",
@@ -31,15 +31,15 @@ const isTextClip = (c: AnyClip): c is TextClip => "textContent" in c;
 
 /**
  * exportOtio — our timeline → an OTIO document. Never fails, never writes
- * internal IDs (docs/09 #11); the only thing we add to the format is the
- * locked `metadata.framebranch` extension (O5).
+ * internal IDs; the only thing we add to the format is the
+ * `metadata.framebranch` extension.
  */
 export function exportOtio(timeline: Timeline): OtioJson {
   const rate = timeline.projectRate;
   return {
     OTIO_SCHEMA: "Timeline.1",
     name: "",
-    // O6 — round-trips the project rate exactly, including for an empty
+    // round-trips the project rate exactly, including for an empty
     // timeline. The VALUE is always 0: our timelines start at 0.
     global_start_time: rationalTimeJson(rt(0, rate)),
     tracks: {
@@ -64,14 +64,14 @@ function exportTrack(track: Track, timeline: Timeline): OtioJson {
   let cursor = 0;
   for (const clip of clips) {
     const start = clip.timelineRange.start.value;
-    // O4 — leading gap + every gap between clips; omitting them would
+    // leading gap + every gap between clips; omitting them would
     // silently slide every later clip (OTIO positions are implicit).
     if (start > cursor) children.push(gapJson(start - cursor, rate));
     children.push(exportClip(clip, timeline));
     cursor = Math.max(cursor, rangeEnd(clip.timelineRange));
   }
 
-  // O5 — OTIO has no text track kind: it goes out as Video + our metadata.
+  // OTIO has no text track kind: it goes out as Video + our metadata.
   const metadata: OtioJson =
     track.kind === "text" ? { framebranch: { kind: "text" } } : {};
 
@@ -88,7 +88,7 @@ function exportTrack(track: Track, timeline: Timeline): OtioJson {
 
 function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
   if (isTextClip(clip)) {
-    // O5 — text clip = Clip.1 + MissingReference.1 + framebranch metadata.
+    // text clip = Clip.1 + MissingReference.1 + framebranch metadata.
     return {
       OTIO_SCHEMA: "Clip.1",
       name: "",
@@ -116,7 +116,7 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
   }
 
   const media = timeline.mediaRefs.find((m) => m.id === clip.mediaRefId);
-  // A2.1 amendment — put the file's own start back on, so a file with
+  // amendment — put the file's own start back on, so a file with
   // embedded timecode comes out exactly as it went in.
   const fileStart = media?.sourceStartInFile;
   const outSourceRange: TimeRange = fileStart
@@ -136,7 +136,7 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
       ? {
           OTIO_SCHEMA: "ExternalReference.1",
           target_url: media.url,
-          // O1 — an image has no length, so it has no available_range.
+          // an image has no length, so it has no available_range.
           available_range:
             media.durationInSource === null
               ? null
@@ -146,8 +146,8 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
                 }),
           metadata: {},
         }
-      : // Export never fails (docs/09 #12/#13): a clip whose media ref is
-        // gone still goes out, honestly, as a placeholder.
+      : // Export still succeeds if a clip's media ref is gone; it writes an
+        // honest placeholder instead of hiding the broken reference.
         {
           OTIO_SCHEMA: "MissingReference.1",
           name: "",
@@ -156,8 +156,8 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
         },
     effects: [],
     markers: [],
-    // O5/O10 — properties ride in our own namespace; a clip sitting at the
-    // B3.1 defaults writes nothing at all, so plain files stay plain.
+    // Properties ride in our own namespace; a clip sitting at the defaults
+    // writes nothing at all, so plain files stay plain.
     metadata: emptyOrFramebranch(propertiesJson(clip.properties)),
   };
 }

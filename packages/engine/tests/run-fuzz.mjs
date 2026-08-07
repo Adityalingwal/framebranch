@@ -1,19 +1,4 @@
-/**
- * Keep each Vitest worker below its 60-second RPC window while preserving one
- * deterministic seed/case universe for the package-level T3 command.
- *
- * [AMENDED 2026-08-04, CI speed optimization] Chunks now run CONCURRENTLY
- * (bounded by FRAMEBRANCH_FUZZ_CONCURRENCY / core count) instead of one at a
- * time via spawnSync. Determinism is preserved by construction: each case's
- * RNG seed is caseSeed(masterSeed, globalIndex), where globalIndex =
- * OFFSET + i — identical no matter which chunk or shard runs it, and no
- * matter the finish order of concurrent chunks. See docs/12 T5 amendment
- * (2026-08-04) and IMPLEMENTATION-NOTES.md for the concurrency-default and
- * output-ordering assumptions.
- */
-
 /* global console, process */
-
 import { spawn } from "node:child_process";
 import os from "node:os";
 
@@ -39,16 +24,13 @@ const seed =
     0x4d345f54,
     0,
   ) >>> 0;
-// Each chunk runs its cases synchronously inside one `it()`, so the chunk's
+// Each chunk runs its cases synchronously inside one `it`, so the chunk's
 // wall-clock IS how long the Vitest worker goes without answering an RPC —
 // cross 60s and Vitest kills it with `Timeout calling "onTaskUpdate"`, even
 // though every case passed.
 //
-// [AMENDED 2026-08-04] 500 was sized against a sequential run on the owner's
-// Mac (18.5s/chunk). It failed on GitHub's slower runners once chunks began
-// running concurrently: a 500-case chunk measured 66.01s there (CI run
-// 30928377322) and every shard died on the RPC timeout. 250 halves that to
-// ~33s, keeping a real margin on the slowest machine we actually run on.
+// 500 was fine on a fast local sequential run, but GitHub's slower concurrent
+// shards crossed Vitest's RPC timeout. 250 keeps a real margin there.
 // Override per-machine with FRAMEBRANCH_FUZZ_CHUNK if a future runner needs it.
 const chunkSize = parseInteger(
   "FRAMEBRANCH_FUZZ_CHUNK",

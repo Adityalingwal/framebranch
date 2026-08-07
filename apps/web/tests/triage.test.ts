@@ -1,16 +1,3 @@
-/**
- * triage.test.ts — regression tests for the six M7a owner-triage fixes
- * (2026-08-05). Each `it` names the item it locks down, so a later change
- * that quietly undoes one of them fails here.
- *
- * 1/6 tickets.ticket UNIQUE at the DB level (review finding F1)
- * 3/6 E_BAD_REQUEST for a malformed request (covered in ops.test.ts)
- * 4/6 E_BRANCH_EXISTS for a duplicate branch name
- * 5/6 E_INTERNAL — an unexpected crash still comes back in the C4 envelope
- * 6/6 demo.otio's logo is an IMAGE (O1: durationInSource null)
- *
- * 2/6 was documentation only and has no runtime behaviour to test.
- */
 
 import { sql } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";

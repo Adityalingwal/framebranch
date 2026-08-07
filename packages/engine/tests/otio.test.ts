@@ -1,10 +1,5 @@
-/**
- * Group H — OTIO import/export goldens (docs/12 "M5 (OTIO) test
- * additions", locks O1-O10 in docs/11). Names carry their lock-ID prefix
- * per the docs/12 T1 convention.
- *
- * Warning assertions are on `code` ONLY — never on English prose (O8).
- */
+// OTIO import/export golden tests.
+// Warning assertions match on `code` only — never on English message text.
 
 import { describe, expect, it } from "vitest";
 import { applyCommand } from "../src/verbs";
@@ -29,9 +24,9 @@ import {
   type Json,
 } from "./otio-fixtures";
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // helpers
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 type AnyClip = Clip | TextClip;
 
@@ -95,9 +90,9 @@ const mediaOf = (timeline: Timeline, clip: Clip): MediaRef => {
 const codes = (warnings: { code: string }[]): string[] =>
   warnings.map((w) => w.code);
 
-// ---------------------------------------------------------------------------
-// H1 — O4: gaps are a measurement on import, a real item on export
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : gaps are a measurement on import, a real item on export
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O4/H1: gap import + export", () => {
   const doc = otioTimeline({
@@ -200,9 +195,9 @@ describe("O4/H1: gap import + export", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H2 — O4: a transition consumes no track time
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : a transition consumes no track time
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O4/H2: transition does not move the cursor", () => {
   const doc = otioTimeline({
@@ -241,10 +236,10 @@ describe("O4/H2: transition does not move the cursor", () => {
     expect(codes(warnings)).toEqual(["skipped-unsupported"]);
   });
 
-  // Regression (2026-08-05 review, F1): real serializers write
+  // Regression (2026-08-05 review, ): real serializers write
   // `"source_range": null` on an untrimmed Item. That is "no range of its
   // own", not "a range that failed to parse" — treating it as present made
-  // the whole import abort on exactly the nested Stack O7(b) says to skip.
+  // the whole import abort on exactly the nested Stack (b) says to skip.
   it("O4/H2: a skipped item with source_range null is skipped, not fatal", () => {
     const withNullRange = otioTimeline({
       tracks: [
@@ -288,9 +283,9 @@ describe("O4/H2: transition does not move the cursor", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H3 — O1 + O9: an image has no length, so it can be extended freely
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// Image media: an image has no length, so it can be extended freely.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O1+O9/H3: image media", () => {
   const doc = otioTimeline({
@@ -315,7 +310,7 @@ describe("O1+O9/H3: image media", () => {
     const clip = clipsOf(timeline, 0)[0] as Clip;
     expect(mediaOf(timeline, clip).kind).toBe("image");
     // No skipped-media-length-missing: an image is not missing a length,
-    // it has none (O1 vs O2).
+    // it has none ( vs ).
     expect(warnings).toEqual([]);
   });
 
@@ -338,9 +333,9 @@ describe("O1+O9/H3: image media", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H4 — O3: slip is not applicable to an image
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : slip is not applicable to an image
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O3/H4: slip on an image clip", () => {
   it("O3/H4: image slip → E_NOT_APPLICABLE (parallel to the TextClip case)", () => {
@@ -372,9 +367,9 @@ describe("O3/H4: slip on an image clip", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H5 — O2: video/audio without available_range is not importable
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : video/audio without available_range is not importable
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O2/H5: video without available_range", () => {
   it("O2/H5: the clip is skipped + warned, the rest of the file imports", () => {
@@ -414,11 +409,11 @@ describe("O2/H5: video without available_range", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// A2.1 amendment (2026-08-05 review, F2) — media whose own range does not
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// amendment (2026-08-05 review, ) — media whose own range does not
 // start at 0 (embedded timecode). Engine coordinates always start at 0, so
 // the door subtracts the file's start and puts it back on export.
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("A2.1/H5: available_range with a non-zero start", () => {
   const withOffset = (sourceStart: number) =>
@@ -445,7 +440,7 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
     expect(warnings).toEqual([]);
     const clip = clipsOf(timeline, 0)[0] as Clip;
     // 250 - 90 = 160, and the file is 200 long, so this is comfortably inside
-    // — the old code read it as 250 inside a 200-long file and aborted.
+    // the old code read it as 250 inside a 200-long file and aborted.
     expect(clip.sourceRange.start.value).toBe(160);
     expect(clip.sourceRange.duration.value).toBe(20);
     const media = timeline.mediaRefs[0];
@@ -475,10 +470,9 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
   });
 
   it("A3.6/H5: a property the media kind cannot carry skips the clip", () => {
-    // N1 matrix: an image has no volume (a photo makes no sound). Importing
+    // matrix: an image has no volume (a photo makes no sound). Importing
     // one would mint a state no verb can produce — applyCommand would answer
     // E_PROPERTY_NOT_APPLICABLE — while diff/merge kept comparing it.
-    // [F3, 2026-08-05 review.]
     const doc = otioTimeline({
       tracks: [
         otioTrack({
@@ -504,9 +498,9 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
   });
 
   it("A3.6/H5: image media on an audio track is skipped, not coerced", () => {
-    // N1 track mapping: an image is visual, so it belongs on a video lane.
+    // track mapping: an image is visual, so it belongs on a video lane.
     // addClip refuses this placement outright (E_TRACK_KIND_MISMATCH); import
-    // used to accept it silently. [F4, 2026-08-05 review.]
+    // must not accept it silently.
     const doc = otioTimeline({
       tracks: [
         otioTrack({
@@ -531,8 +525,8 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
 
   it("O6/H7: the project rate ignores clips inside a skipped nested Stack", () => {
     // The rate must come from content we KEEP. A nested Stack is skipped
-    // (O7b), so its 30fps clip must not decide the rate that the surviving
-    // 24fps track then gets converted into. [F6, 2026-08-05 review.]
+    // so its 30fps clip must not decide the rate that the surviving
+    // 24fps track then gets converted into.
     const doc = otioTimeline({
       tracks: [
         {
@@ -587,9 +581,9 @@ describe("A2.1/H5: available_range with a non-zero start", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H6 — O5: text clips round-trip through metadata.framebranch
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : text clips round-trip through metadata.framebranch
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O5/H6: text clip round-trip", () => {
   const style: TextStyle = { font: "Georgia", size: 32, color: "#00ff00" };
@@ -764,9 +758,9 @@ describe("O5/H6: text clip round-trip", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H7 — O6: the three project-rate rules
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : the three project-rate rules
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O6/H7: project rate", () => {
   it("O6/H7a: mixed rates converge on the first clip's rate", () => {
@@ -796,7 +790,7 @@ describe("O6/H7: project rate", () => {
     const { timeline } = expectImported(importOtio(doc));
     expect(timeline.projectRate).toBe(24);
     const clips = clipsOf(timeline, 0) as Clip[];
-    // 300 @30 = 10s = 240 @24 (A1.3 round-nearest, ties floor).
+    // 300 @30 = 10s = 240 @24 ( round-nearest, ties floor).
     expect(clips[1].timelineRange).toEqual({
       start: { value: 240, rate: 24 },
       duration: { value: 240, rate: 24 },
@@ -844,9 +838,9 @@ describe("O6/H7: project rate", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H8 — O7: version whitelist
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : version whitelist
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O7/H8: schema version whitelist", () => {
   it("O7/H8: Clip.2 aborts the whole import, naming the label", () => {
@@ -896,9 +890,9 @@ describe("O7/H8: schema version whitelist", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H9 — O8: warning shape
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : warning shape
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("O8/H9: warning shape", () => {
   it("O8/H9: warnings are {code, detail, count}, grouped and counted", () => {
@@ -949,11 +943,11 @@ describe("O8/H9: warning shape", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// H10 — O10: full round-trip on a fixture with gap + text + image
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : full round-trip on a fixture with gap + text + image
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-/** B3.1 — defaults materialize before comparing. */
+/** — defaults materialize before comparing. */
 const materialize = (properties: Record<string, unknown> | undefined) => ({
   volume: properties?.volume ?? 100,
   opacity: properties?.opacity ?? 100,
@@ -962,7 +956,7 @@ const materialize = (properties: Record<string, unknown> | undefined) => ({
 });
 
 /**
- * O10 — the exact comparison: track order + kind, every clip's
+ * the exact comparison: track order + kind, every clip's
  * timelineRange / sourceRange, the media a clip sits on matched by URL
  * (never by id — import always mints fresh ids), text content + style,
  * properties with defaults materialized, and projectRate.
@@ -1017,7 +1011,7 @@ function roundTripFixture(): Timeline {
           start: { value: 4, rate: 24 },
           duration: { value: 10, rate: 24 },
         },
-        // O10 — non-default properties on purpose: they are what proves the
+        // non-default properties on purpose: they are what proves the
         // round-trip carries them (they have no OTIO field of their own).
         properties: { volume: 80, scale: 1.5 },
         lineage: {
@@ -1039,7 +1033,7 @@ function roundTripFixture(): Timeline {
           start: { value: 20, rate: 24 },
           duration: { value: 5, rate: 24 },
         },
-        // opacity/position are the image column of the N1 matrix (volume and
+        // opacity/position are the image column of the matrix (volume and
         // scale are not — an image has no volume).
         properties: { opacity: 40, position: { x: 12, y: -3 } },
         lineage: {
@@ -1164,14 +1158,14 @@ describe("O10/H10: round-trip (gap + text + image)", () => {
     );
     expect(warnings).toEqual([]);
     expect(structure(after)).toEqual(structure(before));
-    // Fresh start: the ids are genuinely new (docs/09 #10).
+    // Fresh start: the ids are genuinely new.
     expect(clipsOf(after, 0)[0].id).not.toBe("A");
   });
 });
 
-// ---------------------------------------------------------------------------
-// H11 — invalid input
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// invalid input
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("H11: invalid OTIO input", () => {
   const garbage: [string, unknown][] = [

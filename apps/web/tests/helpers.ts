@@ -1,21 +1,12 @@
-/**
- * helpers.ts — the shared harness for the server tests.
- *
- * Clean-state strategy: TRUNCATE every table before each test (one
- * statement, CASCADE). Chosen over per-test transaction rollback because
- * the code under test opens its OWN transactions — wrapping it in an outer
- * transaction would nest them and stop testing the real thing (and the
- * G-group exists precisely to test real transaction behaviour). No test
- * depends on another's rows or on execution order.
- */
-
+// Shared test harness. Uses TRUNCATE (not transaction rollback) — code under test opens its own
+// transactions; an outer rollback would nest them and stop testing real DB behaviour.
 import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 
 const url = process.env.TEST_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!url) {
   throw new Error(
-    "The server tests need a real Postgres (M7 lock B). Set TEST_DATABASE_URL " +
+    "The server tests need a real Postgres database. Set TEST_DATABASE_URL " +
       "(or DATABASE_URL) to a database you are happy to have TRUNCATEd, e.g.\n" +
       "  createdb framebranch_test\n" +
       "  TEST_DATABASE_URL=postgres://localhost:5432/framebranch_test pnpm test",

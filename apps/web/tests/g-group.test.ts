@@ -1,17 +1,5 @@
-/**
- * G-group — the named server/state integration tests (docs/12 T2, F11
- * amendment). Names carry their lock-ID prefix (T1) so the M7b gap-script
- * can count them.
- *
- * G1 response-lost retry · G2 same ticket + different endpoint ·
- * G3 dirty branch-switch · G5 capability-token mismatch.
- * G4 (merge finalize CAS) belongs to M7b and is deliberately absent.
- *
- * Real Postgres, handlers called directly — these tests are about what the
- * database itself does (unique register, one transaction, CAS), which is
- * exactly why a fake DB was rejected (M7 lock B).
- */
-
+// Server/state integration tests: retry, ticket+endpoint, branch-switch, token mismatch.
+// (merge finalize CAS) is in merge.test.ts. Real Postgres — tests exercise DB-level behaviour.
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -79,7 +67,7 @@ async function editMain(
 const commitCount = async (): Promise<number> =>
   (await getDb().select({ id: commits.id }).from(commits)).length;
 
-describe("G-group — server/state integration (docs/12 T2 F11)", () => {
+describe("G-group — server/state integration", () => {
   it("G1: response-lost retry — the same ticket returns the stored result and creates NO second commit", async () => {
     const s = await newSession();
     await editMain(s, 0, 80);
@@ -131,7 +119,7 @@ describe("G-group — server/state integration (docs/12 T2 F11)", () => {
     );
     expect(expectError(reused).code).toBe("E_TICKET_REUSED");
 
-    // F2: no payload comparison exists — the SAME endpoint with the same
+    // no payload comparison exists — the SAME endpoint with the same
     // ticket replays the stored result instead of erroring.
     const replay = await post(
       postCommit,
