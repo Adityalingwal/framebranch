@@ -1,13 +1,12 @@
 /**
- * optimistic.ts — the ONE opt-in list + the ONE computation call site for
- * the hybrid optimistic wrapper (brief §4, docs/07 M8 lock 5).
+ * optimistic.ts — the one opt-in list and computation call site for the
+ * hybrid optimistic wrapper.
  *
- * Framework-free on purpose (no React import here): the locked test —
- * "for the same command, the optimistic result equals the server result" —
- * is written as a plain unit test against this file (tests/optimistic.test.ts),
- * no browser, no React, no DOM.
+ * Framework-free on purpose (no React): the locked test — "for the same
+ * command, the optimistic result equals the server result" — is a plain unit
+ * test against this file.
  *
- * Robustness rule (a): default = server-first. `OPTIMISTIC_VERBS` is the
+ * Default = server-first. OPTIMISTIC_VERBS is the
  * single opt-in list; a verb absent from it silently falls back to
  * server-first (the mutation still succeeds — it just doesn't jump the gun
  * on screen). Forgetting to add a new verb here can never make it dangerous.
@@ -23,9 +22,9 @@
  * arrives — the browser cannot predict it. An optimistic add would show a
  * clip under a client-guessed id that the server's real id will never match,
  * which is exactly the "client guessed, server did something else" failure
- * mode rule (b) exists to rule out. addClip is out of scope for M8b anyway
- * (brief §5: "not needed for the 9-step demo; build only if it costs
- * nothing") — it was not built at all (see findings).
+ * mode rule (b) exists to rule out. addClip mints ids server-side — the
+ * browser cannot predict them, so optimistic add would be the same
+ * "client guessed, server did something else" failure.
  */
 
 import { applyCommand } from "@framebranch/engine";

@@ -1,17 +1,12 @@
 /**
  * commits.ts — creating a commit ("sealing"), the one place it happens.
  *
- * Locked rules implemented here:
- *  - docs/09 #4 terminology: seal / auto-seal / auto-commit are all just
- *    COMMIT; only three triggers exist (user button, agent run complete,
- *    boundary + pending).
- *  - docs/09 Item 4b: commit row + ops + snapshot + branch pointer move in
- *    ONE transaction.
- *  - docs/09 7a: optimistic concurrency — the branch head must still be the
- *    base this work started from (compare-and-swap), else E_STALE_HEAD.
- *  - docs/09 #9 + docs/11 Q1: snapshot cadence N = 10; import / restore /
- *    merge commits are ALWAYS full snapshots with snapshot_distance = 0.
- *  - docs/09 Item 6a(5): names are deterministic templates (see naming.ts).
+ * - Commits are created in ONE transaction (row + ops + snapshot + branch pointer).
+ * - Optimistic concurrency: the branch head must still be the base this work
+ *   started from (compare-and-swap), else E_STALE_HEAD.
+ * - Snapshot cadence: every 10th commit is a full snapshot; import / restore /
+ *   merge commits are always full snapshots.
+ * - Names are deterministic templates (see naming.ts).
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -25,12 +20,12 @@ import type { BranchRow, WorkingStateRow } from "./branches";
 import type { Actor, PendingOp } from "./types";
 import type { Tx } from "./tx";
 
-/** docs/09 Item 4a: N = config constant, default 10 (benchmark-validated). */
+/** Snapshot interval: every Nth commit is a full snapshot. */
 export const SNAPSHOT_INTERVAL = 10;
 
 /**
- * commits.id is a hash (C3). The hashed payload deliberately includes the
- * project id and a per-commit nonce: every project is seeded from the SAME
+ * commits.id is a hash. The hashed payload deliberately includes the
+ * project id and a per-commit nonce: every project is seeded from the same
  * demo.otio, so a purely content-addressed root commit would mint the
  * identical id in every project and collide on the primary key.
  */
@@ -47,23 +42,16 @@ export type CreateCommitInput = {
   timeline: Timeline;
   name: string;
   actor: Actor;
-  /**
-   * C3 — the SECOND parent, non-null ONLY on merge commits. [ADDED by M7b,
-   * which is the first milestone with a caller: `POST merge` finalize.]
-   */
+  /** The second parent — non-null ONLY on merge commits. */
   parent2Id?: string | null;
   /**
-   * docs/11 Q1 + docs/09 #9 — import / restore / merge commits are ALWAYS
-   * full snapshots with `snapshot_distance = 0`; the every-Nth cadence is
-   * skipped for them. Their content has no op-representation at all (there
-   * is no "become commit X" verb, an import has no parent, and a merge is
-   * not expressible as ops), so a full snapshot is their only honest form.
+   * Import / restore / merge commits are always full snapshots. Their
+   * content has no op-representation (there is no "become commit X" verb,
+   * an import has no parent, a merge is not expressible as ops), so a
+   * full snapshot is their only honest form.
    */
   forceSnapshot?: boolean;
-  /**
-   * C3 + F7 — the itemized skipped-list, non-null ONLY on import commits.
-   * This column is how #17's list survives a refresh.
-   */
+  /** The itemized skipped-list from import, non-null ONLY on import commits. */
   importWarnings?: ImportWarning[] | null;
 };
 
@@ -106,7 +94,7 @@ export async function createCommit({
   }
 
   const nextDistance = parentRows[0].snapshotDistance + 1;
-  // Q1: a forced snapshot skips the cadence entirely (distance 0).
+  // Forced snapshot skips the cadence entirely (distance 0).
   const takeSnapshot = forceSnapshot || nextDistance >= SNAPSHOT_INTERVAL;
   const snapshotDistance = takeSnapshot ? 0 : nextDistance;
 
@@ -138,7 +126,7 @@ export async function createCommit({
         id: op.id,
         projectId,
         commitId,
-        seq: index, // C3: seq preserves the order edits were applied in
+        seq: index, // preserves the order edits were applied in
         command: op.command,
         actor: op.actor,
       })),
@@ -149,9 +137,8 @@ export async function createCommit({
     await tx.insert(snapshots).values({ commitId, projectId, timeline });
   }
 
-  // docs/09 7a — CAS: move the head only if it is still where this work
-  // started. A concurrent writer that already moved it loses the race and
-  // gets E_STALE_HEAD (its work is never silently applied on top).
+  // CAS — move the head only if it is still where this work started. A
+  // concurrent writer that already moved it gets E_STALE_HEAD.
   const moved = await tx
     .update(branches)
     .set({ headCommitId: commitId })
@@ -170,9 +157,9 @@ export async function createCommit({
     );
   }
 
-  // docs/09 triage #2: the pending list becomes the commit's op-log, then
-  // the working record restarts on the new commit. working_rev is NOT
-  // reset — it is monotonic for the life of the branch (C3).
+  // The pending list becomes the commit's op-log, then the working record
+  // restarts on the new commit. working_rev is never reset — monotonic for
+  // the life of the branch.
   await tx
     .update(workingState)
     .set({ baseCommitId: commitId, pendingOps: [] })
@@ -189,16 +176,11 @@ export async function createCommit({
 export type CommitRow = typeof commits.$inferSelect;
 
 /**
- * Look one commit up BY ID, project-scoped (HLD #14 + F1). A commit that
- * belongs to another project is simply "not there" — never someone else's
- * data.
+ * Look one commit up by id, project-scoped. A commit belonging to another
+ * project is simply "not there".
  *
- * ⚠ SPEC GAP (reported, not invented): C4's error list has no
- * "commit not found" code. `E_BAD_REQUEST` is used because the locked
- * dividing line is *who rejected it* — this is rejected at the door, before
- * any engine work, exactly like a missing field. The alternatives were worse:
- * `E_CLIP_NOT_FOUND` is a VERB code about clips, and `E_PROJECT_NOT_FOUND`
- * would lie about which thing is missing. See the M7b findings.
+ * E_BAD_REQUEST is used for unknown commits because the dividing line is
+ * who rejected it — this is rejected at the door, before any engine work.
  */
 export async function loadCommitRow(
   tx: Tx,

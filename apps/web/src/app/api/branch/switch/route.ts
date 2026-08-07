@@ -1,17 +1,10 @@
 /**
- * POST /api/branch/switch — docs/11 C4 F5(b) + F6, a BOUNDARY door.
- * This is what test G3 exercises.
+ * POST /api/branch/switch — a boundary door. If the source is dirty it is
+ * auto-sealed, then returns the target branch's working view. One transaction.
  *
- * req:  { from, to, ticket }
- * data: { timeline, workingRev, pendingCount }  (+ sealedCommitId if sealed)
- *
- * ONE transaction: if `from` is dirty, auto-seal it with the template name
- * (docs/09 Item 6a(4) — "chupchaap auto-seal", no popup), then return
- * `to`'s working view so the UI can render the switch directly.
- *
- * Nothing about the switch is stored: F5 locked that the server keeps no
- * current-branch pointer (hidden state + multi-tab clash). The switch is
- * complete because the client now sends `to` in its next request.
+ * Nothing is stored server-side about which branch is "current" — the
+ * switch is complete because the client sends the new branch name in its
+ * next request.
  */
 
 import {

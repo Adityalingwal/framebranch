@@ -1,15 +1,7 @@
 /**
- * GET /api/history — docs/11 C4 (2), a READ door: no ticket, no writes.
- *
- * data: { commits: [{ commitId, name, actor, createdAt, parents,
- *                     importWarnings }] }
- *
- * `actor` is what drives the 👤 / 🤖 badges. `importWarnings` is F7: it is
- * how #17's itemized skipped-list survives a refresh — the list is not
- * kept in the browser, it lives on the import commit.
- *
- * Order: newest first (that is the direction a history panel reads), with
- * the commit id as a deterministic tie-break.
+ * GET /api/history — read-only. Returns commits newest-first with actor for
+ * 👤/🤖 badges, optional importWarnings, and parents list (single parent for
+ * normal commits, two for merge commits, none for root).
  */
 
 import { desc, eq } from "drizzle-orm";

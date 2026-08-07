@@ -1,10 +1,10 @@
 /**
  * branches.ts — branch + working-state lookups.
  *
- * F5 LOCK: the server NEVER remembers a "current branch". Every
- * branch-scoped request carries an explicit `branch` field; a
- * current-branch column was explicitly rejected (hidden state + multi-tab
- * clash). So every lookup here starts from a name the caller sent.
+ * The server never remembers a "current branch". Every branch-scoped request
+ * carries an explicit branch field — a current-branch column was deliberately
+ * rejected (hidden state + multi-tab clash). Every lookup starts from a name
+ * the caller sent.
  */
 
 import { and, eq } from "drizzle-orm";
@@ -31,8 +31,8 @@ export async function loadBranch(
     .where(and(eq(branches.projectId, projectId), eq(branches.name, name)))
     .limit(1);
   if (rows.length === 0) {
-    // HLD #14: a branch belonging to a DIFFERENT project is simply not
-    // found — the project_id predicate above is what makes that true.
+    // A branch belonging to a different project is simply not found —
+    // the project_id predicate makes that true.
     throw new ApiError("E_BRANCH_NOT_FOUND", `no branch named "${name}"`);
   }
   return rows[0];
@@ -52,9 +52,9 @@ export async function findBranch(
 }
 
 /**
- * Branch lookup BY ID — the merge path stores branch ids on the attempt row
- * (C3's `branch_into` / `branch_from`) and re-reads the rows at finalize for
- * the both-parents CAS (docs/09 #8). Project-scoped like every other query.
+ * Branch lookup by id — the merge path stores branch ids on the attempt row
+ * and re-reads the rows at finalize for the both-parents CAS.
+ * Project-scoped like every other query.
  */
 export async function loadBranchById(
   tx: Tx,

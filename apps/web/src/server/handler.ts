@@ -1,20 +1,15 @@
 /**
  * handler.ts — the one door every route goes through.
  *
- * It does three things, in this order:
- *  1. capability token → project (HLD #14). No cookie at all = first visit
- *     → bootstrap a fresh project and set the cookie. A cookie that
- *     matches NO project = 404 E_PROJECT_NOT_FOUND — never 403, and never
- *     anyone else's data (test G5).
+ * It does three things:
+ *  1. capability token → project. No cookie → bootstrap a fresh project.
+ *     Unknown cookie → 404 E_PROJECT_NOT_FOUND (never anyone else's data).
  *  2. runs the route's work.
- *  3. wraps whatever comes back in the C4 envelope.
+ *  3. wraps the result in the standard response envelope.
  *
- * Designed failures throw `ApiError` with a locked code. An UNEXPECTED
- * exception becomes `E_INTERNAL` [ADDED 2026-08-05, M7a owner triage: the
- * code did not exist, so a crash used to escape the envelope entirely and
- * the UI's single reader — the whole point of C4 (1) — met a raw platform
- * 500]. The original message is never sent to the client; it is logged
- * server-side so a stack trace or a connection string cannot leak.
+ * Designed failures throw ApiError with a locked code. Unexpected exceptions
+ * become E_INTERNAL — the original message is logged server-side, never
+ * sent to the client.
  */
 
 import { z } from "zod";
@@ -77,14 +72,11 @@ export async function handleRequest(
 }
 
 /**
- * Body parsing + validation (docs/09 Item 12: every input is
- * schema-validated at the API door; bad input never reaches the engine).
- *
- * A malformed body is E_BAD_REQUEST [ADDED 2026-08-05, M7a owner triage].
- * It used to borrow E_INVALID_VALUE, but that is a Phase-A VERB code meaning
- * "that value is illegal for this clip" — a request that does not even parse
- * is a different failure, and the UI could not tell the two apart.
+ * Body parsing + validation — every input is schema-validated at the
+ * API door; bad input never reaches the engine. A malformed body is
+ * E_BAD_REQUEST.
  */
+
 export async function readBody<T>(
   request: Request,
   schema: z.ZodType<T>,

@@ -1,32 +1,15 @@
 /**
- * POST /api/import — docs/11 C4 (4) + F6 + F5(a), a BOUNDARY door.
+ * POST /api/import — a boundary door.
  *
- * req:  { branch, otioJson, ticket }
- * data: { commitId, skippedItems }
+ * On success the commit carries a forced full snapshot, no ops rows, and
+ * import_warnings from the engine as structured objects. The engine takes
+ * `unknown` and never throws — failures propagate the engine's own code.
  *
- * The ENGINE decides what the document means (`importOtio` — O7/H11: it
- * takes `unknown` and never throws). A failure propagates the engine's own
- * code (E_INVALID_OTIO / E_UNSUPPORTED_OTIO_VERSION) and NOTHING is written.
+ * Import is a fresh start: new ids, nothing matched against previous state.
  *
- * On success the commit carries:
- *  - a forced full snapshot (Q1 — an import has no parent, so ops cannot
- *    express it),
- *  - no ops rows,
- *  - `import_warnings` = the engine's structured warnings (O8:
- *    `{code, detail, count}`). F7 is the reason that column exists: it is
- *    how #17's itemized "Skipped: 2 transitions, 1 blur" survives a refresh.
- *    `skippedItems` in the response is that same list.
- *
- * Import is a FRESH START (docs/09 #10): new ids, nothing matched against
- * what was there before. The engine guarantees that; no matching is added.
- *
- * A1.2/A1.3 read literally would let a re-import overwrite `project_rate`
- * with the new file's own rate, leaving the project's older commits (still
- * in the old rate's frame-numbers) misinterpreted from then on (the M7b
- * findings' witness: 240@24 vs 300@30, same 10s, `GET diff` calls it a
- * 60-frame extension). Fixed here — the project's EXISTING rate is passed
- * to the engine as `targetRate`, so the incoming file lands on it instead
- * of the project ever changing rate after its first import.
+ * A re-import must not change the project's frame rate. The project's
+ * existing rate is passed to the engine as targetRate — older commits stay
+ * interpretable at the same rate they were written in.
  */
 
 import { importOtio } from "@framebranch/engine";
@@ -78,7 +61,7 @@ export async function POST(request: Request): Promise<Response> {
         tx,
         projectId: project.id,
         branch: fresh.branch,
-        working: fresh.working, // clean now → no ops rows (Q1)
+        working: fresh.working, // clean → no ops rows
         timeline: imported.timeline,
         name: IMPORTED_TIMELINE_COMMIT_NAME,
         actor: "user",

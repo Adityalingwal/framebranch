@@ -1,20 +1,12 @@
 /**
- * POST /api/merge — docs/11 C4 (4) + F6, a BOUNDARY door.
+ * POST /api/merge — a boundary door. Merges `from` into `into`.
  *
- * req:  { from, into, ticket }        — `from` is merged INTO `into`
- * data: zero conflicts → { done: true, mergeCommitId }
- *       conflicts      → { attemptId, conflicts, counts }
+ * Both branches are sealed when dirty — the merge is computed from
+ * committed heads, stored for the finalize CAS. Unsealed pending work would
+ * be absent from the merge.
  *
- * Why BOTH branches are sealed when dirty: the merge is computed from the
- * two branches' COMMITTED heads, and `merge_attempts` stores those two head
- * ids for the finalize CAS (docs/09 #8). Unsealed pending work on either
- * side would silently be absent from the merge — precisely what the boundary
- * auto-seal rule (docs/09 Item 6a(4), which names merge as one of the six)
- * exists to prevent.
- *
- * Zero conflicts finalize immediately, in this same transaction: the
- * two-phase flow's second phase is empty, and docs/09 6d locks that the
- * merge commit appears automatically with no extra "Confirm merge?" step.
+ * Zero conflicts finalize immediately in the same transaction — no extra
+ * confirmation step.
  */
 
 import { startMerge } from "@framebranch/engine";
@@ -105,7 +97,7 @@ export async function POST(request: Request): Promise<Response> {
           // participants are deliberately NOT in it.
           draftTimeline: result.timeline,
           conflicts: result.conflicts,
-          // The parchi starts as the engine gave it (empty at start).
+          // Choices start exactly as the engine returned them.
           choices: result.choices,
           status: MERGE_ATTEMPT_OPEN,
         })

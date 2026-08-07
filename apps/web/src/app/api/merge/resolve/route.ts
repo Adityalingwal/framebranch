@@ -1,19 +1,12 @@
 /**
- * POST /api/merge/resolve — docs/11 C4 (4) + F6, the EDIT category
- * (docs/09 #5): it writes into the merge DRAFT, never into history.
+ * POST /api/merge/resolve — writes into the merge draft, never into history.
  *
- * req:  { attemptId, conflictId, choice, ticket }
- * data: conflicts remain → { counts, conflicts }   (fresh recompute)
- *       last one answered → { done: true, mergeCommitId }
+ * A click saves an answer in the draft's choices and the engine recomputes
+ * the whole merge from base + both sides + every saved answer. The draft is
+ * never edited in place — click order cannot change the result.
  *
- * B3.3: a click saves an answer in the parchi (`choices`) and the engine
- * recomputes the WHOLE merge from base/ours/theirs + every saved answer.
- * The draft is never edited in place, so click order cannot change the
- * result and a crash cannot leave a half-written draft.
- *
- * The three timelines are re-materialized from the heads the ATTEMPT stored,
- * never from the branches' current heads: the attempt is pinned to the
- * history it started from, which is what makes the finalize CAS meaningful.
+ * The three timelines come from the heads the attempt stored, never from
+ * the branches' current heads, making the finalize CAS meaningful.
  */
 
 import { applyChoice } from "@framebranch/engine";
@@ -61,10 +54,9 @@ export async function POST(request: Request): Promise<Response> {
           choice: body.choice,
         });
         if (!result.ok) {
-          // C7 owns the rules this reports: an unknown/answered conflict, a
-          // choice the bucket does not offer, and replacing a permanent
-          // answer with a DIFFERENT one. Re-answering with the SAME choice
-          // is a normal success there, so it is a normal success here.
+          // The engine reports: unknown/answered conflict, invalid choice
+          // for the bucket, or replacing a permanent answer. Re-answering
+          // with the same choice IS valid — identical choice = no-change.
           throw new ApiError("E_MERGE_PRECONDITION", result.error.message);
         }
 
@@ -78,14 +70,10 @@ export async function POST(request: Request): Promise<Response> {
           .where(eq(mergeAttempts.id, attempt.id));
 
         if (result.conflicts.length > 0) {
-          // B3.4's honest count: `counts` includes any conflict that only
-          // appeared because this answer put a held-back clip on the
-          // timeline for the first time.
           return { counts: result.counts, conflicts: result.conflicts };
         }
 
-        // Last conflict answered → finalize automatically, in this same
-        // transaction (docs/09 6d).
+        // Last conflict answered → finalize automatically in this transaction.
         return finalizeMerge({
           tx,
           projectId: project.id,

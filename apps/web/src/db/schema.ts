@@ -1,16 +1,5 @@
 /**
- * schema.ts — the 8 locked tables, exactly as docs/11 C3 specifies
- * (+ the F1 amendment: ops / snapshots / working_state each carry
- * `project_id` too, because HLD #14's rule is "every row carries
- * project_id").
- *
- * The table count is LOCKED at 8 (HLD #16). Nothing here may grow a ninth
- * table or a column C3 does not name.
- *
- * Locked indexes (C3): project_id on every table;
- * branches(project_id, name) unique; ops(commit_id, seq) unique;
- * snapshots(commit_id) unique; working_state(branch_id) unique;
- * tickets(project_id, endpoint, ticket) unique.
+ * schema.ts — the 8 table schema.
  */
 
 import {
@@ -31,8 +20,8 @@ import type { ImportWarning } from "@framebranch/engine";
 import type { PendingOp } from "../server/types";
 
 /**
- * (1) projects — HLD #14 (capability token) + #15 (100-project cap).
- * `project_rate` comes from the imported OTIO (A1.2); never hardcoded.
+ * (1) projects — capability token identification + 100-project cap.
+ * `project_rate` comes from the imported OTIO; never hardcoded.
  */
 export const projects = pgTable(
   "projects",
@@ -45,15 +34,14 @@ export const projects = pgTable(
       .defaultNow(),
   },
   (table) => [
-    // Not in C3's index list, which only speaks about project_id and the
-    // five unique keys; added because a capability token identifies exactly
-    // ONE project (HLD #14) and every request looks the project up by it.
+    // A capability token identifies exactly one project and every request
+    // looks the project up by it.
     uniqueIndex("projects_owner_token_key").on(table.ownerToken),
     index("projects_created_at_idx").on(table.createdAt),
   ],
 );
 
-/** (2) branches — head_commit_id is the sticky note the CAS guards (HLD 7a). */
+/** (2) branches — head_commit_id is where the compare-and-swap guards. */
 export const branches = pgTable(
   "branches",
   {
@@ -162,9 +150,9 @@ export const workingState = pgTable(
 );
 
 /**
- * (7) merge_attempts — the merge draft lives in the DB, never in memory
- * (HLD triage #1). Created and consumed by M7b; the table is created here
- * because the schema and its migration are one artefact.
+ * (7) merge_attempts — the merge draft lives in the DB, never in memory.
+ * The table is created here because the schema and its migration are one
+ * artefact.
  */
 export const mergeAttempts = pgTable(
   "merge_attempts",
@@ -190,9 +178,9 @@ export const mergeAttempts = pgTable(
 );
 
 /**
- * (8) tickets — the shared idempotency register for ALL mutating endpoints
- * (HLD #16). No payload fingerprint column: F2 cut payload comparison, so
- * the original payload is not stored at all. Rows have a 24h TTL.
+ * (8) tickets — the shared idempotency register for all mutating endpoints.
+ * No payload fingerprint column — the original payload is not stored.
+ * Rows have a 24h TTL.
  */
 export const tickets = pgTable(
   "tickets",

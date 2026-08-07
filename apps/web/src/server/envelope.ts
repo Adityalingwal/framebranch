@@ -1,20 +1,14 @@
 /**
- * envelope.ts — docs/11 C4 (1): EVERY response has the same outer shape.
+ * envelope.ts — every response has the same outer shape:
  *
  *   success → { ok: true,  data: {...} }
  *   failure → { ok: false, error: { code, message } }
  *
- * `code` is the machine contract (the UI switches on it), `message` is for
- * a human. Per-endpoint custom shapes were explicitly rejected.
- *
- * The error CODES below are exactly C4 point (5) + its F8 amendment + the
- * 2026-08-05 M7a amendment (three transport codes: E_BAD_REQUEST,
- * E_BRANCH_EXISTS, E_INTERNAL) — the official list, nothing else.
- * `E_ID_COLLISION` is absent on purpose (F8 removed it: unreachable by
- * design).
+ * code is the machine contract (the UI switches on it), message is for a
+ * human. Per-endpoint custom shapes were explicitly rejected.
  */
 
-/** C4 (5) — Phase A verb codes. Mirrors the engine's own `ErrorCode`. */
+/** Phase A verb codes. Mirrors the engine's own ErrorCode union. */
 const VERB_CODES = [
   "E_CLIP_NOT_FOUND",
   "E_TRACK_NOT_FOUND",
@@ -46,23 +40,18 @@ const SYSTEM_CODES = [
 ] as const;
 
 /**
- * C4 (5) — transport codes [AMENDED 2026-08-05, M7a owner triage].
- *
- * The original list covered verb failures and designed system failures, but
- * named nothing for three situations M7a hit for real:
+ * Transport codes — named later for three situations that needed codes:
  *
  * - E_BAD_REQUEST   — the request itself does not parse (bad JSON, a command
- *                     outside the Phase A union, a missing field). Previously
- *                     borrowed E_INVALID_VALUE, which is a VERB code meaning
- *                     "that value is illegal for this clip" — two different
- *                     failures behind one code the UI could not tell apart.
- * - E_BRANCH_EXISTS — the locked branches(project_id, name) unique index makes
- *                     this real and detectable; C4 never named it. The branch
- *                     is still never created; this only lets the UI say "that
- *                     name is taken" instead of "invalid value".
- * - E_INTERNAL      — an UNEXPECTED exception. Without it, a crash escaped the
- *                     envelope entirely and the UI's single reader (the whole
- *                     point of C4 (1)) met a raw platform 500.
+ *                     outside the union, a missing field). Distinguished from
+ *                     E_INVALID_VALUE which means "that value is illegal for
+ *                     this clip" — a different failure.
+ * - E_BRANCH_EXISTS — the branches(project_id, name) unique index makes this
+ *                     real and detectable. The branch is still never created;
+ *                     this only lets the UI say "that name is taken".
+ * - E_INTERNAL      — an unexpected exception. Without it, a crash escaped the
+ *                     envelope entirely and the single response reader met a
+ *                     raw platform 500.
  */
 const TRANSPORT_CODES = [
   "E_BAD_REQUEST",
@@ -79,9 +68,8 @@ export const ERROR_CODES = [
 export type ApiErrorCode = (typeof ERROR_CODES)[number];
 
 /**
- * HTTP status is transport, not contract: the UI reads `error.code`. The
- * only status the docs pin down is 404 for a capability-token mismatch
- * (HLD #14 — "mismatch = 404, never 403, never another project's data").
+ * HTTP status is transport, not contract: the UI reads `error.code`.
+ * Capability-token mismatches use 404 — never 403, never another project's data.
  */
 const STATUS_BY_CODE: Partial<Record<ApiErrorCode, number>> = {
   E_PROJECT_NOT_FOUND: 404,

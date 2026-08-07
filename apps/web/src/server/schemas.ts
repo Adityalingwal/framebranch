@@ -1,17 +1,10 @@
 /**
- * schemas.ts — Zod schemas for every request body (docs/09 Item 12).
+ * schemas.ts — Zod schemas for every request body.
  *
- * The command schema mirrors the Phase A discriminated union (docs/11 A3 +
- * the F4 addClip forms) at the STRUCTURE level only. It answers "is this
- * even a command?" — it does NOT re-implement any verb's rules. Ranges,
- * overlap, applicability, bounds: all of that belongs to the engine and
- * only to the engine ("the engine decides; the server does not
- * re-implement any verb logic").
- *
- * The two `addClip` forms are strict objects so a payload can never
- * satisfy both: the engine distinguishes them by field presence
- * (`"mediaRefId" in command`), and a body carrying both would be
- * ambiguous.
+ * The command schema mirrors the Phase A discriminated union at the
+ * STRUCTURE level only — it answers "is this even a command?" It does NOT
+ * re-implement any verb's rules. Ranges, overlap, applicability, bounds:
+ * all of that belongs to the engine.
  */
 
 import { z } from "zod";

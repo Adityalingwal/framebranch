@@ -1,20 +1,8 @@
 /**
- * POST /api/agent/simulate — docs/11 C4 (4) + F6 + F5(a), a BOUNDARY door.
- *
- * req:  { branch, script, ticket }    — `script` is a NAME (C8 fixture)
- * data: { commitId, name, actor: "agent", opsApplied }
- *
- * docs/09 triage #3 — an agent run is ATOMIC: the engine applies every one
- * of the script's commands IN MEMORY first; if any one fails, nothing at all
- * is written and that verb's own error comes back ("Agent run failed — no
- * changes were made"). If all pass, the ops rows and ONE auto-commit are
- * written in the same transaction (Item 6a(2): an agent run is one commit).
- *
- * The agent does not go through `POST ops` per edit — that is the human
- * path. Same verbs, same provenance machinery, different batching.
- *
- * `actor: "agent"` on the commit AND on every op row is what the history's
- * 🤖 badge reads (C3: ops carry per-edit provenance).
+ * POST /api/agent/simulate — a boundary door. Applies a named script atomically:
+ * all commands run in memory first; if any fail, nothing is written. If all
+ * pass, one auto-commit is created with actor "agent" on the commit and
+ * every op row.
  */
 
 import { randomUUID } from "node:crypto";
@@ -83,7 +71,7 @@ export async function POST(request: Request): Promise<Response> {
             // "no changes were made" is literally true.
             throw new ApiError(result.error.code, result.error.message);
           }
-          // A4 (1): a no-change command is a success that is NOT recorded.
+          // no-change commands succeed but are not recorded (log stays clean).
           if (result.noChange) continue;
           timeline = result.timeline;
           applied.push({ id: opId, actor: "agent", command });

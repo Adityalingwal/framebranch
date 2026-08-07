@@ -68,7 +68,7 @@ export function clipLabel(clip: AnyClip, mediaRef: MediaRef | undefined): string
 /**
  * M8 lock 6 — thumbnails are pre-made images, one `.jpg` per media
  * fixture, sharing the media's own filename stem
- * (apps/web/public/thumbnails/<stem>.jpg — see IMPLEMENTATION-NOTES.md).
+ * (apps/web/public/thumbnails/<stem>.jpg — thumbnails are pre-generated).
  */
 export function thumbnailUrl(mediaUrl: string): string {
   return `/thumbnails/${fileStem(mediaUrl)}.jpg`;

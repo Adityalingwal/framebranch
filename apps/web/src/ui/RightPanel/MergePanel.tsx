@@ -21,21 +21,12 @@ import { ConfirmDialog } from "../ConfirmDialog";
 import { primaryButton, secondaryButton, textInput } from "../styles";
 
 /**
- * §7 — the Merge panel, Level 2 (locked; Level 1 text-only and Level 3
- * live-preview-and-drag were both rejected — docs/07 PRD 5.3).
+ * Merge panel — three-bar side-by-side conflict view.
  *
- * Bars caveat (reported, not invented around — see the M8b findings file):
- * no endpoint returns the merge's `base` timeline (only the engine computes
- * it, internally, per merge call — `server/merge.ts` `loadMergeSides` never
- * sends it over the wire) or the `ours`/`theirs` snapshots the conflict was
- * actually computed from. What CAN be shown accurately is each side's
- * CURRENT branch timeline (`GET /api/timeline?branch=`) — accurate because
- * both branches are auto-sealed the instant a merge starts (docs/09 6a(4)),
- * so "current" and "the merge's ours/theirs" agree unless something edits
- * either branch again while the merge stays open (the same situation
- * `E_STALE_HEAD` already exists to catch). The Base row has no accurate
- * source at all and is rendered as a clearly-labelled placeholder rather
- * than invented data.
+ * The merge base timeline is not available over the wire (the engine computes
+ * it internally), so the Base row is shown as a labelled placeholder.
+ * Yours/Agent rows show each branch's current timeline, accurate because
+ * both branches are auto-sealed the instant a merge starts.
  */
 type Attempt = {
   attemptId: string;
@@ -83,12 +74,9 @@ export function MergePanel({
       { from: mergingFrom, into: currentBranch },
       {
         onSuccess: (data) => {
-          // docs/09 6a(4): starting a merge is a boundary — EITHER side, if
-          // dirty, is auto-sealed before the merge is even computed. That
-          // happens whether or not conflicts come back, so both branches'
-          // cached timeline/history need a refetch either way (the `done`
-          // path below already re-invalidates `currentBranch`, which is
-          // harmless — invalidate is idempotent).
+          // Starting a merge auto-seals either side if dirty. Both branches'
+          // cached data needs a refetch whether or not conflicts come back,
+          // so invalidate is called regardless of outcome.
           queryClient.invalidateQueries({
             queryKey: queryKeys.timeline(currentBranch),
           });

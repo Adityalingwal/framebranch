@@ -1,20 +1,15 @@
 /**
  * timeline.ts — turning stored rows back into a Timeline.
  *
- * Storage is hybrid (docs/09 Item 4a): every commit stores its ops, every
- * Nth commit additionally stores a full snapshot. So "what does commit X
- * look like" = walk parents until a snapshot is found (≤ N steps, HLD #9)
- * and replay the ops of the commits in between, in `seq` order.
+ * Storage is hybrid: every commit stores its ops, every Nth commit stores a
+ * full snapshot. To materialize a commit: walk parents until a snapshot is
+ * found (≤N steps), then replay the ops in between in seq order.
  *
- * "What is the user actually looking at" = that, plus `working_state`'s
- * `pending_ops` replayed on top (docs/09 triage #2).
+ * The working view = base commit + pending_ops replayed on top.
  *
- * DETERMINISTIC REPLAY: `addClip` mints a clip id. Replay must mint the
- * SAME id it minted the first time, or a later op's `clipId` would point at
- * nothing. The engine already offers the seam (`ApplyOptions.mintId`), so
- * ids are derived from the op's own row id — which is stored — instead of
- * being stored a second time next to the command (C3 gives `ops` a
- * `command` column and nothing else).
+ * Deterministic replay: addClip mints a clip id. Replay must mint the SAME
+ * id or later ops' clipIds would dangle. Ids are derived from the op's row
+ * id (which is stored) rather than stored twice.
  */
 
 import { and, asc, eq } from "drizzle-orm";
@@ -26,10 +21,8 @@ import { commits, ops, snapshots } from "../db/schema";
 import type { PendingOp } from "./types";
 import type { Tx } from "./tx";
 
-/**
- * The id minter for one op. `@` is deliberately absent: that character is
- * the reserved split-lineage namespace (B1.1).
- */
+/** The id minter for one op. `@` is deliberately absent — that character
+ * is the reserved split-lineage namespace. */
 export function minterFor(opId: string): () => string {
   let n = 0;
   return () => `clip-${opId}-${n++}`;
@@ -75,7 +68,7 @@ export async function loadCommitTimeline(
       .where(
         and(
           eq(snapshots.commitId, cursor),
-          eq(snapshots.projectId, projectId), // HLD #14: always project-scoped
+          eq(snapshots.projectId, projectId), // always project-scoped
         ),
       )
       .limit(1);
@@ -97,9 +90,9 @@ export async function loadCommitTimeline(
   }
 
   if (base === null) {
-    // The root commit of every project is an import commit, and Q1 makes
-    // import commits ALWAYS full snapshots — so a chain that reaches the
-    // root without meeting a snapshot cannot happen.
+    // The root commit is always an import commit, and import commits are
+    // always full snapshots — so reaching the root without a snapshot
+    // cannot happen.
     throw new Error(`no snapshot reachable from commit ${commitId}`);
   }
 

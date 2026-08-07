@@ -18,8 +18,8 @@ const DEFAULT_POSITION: Position = { x: 0, y: 0 };
 const FONTS: TextFont[] = ["Arial", "Georgia", "Courier New"];
 // Mirrors packages/engine/src/verbs.ts's own bounds (MAX_TEXT_CONTENT, the
 // textStyle.size 8-200 check) — controls must not be able to emit
-// out-of-range values (brief §5, propertyChange row); HTML min/max alone
-// don't constrain typed number input, so this is enforced in JS on commit.
+// out-of-range values — HTML min/max alone don't constrain typed input,
+// so this is enforced in JS on commit.
 const MAX_TEXT_CONTENT = 500;
 const MIN_TEXT_SIZE = 8;
 const MAX_TEXT_SIZE = 200;
@@ -28,10 +28,9 @@ const MAX_TEXT_SIZE = 200;
  * §5/§8.2 — the six-property whitelist, now editable. Every whitelisted
  * property is shown for every clip it can structurally carry (the engine's
  * `Clip`/`TextClip` types already narrow that — text only ever has
- * opacity/position, per BC.1). Kind-based applicability beyond that
+ * opacity/position). Kind-based applicability beyond that
  * (e.g. "no volume on an image") is NOT filtered here — that repeats
- * M8a's own decision (IMPLEMENTATION-NOTES.md #11: "no lock specifies
- * kind-based filtering"), so an inapplicable edit reaches the server and
+ * the same decision arrived at earlier: an inapplicable edit reaches the server and
  * comes back as a normal, honestly-shown `E_PROPERTY_NOT_APPLICABLE`
  * rollback — same pattern the wrapper already uses for every verb error.
  *

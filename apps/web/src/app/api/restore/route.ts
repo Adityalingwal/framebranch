@@ -1,16 +1,7 @@
 /**
- * POST /api/restore — docs/11 C4 (4) + F6 + F5(a), a BOUNDARY door.
- *
- * req:  { branch, commitId, ticket }
- * data: { commitId, name }   — the NEW restore commit, not the one restored from
- *
- * docs/09 Item 6c: restore is a NEW commit whose CONTENT is an old version.
- * History is never rewritten and nothing is deleted — restore moves forward,
- * so restoring is itself undoable.
- *
- * The commit carries a forced full snapshot (Q1): "become version X" is not
- * a verb, so there are no ops that could express this commit, and a full
- * snapshot is its only honest representation.
+ * POST /api/restore — a boundary door. Creates a new commit whose content is
+ * an old version. History is never rewritten — restoring moves forward and
+ * is itself undoable. The commit carries a full snapshot.
  */
 
 import { isDirty, loadBranchView } from "../../../server/branches";
@@ -31,9 +22,8 @@ export async function POST(request: Request): Promise<Response> {
     return runWithTicket(db, project.id, "restore", body.ticket, async (tx) => {
       const view = await loadBranchView(tx, project.id, body.branch, true);
 
-      // Project-scoped, and checked BEFORE the seal: an unknown version must
-      // not leave an auto-seal behind, and a commit from another project is
-      // simply not there (HLD #14).
+      // Project-scoped, checked before the seal: an unknown commit must
+      // not leave an auto-seal behind.
       const target = await loadCommitRow(tx, project.id, body.commitId);
       const restored = await loadCommitTimeline(tx, project.id, target.id);
 
@@ -56,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
         tx,
         projectId: project.id,
         branch: fresh.branch,
-        working: fresh.working, // clean now → no ops rows (Q1)
+        working: fresh.working, // clean now → no ops rows
         timeline: restored,
         name: restoreCommitName(target.name),
         actor: "user",
