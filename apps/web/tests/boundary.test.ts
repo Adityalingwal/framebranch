@@ -101,9 +101,9 @@ const volumeOf = (timeline: Timeline, clipId: string): number | undefined =>
     }
   ).properties.volume;
 
-// ---------------------------------------------------------------------------
-// POST restore — docs/09 Item 6c + Q1
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// POST restore — +
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST restore", () => {
   it("Item 6c/Q1: restore is a NEW forced-snapshot commit and the old history is intact", async () => {
@@ -141,7 +141,7 @@ describe("C4 (4) — POST restore", () => {
       .from(snapshots)
       .where(eq(snapshots.commitId, restored.commitId));
     expect(snap).toHaveLength(1);
-    // No ops rows: restore has no verb representation (Q1).
+    // No ops rows: restore has no verb representation .
     const opRows = await getDb()
       .select()
       .from(ops)
@@ -192,15 +192,15 @@ describe("C4 (4) — POST restore", () => {
       { branch: "main", commitId: hers.commitId, ticket: ticket() },
       bob,
     );
-    // No "commit not found" code exists in C4 — see the M7b findings.
+    // No "commit not found" code exists in — see the findings.
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
     expect(await commitCount()).toBe(2); // one import commit each, nothing new
   });
 });
 
-// ---------------------------------------------------------------------------
-// POST import — O7/O8 + F7 + HLD #10
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// POST import — / + +
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 const time = (value: number, rate = 24) => ({
   OTIO_SCHEMA: "RationalTime.1",
@@ -273,7 +273,7 @@ describe("C4 (4) — POST import", () => {
       ),
     ) as { commitId: string; skippedItems: ImportWarning[] };
 
-    // O8: assert on the CODE, never on English prose.
+    // assert on the CODE, never on English prose.
     expect(data.skippedItems.map((w) => w.code)).toEqual([
       "skipped-unsupported",
     ]);
@@ -282,7 +282,7 @@ describe("C4 (4) — POST import", () => {
       await getDb().select().from(commits).where(eq(commits.id, data.commitId))
     )[0];
     expect(row.importWarnings).toEqual(data.skippedItems);
-    // Q1: an import commit is always a full snapshot, with no ops.
+    // an import commit is always a full snapshot, with no ops.
     expect(row.snapshotDistance).toBe(0);
     expect(
       await getDb()
@@ -294,7 +294,7 @@ describe("C4 (4) — POST import", () => {
       await getDb().select().from(ops).where(eq(ops.commitId, row.id)),
     ).toHaveLength(0);
 
-    // HLD #10: a fresh start — the imported document replaced the timeline.
+    // a fresh start — the imported document replaced the timeline.
     const after = await view(s);
     expect(after.timeline.tracks).toHaveLength(1);
     expect(after.timeline.tracks[0].clips).toHaveLength(1);
@@ -330,7 +330,7 @@ describe("C4 (4) — POST import", () => {
     );
 
     // The demo project is 24fps; import must never change project_rate
-    // (the old bug: it took the file's own rate instead — see the M7b
+    // (the old bug: it took the file's own rate instead — see the
     // findings' witness: 240@24 vs 300@30, same 10s, called a 60-frame
     // extension).
     const projectRow = (await getDb().select().from(projects))[0];
@@ -379,9 +379,9 @@ describe("C4 (4) — POST import", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// POST export — docs/09 #4
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// POST export — #4
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST export", () => {
   it("HLD#4: export seals a dirty branch, ties the file to that head, and round-trips", async () => {
@@ -398,7 +398,7 @@ describe("C4 (4) — POST export", () => {
       ),
     ) as { otioJson: unknown; commitId: string; name: string };
 
-    // The seal ran with the name docs/09 #4 fixes verbatim…
+    // The seal ran with the name #4 fixes verbatim…
     expect(data.name).toBe("Auto — before export");
     expect(await commitCount()).toBe(before + 1);
     expect((await view(s)).pendingCount).toBe(0);
@@ -409,14 +409,14 @@ describe("C4 (4) — POST export", () => {
     expect(head.name).toBe("Auto — before export");
 
     // The locked shape has mediaWarnings OPTIONAL; there is no honest signal
-    // for it in V1 (docs/09 #12/#13), so the field is omitted entirely.
+    // for it in ( #12/#13), so the field is omitted entirely.
     expect(Object.keys(data as object).sort()).toEqual([
       "commitId",
       "name",
       "otioJson",
     ]);
 
-    // O10-style structural round-trip through the real importer.
+    // -style structural round-trip through the real importer.
     const back = importOtio(data.otioJson);
     expect(back.ok).toBe(true);
     if (!back.ok) return;
@@ -449,14 +449,14 @@ describe("C4 (4) — POST export", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// POST agent/simulate — docs/09 #3 + C8
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// POST agent/simulate — #3 +
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST agent/simulate", () => {
   /**
-   * C8's script places clip D at 0:20 on the video track (frames 480-600 @
-   * 24fps). The M7b fixture fix shortened clip C to 18s-20s (frames
+   * 's script places clip D at 0:20 on the video track (frames 480-600 @
+   * 24fps). The fixture fix shortened clip C to 18s-20s (frames
    * 432-480) so the untouched fixture no longer overlaps D there — the
    * choreography's step 2 (branch "tighten-intro" off pristine main, no
    * other edits before the agent runs) now matches the locked script
@@ -577,9 +577,9 @@ describe("C4 (4) — POST agent/simulate", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// POST demo/reset — docs/09 #5 (DISCARD)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// POST demo/reset — #5 (DISCARD)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (4) — POST demo/reset", () => {
   it("HLD#5: the project row and cookie survive, the state is the fresh fixture", async () => {
@@ -633,9 +633,9 @@ describe("C4 (4) — POST demo/reset", () => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// GET diff — C4 (2) + C1
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// GET diff — (2) +
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("C4 (2) — GET diff", () => {
   it("C1: the engine's sentences come back verbatim, 1:1 with entries", async () => {

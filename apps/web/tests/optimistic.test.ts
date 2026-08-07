@@ -71,7 +71,7 @@ function fixtureTimeline(): Timeline {
   };
 }
 
-/** One command per opt-in verb, table-driven per docs/12 T1's pattern. */
+/** One command per opt-in verb, table-driven per 's pattern. */
 const COMMANDS: { name: string; command: Command }[] = [
   { name: "move", command: { op: "move", clipId: "B", newStart: t(200) } },
   {

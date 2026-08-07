@@ -43,7 +43,7 @@ export const otioClip = (options: {
   duration: number;
   rate: number;
   targetUrl: string;
-  /** null = the exporting tool never wrote `available_range` (O2). */
+  /** null = the exporting tool never wrote `available_range` . */
   available?: { start: number; duration: number; rate: number } | null;
   schema?: string;
 }): Json => ({
@@ -65,7 +65,7 @@ export const otioClip = (options: {
   metadata: {},
 });
 
-/** O5 — a FrameBranch text clip travels in `metadata.framebranch`. */
+/** — a FrameBranch text clip travels in `metadata.framebranch`. */
 export const otioTextClip = (options: {
   duration: number;
   rate: number;
@@ -111,7 +111,7 @@ export const otioTransition = (): Json => ({
 export const otioTrack = (options: {
   kind: "Video" | "Audio";
   children: Json[];
-  /** O5 — set for a FrameBranch text track. */
+  /** — set for a FrameBranch text track. */
   framebranchText?: boolean;
   schema?: string;
 }): Json => ({
@@ -126,7 +126,7 @@ export const otioTrack = (options: {
 
 export const otioTimeline = (options: {
   tracks: Json[];
-  /** Present → O6 rule (1); its VALUE is always ignored. */
+  /** Present → rule (1); its VALUE is always ignored. */
   globalStart?: { value: number; rate: number };
 }): Json => ({
   OTIO_SCHEMA: "Timeline.1",
@@ -151,7 +151,7 @@ export const otioTimeline = (options: {
 });
 
 /**
- * H8's positive half: ONE fully literal document that uses all nine
+ * 's positive half: ONE fully literal document that uses all nine
  * whitelisted labels — Timeline.1, Stack.1, Track.1, Clip.1, Gap.1,
  * TimeRange.1, RationalTime.1, ExternalReference.1, MissingReference.1.
  */

@@ -82,7 +82,7 @@ export function checkInvariants(timeline: Timeline): InvariantViolation[] {
           });
         }
 
-        // 5. sourceRange.duration === timelineRange.duration (no speed-change in V1)
+        // 5. sourceRange.duration === timelineRange.duration (no speed-change in )
         if (src.duration.value !== tl.duration.value) {
           violations.push({
             kind: "source-timeline-duration-mismatch",
@@ -90,7 +90,7 @@ export function checkInvariants(timeline: Timeline): InvariantViolation[] {
           });
         }
 
-        // 2. source range inside the file — O1: an image has no length
+        // 2. source range inside the file — : an image has no length
         // (durationInSource === null = unbounded), so the check skips it.
         const media = mediaById.get(clip.mediaRefId);
         if (media && media.durationInSource !== null) {

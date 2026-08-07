@@ -24,7 +24,7 @@ const seed =
     0x4d345f54,
     0,
   ) >>> 0;
-// Each chunk runs its cases synchronously inside one `it()`, so the chunk's
+// Each chunk runs its cases synchronously inside one `it`, so the chunk's
 // wall-clock IS how long the Vitest worker goes without answering an RPC —
 // cross 60s and Vitest kills it with `Timeout calling "onTaskUpdate"`, even
 // though every case passed.

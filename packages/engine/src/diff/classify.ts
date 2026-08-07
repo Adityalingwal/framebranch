@@ -43,7 +43,7 @@ function classifyPair(
     rawClip("kind", refIsText ? "text" : "media", curIsText ? "text" : "media");
   }
 
-  // #16 — track changed (cross-track move is V1 OUT; out-of-family)
+  // #16 — track changed (cross-track move is OUT; out-of-family)
   if (ref.track.id !== cur.track.id) {
     rawClip("track", ref.track.id, cur.track.id);
   }
@@ -123,7 +123,7 @@ function classifyPair(
     );
   }
 
-  // #7–#12 — properties, defaults materialized (B3.1)
+  // #7–#12 — properties, defaults materialized
   const rp = materialized(refClip);
   const cp = materialized(curClip);
   const prop = (
@@ -217,7 +217,7 @@ function classifyFamily(
   }
 
   // Existence: the left-most descendant always carries the base id
-  // (B1.1 left-survives), so a missing base id = that content removed.
+  // ( left-survives), so a missing base id = that content removed.
   if (!baseInB) {
     pushAtBase({
       rule: 14,

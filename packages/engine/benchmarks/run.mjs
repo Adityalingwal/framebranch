@@ -12,9 +12,9 @@ import {
   generateConflictingPair,
 } from "./generator.mjs";
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Dynamic engine imports (ESM → TS source via vitest/register or tsx)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 const enginePath = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -22,9 +22,9 @@ const enginePath = join(
 );
 const { computeDiff, startMerge, applyCommand } = await import(enginePath);
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Measurement utilities
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 const WARMUP_RUNS = 3;
 const MEASURE_RUNS = 10;
@@ -34,8 +34,8 @@ const MEASURE_RUNS = 10;
  * Returns median of MEASURE_RUNS after WARMUP_RUNS warm-ups.
  *
  * @param {string} label
- * @param {() => void} fn
- * @returns {{ label: string, medianMs: number, runs: number[] }}
+ * @param { => void} fn
+ * @returns {{ label: string, medianMs: number, runs: number }}
  */
 function measure(label, fn) {
   // Warm up (JIT compilation + GC stabilization)
@@ -74,9 +74,9 @@ function formatMs(ms) {
   return `${(ms / 1000).toFixed(2)} s`;
 }
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Fixture generation
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 console.log("T4 Benchmark — Generating fixtures...\n");
 
@@ -126,8 +126,8 @@ for (const [name, { clipCount, seed }] of Object.entries(fixtures)) {
   console.log(
     `  Generating ${name} conflict-heavy pair (${clipCount} clips)...`,
   );
-  // Built from the STANDARD timeline (not split-heavy) — T4 "conflict
-  // fixtures" gap-fix, Option A1 (2026-08-05): same clips, same atom,
+  // Built from the STANDARD timeline (not split-heavy) — "conflict
+  // fixtures" gap-fix, (2026-08-05): same clips, same atom,
   // different values, so every edited clip is a guaranteed conflict.
   conflictingPairs[name] = generateConflictingPair(
     timelines[name],
@@ -151,15 +151,15 @@ for (const [name, { clipCount, seed }] of Object.entries(fixtures)) {
   };
 }
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Run benchmarks
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 console.log("\nRunning benchmarks...\n");
 
 const results = [];
 
-// --- 1. computeDiff ---
+// - - 1. computeDiff - -
 for (const scale of ["1k", "10k"]) {
   const base = timelines[scale];
   const edited = editedTimelines[scale].ours;
@@ -266,7 +266,7 @@ for (const scale of ["1k", "10k"]) {
   console.log(`  ${result.label}: ${formatMs(result.medianMs)}`);
 }
 
-// --- 4. Single-verb apply (trim, split, move) ---
+// - - 4. Single-verb apply (trim, split, move) - -
 {
   const tl = generateTimeline(100, 555);
   const clips = tl.tracks.flatMap((track) => track.clips);
@@ -314,7 +314,7 @@ for (const scale of ["1k", "10k"]) {
   }
 }
 
-// --- 5. Restore round-trip (snapshot + replay ≤10 steps) ---
+// - - 5. Restore round-trip (snapshot + replay ≤10 steps) - -
 {
   const baseRestore = generateTimeline(100, 777);
   const commands = [];
@@ -358,9 +358,9 @@ for (const scale of ["1k", "10k"]) {
   console.log(`  ${restoreResult.label}: ${formatMs(restoreResult.medianMs)}`);
 }
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Generate REPORT.md
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 console.log("\nGenerating REPORT.md...\n");
 

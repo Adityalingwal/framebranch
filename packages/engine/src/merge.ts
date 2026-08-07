@@ -1,5 +1,5 @@
 /**
- * M4 — pure three-way merge engine.
+ * pure three-way merge engine.
  *
  * The engine compares net state, refines split families by lineage span,
  * composes independent atoms, withholds unresolved participants, and replays
@@ -97,8 +97,8 @@ export type MergeResult = MergeSuccess | MergeFailure;
 export type FinalizeResult = { ok: true; timeline: Timeline } | MergeFailure;
 
 /**
- * M1: private call-shape aliases — the three functions' parameter shapes are
- * public through their signatures (C7); the aliases themselves are not part
+ * private call-shape aliases — the three functions' parameter shapes are
+ * public through their signatures ; the aliases themselves are not part
  * of the locked exported boundary-type list.
  */
 type StartMergeInput = {
@@ -117,7 +117,7 @@ type FinalizeCheckInput = StartMergeInput & {
   choices: MergeChoices;
 };
 
-/** Package-private, lossless T3 delta. It is deliberately not re-exported. */
+/** Package-private, lossless delta. It is deliberately not re-exported. */
 export type MergeDelta = {
   baseFingerprint: string;
   projectRate?: number;
@@ -201,7 +201,7 @@ const FIELD_ORDER: readonly MergeField[] = [
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
 /**
- * I2: canonical serialization — objects with the same fields in a different
+ * canonical serialization — objects with the same fields in a different
  * insertion order (e.g. position `{x,y}` vs `{y,x}`) must fingerprint equal,
  * matching the verb engine's field-by-field equality. Arrays keep order.
  */
@@ -223,7 +223,7 @@ const canonicalize = (value: unknown): unknown => {
 const fingerprint = (value: unknown): string =>
   JSON.stringify(canonicalize(value));
 
-/** T3 private lossless delta constructor. */
+/** private lossless delta constructor. */
 export function makeDelta(base: Timeline, target: Timeline): MergeDelta {
   const delta: MergeDelta = { baseFingerprint: fingerprint(base) };
   if (base.projectRate !== target.projectRate)
@@ -237,7 +237,7 @@ export function makeDelta(base: Timeline, target: Timeline): MergeDelta {
   return delta;
 }
 
-/** T3 private lossless delta application. */
+/** private lossless delta application. */
 export function applyDelta(base: Timeline, delta: MergeDelta): Timeline {
   if (fingerprint(base) !== delta.baseFingerprint) {
     throw new Error("MergeDelta base mismatch");
@@ -433,7 +433,7 @@ function projectedOuterCover(
 }
 
 /**
- * N1: refinement cut points come ONLY from actual piece boundaries carried
+ * refinement cut points come ONLY from actual piece boundaries carried
  * in a family's state lineage spans — interior boundaries between pieces,
  * never the family's outer bounds and never numbers parsed out of ID strings.
  */
@@ -749,11 +749,11 @@ function toClip(
 }
 
 /**
- * N1: a refined segment whose span exactly matches a surviving branch piece
+ * a refined segment whose span exactly matches a surviving branch piece
  * keeps that piece's ACTUAL ID. Only a genuinely refined piece (created by
  * unioning different cuts) gets an ID, and it is exactly the ID the split
  * verb itself would have minted for that cut: the covering piece's ID for a
- * left remainder, `<coveringId>@<cut>` for a right piece (B1.1 formula).
+ * left remainder, `<coveringId>@<cut>` for a right piece ( formula).
  * The formula + reserved `@` namespace make collisions impossible, so no
  * merge-time collision handling exists.
  */
@@ -802,12 +802,12 @@ function refinedPieceId(
 }
 
 /**
- * N1: final piece IDs, assigned left to right. A refined segment keeps the
+ * final piece IDs, assigned left to right. A refined segment keeps the
  * exact-span surviving branch piece ID when one exists; a genuinely refined
  * piece gets exactly the split-verb formula from its covering piece. The
  * same birth ID can carry DIFFERENT spans on the two branches (trims moved
  * it), so assignment is uniqueness-aware in span order — the parent ID
- * belongs to the leftmost surviving content (B1.1 left-survives) and a
+ * belongs to the leftmost surviving content ( left-survives) and a
  * later stale exact-match falls through to that segment's next lawful
  * candidate (fuzz witness: seed 1295277908 case 157).
  */
@@ -967,8 +967,8 @@ function mergeFamily(
     );
   }
 
-  // B1.2(5), N2 Option A: a trim that FULLY erases a split piece edited on
-  // the other branch is a PIECE-scoped B2 — only the erased+edited piece is
+  // (5), : a trim that FULLY erases a split piece edited on
+  // the other branch is a PIECE-scoped — only the erased+edited piece is
   // governed by it; every other family piece composes normally. Detection
   // runs before outer coverage composition would hide the erased region.
   const eraseOverrides: Array<{
@@ -1067,7 +1067,7 @@ function mergeFamily(
     return chooseFamily(choice, baseFamily, oursFamily, theirsFamily);
   }
 
-  // An answered clip/base erase-B2 keeps its piece's region in the result
+  // An answered clip/base erase- keeps its piece's region in the result
   // even though the erasing side's coverage bound excludes it.
   let coverStart = mergedStart;
   let coverEnd = mergedEnd;
@@ -1271,7 +1271,7 @@ function composeTimeline(ctx: MergeContext): Timeline {
     else byTrack.set(family.trackId, familyClips);
   }
   // Key order matches the Timeline construction order used by the verbs so
-  // a no-change merge is byte-identical to its input (N1 W1).
+  // a no-change merge is byte-identical to its input .
   return {
     projectRate: ctx.base.projectRate,
     tracks: ctx.base.tracks.map((track) => ({
@@ -1457,7 +1457,7 @@ function shiftClip(timeline: Timeline, clipId: string): Timeline {
 }
 
 /**
- * C1: B3 `base` resolves each participant by lineage family, not raw clip
+ * `base` resolves each participant by lineage family, not raw clip
  * ID. A family present in the base is restored WHOLE to its exact base
  * state (all draft clips of that rootId removed first — idempotent); only a
  * genuinely base-absent add is removed as new content.
@@ -1563,7 +1563,7 @@ function processOverlaps(ctx: MergeContext, input: Timeline): Timeline {
         !appliedStates.has(`${conflict.public.conflictId}\u0000${state}`),
     );
     if (!answered) {
-      // I1: every still-unanswered overlap participant is withheld from the
+      // every still-unanswered overlap participant is withheld from the
       // returned safe draft on EVERY recompute, regardless of how many
       // unrelated permanent answers already exist.
       const pendingIds = new Set<string>();
@@ -1622,7 +1622,7 @@ function recompute(
   theirsInput: Timeline,
   choices: MergeChoices,
 ): MergeResult {
-  // Exercise the private lossless delta boundary used by merge and T3.
+  // Exercise the private lossless delta boundary used by merge and .
   const base = clone(baseInput);
   const ours = applyDelta(base, makeDelta(base, oursInput));
   const theirs = applyDelta(base, makeDelta(base, theirsInput));

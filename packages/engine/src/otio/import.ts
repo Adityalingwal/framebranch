@@ -7,7 +7,7 @@ import { type AnyClip, OtioAbortError, childrenOf, convertTimeRange, framebranch
 
 type ImportCtx = {
   rate: number;
-  /** key = JSON.stringify([code, detail]) → grouped entry (O8). */
+  /** key = JSON.stringify([code, detail]) → grouped entry . */
   warnings: Map<string, ImportWarning>;
   mediaByUrl: Map<string, MediaRef>;
   mediaRefs: MediaRef[];
@@ -15,9 +15,9 @@ type ImportCtx = {
 };
 
 /**
- * Import is always a fresh start (docs/09 #10) — every id is minted here.
+ * Import is always a fresh start ( #10) — every id is minted here.
  * Deterministic per-document counters: same file in → same ids out, and the
- * ids are `@`-free, so the B1.1 split namespace stays reserved.
+ * ids are `@`-free, so the split namespace stays reserved.
  */
 function mint(ctx: ImportCtx, prefix: string): string {
   const next = (ctx.counters.get(prefix) ?? 0) + 1;
@@ -37,12 +37,12 @@ function warn(ctx: ImportCtx, code: ImportWarningCode, detail: string): void {
   ctx.warnings.set(key, { code, detail, count: 1 });
 }
 
-// ---------------------------------------------------------------------------
-// O6 — project rate
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// project rate
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /**
- * O6 (2): the rate of the FIRST clip in document order. Deliberately
+ * (2): the rate of the FIRST clip in document order. Deliberately
  * tolerant — it only reads; every real validation (and every abort) is the
  * main walk's job, so a broken document reports its error exactly once.
  */
@@ -50,9 +50,9 @@ function firstClipRate(trackNodes: readonly unknown[]): number | null {
   for (const trackNode of trackNodes) {
     if (!isObject(trackNode)) continue;
     // Only real Tracks: a nested Stack at this level is skipped by the walk
-    // (O7b), so taking the project rate from a clip inside it would let a
+    // so taking the project rate from a clip inside it would let a
     // discarded clip decide the rate every KEPT value then converts into.
-    // [F6, 2026-08-05 review.]
+    // [, 2026-08-05 review.]
     const trackSchema = trackNode.OTIO_SCHEMA;
     if (typeof trackSchema !== "string" || !trackSchema.startsWith("Track.")) {
       continue;
@@ -76,12 +76,12 @@ function firstClipRate(trackNodes: readonly unknown[]): number | null {
   return null;
 }
 
-// ---------------------------------------------------------------------------
-// O9 — media kind from the target_url extension
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// media kind from the target_url extension
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /**
- * O9: `.png .jpg .jpeg .webp` → image; otherwise the track decides. An
+ * `.png .jpg .jpeg .webp` → image; otherwise the track decides. An
  * extension-less URL is treated as VIDEO on purpose — the safe side,
  * because the source-bounds invariant then still applies (documented
  * assumption, IMPLEMENTATION-NOTES 2026-08-04).
@@ -95,9 +95,9 @@ function mediaKindFromUrl(url: string, trackKind: TrackKind): MediaKind {
   return trackKind === "audio" ? "audio" : "video";
 }
 
-// ---------------------------------------------------------------------------
-// O5 — text clip payload carried in metadata.framebranch
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// text clip payload carried in metadata.framebranch
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 function parseTextContent(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
@@ -142,7 +142,7 @@ function parseTextStyle(raw: unknown): TextStyle | null {
 }
 
 /**
- * O5/O10 [AMENDED 2026-08-05, owner call] — clip properties travel in the
+ * / [AMENDED 2026-08-05, owner call] — clip properties travel in the
  * framebranch metadata slot, the same door text clips already use.
  *
  * OTIO core has no volume/opacity/scale/position field, so no other tool can
@@ -189,11 +189,11 @@ function parseProperties(
 }
 
 /**
- * Which properties each kind may carry — the N1 6x4 applicability matrix
- * (A3.6), the same table `verbs.ts` enforces. Import must not mint a state
+ * Which properties each kind may carry — the 6x4 applicability matrix
+ * the same table `verbs.ts` enforces. Import must not mint a state
  * no verb could produce: an image with a volume would fail
  * E_PROPERTY_NOT_APPLICABLE from applyCommand, yet diff/merge would go on
- * comparing it as a real field. [F3, 2026-08-05 review.]
+ * comparing it as a real field. [, 2026-08-05 review.]
  */
 const PROPERTY_KEYS_BY_KIND = {
   video: ["volume", "opacity", "scale", "position"],
@@ -205,16 +205,16 @@ const PROPERTY_KEYS_BY_KIND = {
   readonly ("volume" | "opacity" | "scale" | "position")[]
 >;
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // importOtio (public 6/7)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 /**
- * `targetRate` — M7b: importing into a project that already has a rate
+ * `targetRate` — : importing into a project that already has a rate
  * (a re-import, not the project's first) must land ON that rate, not
- * whatever the new file declares (O6 is for establishing a rate from
- * scratch). When given, it skips O6 entirely and every value converts to
- * it — same single door, same `convertRate()`, just caller-supplied.
+ * whatever the new file declares ( is for establishing a rate from
+ * scratch). When given, it skips entirely and every value converts to
+ * it — same single door, same `convertRate`, just caller-supplied.
  */
 export function importOtio(
   otioJson: unknown,
@@ -260,7 +260,7 @@ function runImport(otioJson: unknown, targetRate?: number): ImportResult {
     counters: new Map(),
   };
 
-  // O6 — (1) global_start_time's RATE (its value is ignored: our timelines
+  // (1) global_start_time's RATE (its value is ignored: our timelines
   // always start at 0), (2) else the first clip's rate, (3) else 24 + warning.
   // Skipped entirely when the caller supplies `targetRate` (a re-import
   // landing on an existing project's rate, not establishing a fresh one).
@@ -295,7 +295,7 @@ function runImport(otioJson: unknown, targetRate?: number): ImportResult {
   // The engine's contract is that a Timeline in hand is always valid. Only
   // an internally inconsistent document can get here (e.g. a source_range
   // outside its own available_range) — that is malformed input, not a clip
-  // to silently drop beyond the locked skip rules (O2/O7b).
+  // to silently drop beyond the locked skip rules (/).
   const violations = checkInvariants(timeline);
   if (violations.length > 0) {
     invalid(
@@ -308,7 +308,7 @@ function runImport(otioJson: unknown, targetRate?: number): ImportResult {
   return { ok: true, timeline, warnings: [...ctx.warnings.values()] };
 }
 
-/** O5 — a track is ours-text if it says so in metadata; else Video/Audio. */
+/** — a track is ours-text if it says so in metadata; else Video/Audio. */
 function importTrackKind(track: Record<string, unknown>): TrackKind | null {
   const fb = framebranchMeta(track);
   if (fb && fb.kind === "text") return "text";
@@ -321,7 +321,7 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
   const node = requireObject(trackNode, "track");
   const schema = requireSchema(node, "track");
   if (schema.name !== "Track") {
-    // O7(b) — a non-Track child of the top-level Stack (e.g. a nested
+    // (b) — a non-Track child of the top-level Stack (e.g. a nested
     // Stack): skip + warning, import carries on.
     warn(ctx, "skipped-unsupported", schema.raw);
     return null;
@@ -345,7 +345,7 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
     const childSchema = requireSchema(child, "track child");
 
     if (childSchema.name === "Gap") {
-      // O4 — a gap creates NOTHING; it only moves the cursor.
+      // a gap creates NOTHING; it only moves the cursor.
       const gapRange = convertTimeRange(
         parseTimeRange(child.source_range, "gap source_range"),
         ctx.rate,
@@ -355,10 +355,10 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
     }
 
     if (childSchema.name !== "Clip") {
-      // O4/O7(b) — Transition.1, effects, a nested Stack, …: skip + warning.
+      // /(b) — Transition.1, effects, a nested Stack, …: skip + warning.
       // [AMENDED 2026-08-05, owner call] The cursor advances by the skipped
       // item's OWN duration when it has one. A Transition carries no
-      // source_range, so it still does not move the cursor (O4's locked
+      // source_range, so it still does not move the cursor ('s locked
       // rule — it consumes no track time). But a nested Stack DOES occupy
       // its span; not advancing there pulled every later clip left.
       // One rule covers both: "advance by whatever span the item declares".
@@ -366,7 +366,7 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
       // `source_range: null` is what real serializers write for an untrimmed
       // Item — it means "no range of its own", exactly like the field being
       // absent. Treating null as present aborted the whole import on the very
-      // shape O7(b) says to skip past.
+      // shape (b) says to skip past.
       if (child.source_range !== undefined && child.source_range !== null) {
         const skippedRange = convertTimeRange(
           parseTimeRange(child.source_range, `${childSchema.raw} source_range`),
@@ -379,7 +379,7 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
 
     const clip = importClip(ctx, child, kind, cursor);
     // A clip always occupies its own span in OTIO, even when we skip it —
-    // so the cursor advances either way (O2/O7b skips must not shift the
+    // so the cursor advances either way (/ skips must not shift the
     // rest of the track).
     cursor += clip.duration;
     if (clip.clip) clips.push(clip.clip);
@@ -401,7 +401,7 @@ function importClip(
   const duration = sourceRange.duration.value;
 
   if (duration <= 0) {
-    // A4 (3) — zero/negative-duration clip on import: skip + itemized warning.
+    // (3) — zero/negative-duration clip on import: skip + itemized warning.
     warn(ctx, "skipped-unsupported", "zero-duration clip");
     return { clip: null, duration: Math.max(duration, 0) };
   }
@@ -429,13 +429,13 @@ function importClip(
   const mediaSchema = requireSchema(media, "media_reference");
 
   if (mediaSchema.name === "MissingReference") {
-    // O5 — someone else's placeholder clip: no media, no framebranch
+    // someone else's placeholder clip: no media, no framebranch
     // metadata, nothing we can honestly represent.
     warn(ctx, "skipped-unknown-clip", mediaSchema.raw);
     return { clip: null, duration };
   }
   if (mediaSchema.name !== "ExternalReference") {
-    // O7(b) — e.g. ImageSequenceReference.1, GeneratorReference.1.
+    // (b) — e.g. ImageSequenceReference.1, GeneratorReference.1.
     warn(ctx, "skipped-unsupported", mediaSchema.raw);
     return { clip: null, duration };
   }
@@ -514,12 +514,12 @@ function importMediaClip(
 
   const kind = mediaKindFromUrl(url, trackKind);
 
-  // N1 track mapping (A3.6): an image is visual, so it lives on a VIDEO
+  // track mapping : an image is visual, so it lives on a VIDEO
   // track — never on an audio or text lane. `addClip` refuses that placement
   // with E_TRACK_KIND_MISMATCH, and the invariant sweep does not cover
   // track-kind, so without this check import could mint a timeline no verb
   // could build. Same non-coercion rule already used for text/media
-  // mismatches: skip the clip, never guess the track. [F4, 2026-08-05.]
+  // mismatches: skip the clip, never guess the track. [, 2026-08-05.]
   if (TRACK_KIND_FOR_MEDIA[kind] !== trackKind) {
     warn(ctx, "skipped-unknown-clip", `${kind} media on a ${trackKind} track`);
     return null;
@@ -539,8 +539,8 @@ function importMediaClip(
       ? null
       : parseTimeRange(media.available_range, "available_range");
 
-  // O1 — image = "unbounded": durationInSource is null, exactly and only
-  // for images. O2 — video/audio without a length is not importable.
+  // image = "unbounded": durationInSource is null, exactly and only
+  // for images. — video/audio without a length is not importable.
   let durationInSource: RationalTime | null;
   if (kind === "image") {
     durationInSource = null;
@@ -551,7 +551,7 @@ function importMediaClip(
     durationInSource = convertRate(rawAvailable.duration, ctx.rate);
   }
 
-  // A2.1 amendment (2026-08-05) — OTIO source coordinates live inside the
+  // amendment (2026-08-05) — OTIO source coordinates live inside the
   // media's OWN range, which need not start at 0 (embedded timecode). Engine
   // coordinates always start at 0, so the door normalizes: subtract the
   // file's start here, add it back on export. Ignoring it rejected valid
@@ -575,7 +575,7 @@ function importMediaClip(
       kind,
       url,
       // OTIO carries no fingerprint; hash is an integration-ready field
-      // that V1 flows never read (A2.1).
+      // that flows never read .
       hash: "",
       // The file's native fps: the media's own range when it has one,
       // otherwise the rate the clip's source window was written in.

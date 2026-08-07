@@ -18,7 +18,7 @@ export {
 
 /**
  * Apply one PUBLIC command to a timeline. Pure function: returns a typed
- * error, a no-change success (A4), or the new timeline + inverse.
+ * error, a no-change success , or the new timeline + inverse.
  */
 export function applyCommand(
   timeline: Timeline,
@@ -29,7 +29,7 @@ export function applyCommand(
 }
 
 /**
- * Engine-internal apply: additionally accepts the restore form (A3.1c)
+ * Engine-internal apply: additionally accepts the restore form
  * so inverse (undo) step lists can be executed. NOT exported via index.
  */
 export function applyEngineCommand(

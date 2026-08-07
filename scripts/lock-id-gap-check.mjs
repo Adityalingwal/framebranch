@@ -23,13 +23,13 @@ const EXCLUDED = {
   C5: "schemaVersion was CUT entirely (OUT, documented). The absence of a concept cannot be tested; what replaced it (no version column on snapshots) is asserted by C3's schema tests.",
 };
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 function read(path) {
   return readFileSync(join(ROOT, path), "utf8");
 }
 
-/** docs/11: every locked outcome starts a list item with `- **<ID>`. */
+/** : every locked outcome starts a list item with `- **<ID>`. */
 function lldLockIds(text) {
   const ids = new Set();
   for (const match of text.matchAll(/^- \*\*([A-Z]{1,2}\d*(?:\.\d+)?)\b/gm)) {
@@ -38,7 +38,7 @@ function lldLockIds(text) {
   return ids;
 }
 
-/** docs/12: the H-group list items, and the G-group inside the F11 block. */
+/** : the H-group list items, and the G-group inside the block. */
 function planLockIds(text) {
   const ids = new Set();
   for (const match of text.matchAll(/^- \*\*(H\d+)\b/gm)) ids.add(match[1]);
@@ -64,7 +64,7 @@ function testNames() {
 
 function isCovered(id, names) {
   // Preceded by nothing, whitespace, `(` `/` `+` or `,`; followed by
-  // anything that is not a digit or a dot (so `A3` never matches `A3.1`).
+  // anything that is not a digit or a dot (so `` never matches ``).
   const escaped = id.replace(/\./g, "\\.");
   const pattern = new RegExp(`(^|[\\s(/+,])${escaped}([^0-9.]|$)`);
   return names.some((entry) => pattern.test(entry.name));

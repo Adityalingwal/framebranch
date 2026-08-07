@@ -3,9 +3,9 @@ import type { RationalTime } from "./time";
 
 export type { RationalTime };
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Core time and media types
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 export type TimeRange = {
   start: RationalTime;
@@ -24,9 +24,9 @@ export type MediaRef = {
   sourceStartInFile?: RationalTime;
 };
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Clip types
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 export type Position = { x: number; y: number };
 
@@ -73,9 +73,9 @@ export type TextClip = {
   lineage: Lineage;
 };
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Track and timeline
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 export type TrackKind = "video" | "audio" | "text";
 
@@ -114,9 +114,9 @@ export type EngineError = {
   message: string; // human-readable; code is the machine contract
 };
 
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Commands
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 export type AddClipMediaCommand = {
   op: "addClip";
@@ -195,9 +195,9 @@ export type RestoreClipCommand = {
 
 export type EngineCommand = Command | RestoreClipCommand;
 
-// ---------------------------------------------------------------------------
-// applyCommand result (engine-level; the C4 HTTP envelope is server-side)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// applyCommand result (engine-level; the HTTP envelope is server-side)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 export type ApplyOptions = {
   mintId?: () => string;

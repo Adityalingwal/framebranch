@@ -1,5 +1,5 @@
 /**
- * T4 — Synthetic timeline generator for benchmarks.
+ * Synthetic timeline generator for benchmarks.
  *
  * Creates valid, overlap-free timelines at configurable clip counts with
  * a mix of video, audio, and text tracks. Also provides a "split-heavy"
@@ -47,7 +47,7 @@ class Rng {
 
   /**
    * @template T
-   * @param {readonly T[]} values
+   * @param {readonly T} values
    * @returns {T}
    */
   pick(values) {

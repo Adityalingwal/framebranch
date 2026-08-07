@@ -1,4 +1,4 @@
-// Merge endpoint tests (POST merge/resolve/abort) + G4: merge finalize when head has moved → E_STALE_HEAD.
+// Merge endpoint tests (POST merge/resolve/abort) + : merge finalize when head has moved → E_STALE_HEAD.
 // Real Postgres. Heads moved through the normal commit path — a faked race proves nothing.
 import { eq, isNotNull } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -154,13 +154,13 @@ describe("C4 (4) — POST merge", () => {
     const data = expectOk(await startMergeCall(s)) as MergeDone;
     expect(data.done).toBe(true);
 
-    // C3: parent2_id is set — and ONLY on this commit.
+    // parent2_id is set — and ONLY on this commit.
     const merges = await mergeCommits();
     expect(merges).toHaveLength(1);
     expect(merges[0].id).toBe(data.mergeCommitId);
     expect(merges[0].parentId).toBe(headInto);
     expect(merges[0].parent2Id).toBe(headFrom);
-    // docs/09 #9 + Q1: a merge commit is ALWAYS a full snapshot.
+    // #9 + : a merge commit is ALWAYS a full snapshot.
     expect(merges[0].snapshotDistance).toBe(0);
 
     // Nothing is left behind: the two-phase flow's phase 2 was empty.
@@ -202,7 +202,7 @@ describe("C4 (4) — POST merge", () => {
         s,
       ),
     ) as Resolved;
-    // B3.4: the count stays honest — one answered, one still open.
+    // the count stays honest — one answered, one still open.
     expect(first.counts.resolved).toBe(1);
     expect(first.counts.remaining).toBe(1);
     expect(first.counts.total).toBe(2);
@@ -226,7 +226,7 @@ describe("C4 (4) — POST merge", () => {
     const merges = await mergeCommits();
     expect(merges).toHaveLength(1);
     expect(merges[0].id).toBe(last.mergeCommitId);
-    // C3: "finalize/abort par YE ROW delete" — in the same transaction.
+    // "finalize/abort par YE ROW delete" — in the same transaction.
     expect(await attemptRows()).toHaveLength(0);
   });
 
@@ -299,7 +299,7 @@ describe("C4 (4) — POST merge", () => {
 
     expect(aborted.aborted).toBe(true);
     expect(await attemptRows()).toHaveLength(0);
-    // DISCARD: no commit is created at all (docs/09 #5).
+    // DISCARD: no commit is created at all ( #5).
     expect(await commitCount()).toBe(before);
     expect(await headOf("main")).toBe(headMain);
     expect(await headOf(AGENT)).toBe(headAgent);
@@ -382,14 +382,14 @@ describe("C4 (4) — POST merge", () => {
 
     expect(retry).toEqual(first);
     const rows = await attemptRows();
-    // B3.3's parchi has exactly ONE answer in it, not two.
+    // 's parchi has exactly ONE answer in it, not two.
     expect(Object.keys(rows[0].choices as object)).toHaveLength(1);
   });
 });
 
-// ---------------------------------------------------------------------------
-// G4 — docs/12 T2 (F11): the both-parents CAS at finalize (docs/09 #8)
-// ---------------------------------------------------------------------------
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// : the both-parents CAS at finalize ( #8)
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 describe("G-group — merge finalize CAS (docs/12 T2 F11)", () => {
   /**

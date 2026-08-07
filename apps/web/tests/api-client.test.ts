@@ -78,7 +78,7 @@ describe("api-client — envelope + error mapping", () => {
   });
 
   it("mutationErrorMessage: an ApiClientError's already-friendly message passes through; anything else is generic", () => {
-    // M8a review finding: mutation onError handlers use this to show a
+    // review finding: mutation onError handlers use this to show a
     // toast — regression-guard the two cases it must handle.
     expect(
       mutationErrorMessage(new ApiClientError("E_BRANCH_EXISTS", "That name is taken.")),
