@@ -1,6 +1,4 @@
-/**
- * POST /api/ops tests — C4 (3) + the F9 amendment + A4.
- */
+
 
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
