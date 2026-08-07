@@ -165,7 +165,7 @@ export function computeDiff(a: Timeline, b: Timeline): DiffResult {
     }
   }
 
-  // MATCH — ID-only + khandaan grouping ( + ).
+  // MATCH — ID-only + khandaan grouping.
   const aClips = indexClips(a, trackIndexById);
   const bClips = indexClips(b, trackIndexById);
 

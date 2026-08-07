@@ -98,7 +98,7 @@ export type FinalizeResult = { ok: true; timeline: Timeline } | MergeFailure;
 
 /**
  * private call-shape aliases — the three functions' parameter shapes are
- * public through their signatures ; the aliases themselves are not part
+ * public through their signatures; the aliases themselves are not part
  * of the locked exported boundary-type list.
  */
 type StartMergeInput = {
@@ -753,7 +753,7 @@ function toClip(
  * keeps that piece's ACTUAL ID. Only a genuinely refined piece (created by
  * unioning different cuts) gets an ID, and it is exactly the ID the split
  * verb itself would have minted for that cut: the covering piece's ID for a
- * left remainder, `<coveringId>@<cut>` for a right piece ( formula).
+ * left remainder, `<coveringId>@<cut>` for a right piece (split formula).
  * The formula + reserved `@` namespace make collisions impossible, so no
  * merge-time collision handling exists.
  */

@@ -217,7 +217,7 @@ function classifyFamily(
   }
 
   // Existence: the left-most descendant always carries the base id
-  // ( left-survives), so a missing base id = that content removed.
+  // left-survives, so a missing base id = that content removed.
   if (!baseInB) {
     pushAtBase({
       rule: 14,

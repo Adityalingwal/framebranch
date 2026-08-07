@@ -2,7 +2,7 @@ import type { Clip, PropertyValue, TextClip, Track } from "../types";
 
 /**
  * All numbers in entries are integer frame counts at `a.projectRate`
- * ( integer world; `b` carries the same rate unless the input is
+ * integer world; `b` carries the same rate unless the input is
  * out-of-family, which #16 reports).
  */
 
@@ -40,7 +40,7 @@ export type SlippedEntry = {
   toSourceStart: number;
 };
 
-/** #7–#12 — one rule per property ( listing order). */
+/** #7–#12 — one rule per property. */
 export type PropertyChangedEntry = {
   rule: 7 | 8 | 9 | 10 | 11 | 12;
   kind: "propertyChanged";
@@ -72,7 +72,7 @@ export type RemovedEntry = {
 };
 
 /**
- * #15 — partition: split detected from the khandaan-record .
+ * #15 — partition: split detected from the khandaan-record.
  * `cuts` are ROOT-LOCAL cut positions (the coordinate the khandaan
  * records — move-invariant), sorted ascending.
  */
