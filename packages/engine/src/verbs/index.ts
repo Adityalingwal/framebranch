@@ -14,6 +14,7 @@ import {
 } from "./clip-lifecycle";
 import { applyPropertyChange } from "./property-change";
 import { applyMove, applySlip, applySplit, applyTrim } from "./transform-clip";
+import { applyReplaceTracks } from "./track-management";
 
 export {
   PROPERTY_APPLICABILITY,
@@ -63,5 +64,7 @@ export function applyEngineCommand(
       return applyRippleDelete(timeline, command);
     case "split":
       return applySplit(timeline, command);
+    case "replaceTracks":
+      return applyReplaceTracks(timeline, command);
   }
 }

@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { ModalShell } from "./ModalShell";
+import { CustomSelect } from "./CustomSelect";
 import { primaryButton, secondaryButton, textInput } from "./styles";
 
 export function BranchControl({
@@ -36,29 +37,16 @@ export function BranchControl({
       >
         Branch
       </label>
-      <select
-        id="branch-select"
+      <CustomSelect
         value={current}
         disabled={disabled || busy}
-        onChange={(e) => {
-          if (e.target.value !== current) onSwitch(e.target.value);
+        ariaLabel="Branch"
+        className="topbar-branch-select"
+        options={known.map((branch) => ({ value: branch, label: branch }))}
+        onChange={(next) => {
+          if (next !== current) onSwitch(next);
         }}
-        style={{
-          background: "var(--fb-panel-2)",
-          color: "var(--fb-text-body-2)",
-          border: "none",
-          borderRadius: "var(--fb-radius-sm)",
-          padding: "6px 8px",
-          fontSize: 12,
-          outline: "none",
-        }}
-      >
-        {known.map((b) => (
-          <option key={b} value={b}>
-            {b}
-          </option>
-        ))}
-      </select>
+      />
       <button
         type="button"
         title="New branch"

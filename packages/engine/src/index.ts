@@ -69,6 +69,7 @@ export type {
   PropertyChangeCommand,
   PropertyName,
   PropertyValue,
+  ReplaceTracksCommand,
   RippleDeleteCommand,
   SlipCommand,
   SplitCommand,

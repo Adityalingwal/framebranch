@@ -64,6 +64,7 @@ export const textInput: CSSProperties = {
   borderRadius: "var(--fb-radius-sm)",
   padding: "8px 10px",
   fontSize: 12,
-  boxShadow: "inset 0 1px 2px rgba(0,0,0,.4)",
+  boxShadow:
+    "inset 0 1px 2px rgba(0,0,0,.4), inset 0 0 0 1px rgba(255,255,255,.07)",
   outline: "none",
 };

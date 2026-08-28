@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import {
+  ArrowCounterClockwise,
+  CaretDown,
+  LinkSimple,
+} from "@phosphor-icons/react";
 
 import type {
   Clip,
+  MediaKind,
   Position,
   PropertyValue,
   TextClip,
@@ -12,7 +18,9 @@ import type {
 } from "@framebranch/engine";
 
 import { isTextClip, type AnyClip } from "../lib/clip-helpers";
-import { dangerButton, secondaryButton, textInput } from "./styles";
+import { toSeconds } from "../lib/format";
+import { textInput } from "./styles";
+import { CustomSelect } from "./CustomSelect";
 
 const DEFAULT_POSITION: Position = { x: 0, y: 0 };
 const FONTS: TextFont[] = ["Arial", "Georgia", "Courier New"];
@@ -23,6 +31,11 @@ const FONTS: TextFont[] = ["Arial", "Georgia", "Courier New"];
 const MAX_TEXT_CONTENT = 500;
 const MIN_TEXT_SIZE = 8;
 const MAX_TEXT_SIZE = 200;
+const DEFAULT_TEXT_STYLE: TextStyle = {
+  font: "Arial",
+  size: 48,
+  color: "#ffffff",
+};
 
 /**
  * §5/§8.2 — the six-property whitelist, now editable. Every whitelisted
@@ -40,16 +53,15 @@ const MAX_TEXT_SIZE = 200;
  */
 export function ClipProperties({
   clip,
-  playheadFrame,
+  displayName,
+  mediaKind,
   onPropertyChange,
-  onDelete,
-  onRippleDelete,
-  onSplit,
   disabled,
   resetToken,
 }: {
   clip: AnyClip | null;
-  playheadFrame: number;
+  displayName?: string;
+  mediaKind?: MediaKind;
   resetToken?: number;
   onPropertyChange: (
     clipId: string,
@@ -57,9 +69,6 @@ export function ClipProperties({
       "volume" | "opacity" | "scale" | "position" | "textContent" | "textStyle",
     value: PropertyValue,
   ) => void;
-  onDelete: (clipId: string) => void;
-  onRippleDelete: (clipId: string) => void;
-  onSplit: (clipId: string, atFrame: number) => void;
   disabled?: boolean;
 }) {
   if (!clip) {
@@ -70,11 +79,6 @@ export function ClipProperties({
     );
   }
 
-  const start = clip.timelineRange.start.value;
-  const end = start + clip.timelineRange.duration.value;
-  // A3.1c: both edges exclusive — a boundary cut is E_SPLIT_AT_BOUNDARY.
-  const canSplit = playheadFrame > start && playheadFrame < end;
-
   return (
     <div
       // Remounts on `resetToken` too — a rejected propertyChange rolls the
@@ -83,78 +87,41 @@ export function ClipProperties({
       // only fires on a genuine value change) would never fire, and a
       // rejected/out-of-range input would stay stuck on screen forever.
       key={`${clip.id}-${resetToken ?? 0}`}
-      className="surface"
-      style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10 }}
+      className="surface clip-settings"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        width: "100%",
+        boxSizing: "border-box",
+        flex: 1,
+        minHeight: 0,
+      }}
     >
-      {isTextClip(clip) ? (
-        <TextControls
-          clip={clip}
-          disabled={disabled}
-          onPropertyChange={onPropertyChange}
-        />
-      ) : (
-        <MediaControls
-          clip={clip}
-          disabled={disabled}
-          onPropertyChange={onPropertyChange}
-        />
-      )}
-
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          paddingTop: 8,
-          borderTop: "1px solid rgba(255,255,255,.05)",
-        }}
-      >
-        <button
-          type="button"
-          style={{
-            ...secondaryButton,
-            padding: "4px 12px",
-            fontSize: 11,
-            ...(disabled || !canSplit
-              ? { opacity: 0.45, cursor: "not-allowed" }
-              : {}),
-          }}
-          disabled={disabled || !canSplit}
-          title={
-            canSplit
-              ? "Split at the playhead"
-              : "Move the playhead inside this clip first"
-          }
-          onClick={() => onSplit(clip.id, playheadFrame)}
-        >
-          Split at playhead
-        </button>
-        <button
-          type="button"
-          style={{
-            ...secondaryButton,
-            padding: "4px 12px",
-            fontSize: 11,
-            ...(disabled ? { opacity: 0.45, cursor: "not-allowed" } : {}),
-          }}
-          disabled={disabled}
-          onClick={() => onRippleDelete(clip.id)}
-        >
-          Delete and close gap
-        </button>
-        <button
-          type="button"
-          style={{
-            ...dangerButton,
-            padding: "4px 12px",
-            fontSize: 11,
-            ...(disabled ? { opacity: 0.45, cursor: "not-allowed" } : {}),
-          }}
-          disabled={disabled}
-          onClick={() => onDelete(clip.id)}
-        >
-          Delete
-        </button>
+      <div className="clip-settings-header">
+        <h2>{mediaKind === "audio" ? "Audio settings" : "Clip settings"}</h2>
+        <span title={displayName}>{displayName ?? "Selected clip"}</span>
+      </div>
+      <div className="clip-settings-body">
+        {isTextClip(clip) ? (
+          <TextControls
+            clip={clip}
+            disabled={disabled}
+            onPropertyChange={onPropertyChange}
+          />
+        ) : mediaKind === "audio" ? (
+          <AudioControls
+            clip={clip}
+            disabled={disabled}
+            onPropertyChange={onPropertyChange}
+          />
+        ) : (
+          <MediaControls
+            clip={clip}
+            mediaKind={mediaKind}
+            disabled={disabled}
+            onPropertyChange={onPropertyChange}
+          />
+        )}
       </div>
     </div>
   );
@@ -162,10 +129,12 @@ export function ClipProperties({
 
 function MediaControls({
   clip,
+  mediaKind,
   disabled,
   onPropertyChange,
 }: {
   clip: Clip;
+  mediaKind?: MediaKind;
   disabled?: boolean;
   onPropertyChange: (
     clipId: string,
@@ -180,30 +149,123 @@ function MediaControls({
 
   return (
     <>
-      <IntSlider
-        label="Volume"
-        value={volume}
-        disabled={disabled}
-        onCommit={(v) => onPropertyChange(clip.id, "volume", v)}
-      />
-      <IntSlider
-        label="Opacity"
-        value={opacity}
-        disabled={disabled}
-        onCommit={(v) => onPropertyChange(clip.id, "opacity", v)}
-      />
-      <ScaleSlider
-        value={scale}
-        disabled={disabled}
-        onCommit={(v) => onPropertyChange(clip.id, "scale", v)}
-      />
-      <PositionInputs
-        value={pos}
-        disabled={disabled}
-        onCommit={(v) => onPropertyChange(clip.id, "position", v)}
-      />
+      <PropertyGroup label="Basic">
+        {mediaKind === "video" && (
+          <IntSlider
+            label="Volume"
+            value={volume}
+            defaultValue={100}
+            changed={volume !== 100}
+            disabled={disabled}
+            onCommit={(v) => onPropertyChange(clip.id, "volume", v)}
+          />
+        )}
+        <IntSlider
+          label="Opacity"
+          value={opacity}
+          defaultValue={100}
+          changed={opacity !== 100}
+          disabled={disabled}
+          onCommit={(v) => onPropertyChange(clip.id, "opacity", v)}
+        />
+      </PropertyGroup>
+      <PropertyGroup label="Transform">
+        <ScaleSlider
+          value={scale}
+          changed={scale !== 1}
+          disabled={disabled}
+          onCommit={(v) => onPropertyChange(clip.id, "scale", v)}
+        />
+        <PositionInputs
+          value={pos}
+          changed={pos.x !== 0 || pos.y !== 0}
+          disabled={disabled}
+          onCommit={(v) => onPropertyChange(clip.id, "position", v)}
+        />
+      </PropertyGroup>
     </>
   );
+}
+
+function AudioControls({
+  clip,
+  disabled,
+  onPropertyChange,
+}: {
+  clip: Clip;
+  disabled?: boolean;
+  onPropertyChange: (
+    clipId: string,
+    property: "volume",
+    value: PropertyValue,
+  ) => void;
+}) {
+  const volume = clip.properties.volume ?? 100;
+  const previousVolume = useRef(volume > 0 ? volume : 100);
+  const duration = toSeconds(clip.timelineRange.duration);
+  const sourceStart = toSeconds(clip.sourceRange.start);
+
+  useEffect(() => {
+    if (volume > 0) previousVolume.current = volume;
+  }, [volume]);
+
+  return (
+    <>
+      <PropertyGroup label="Audio">
+        <IntSlider
+          label="Volume"
+          value={volume}
+          defaultValue={100}
+          changed={volume !== 100}
+          disabled={disabled}
+          onCommit={(value) => onPropertyChange(clip.id, "volume", value)}
+        />
+        <Row label="Mute">
+          <button
+            type="button"
+            role="switch"
+            aria-label="Mute clip"
+            aria-checked={volume === 0}
+            className={`audio-property-toggle${volume === 0 ? " is-active" : ""}`}
+            disabled={disabled}
+            onClick={() => {
+              if (volume > 0) previousVolume.current = volume;
+              onPropertyChange(
+                clip.id,
+                "volume",
+                volume === 0 ? previousVolume.current : 0,
+              );
+            }}
+          >
+            <span aria-hidden />
+            {volume === 0 ? "On" : "Off"}
+          </button>
+        </Row>
+      </PropertyGroup>
+      <PropertyGroup label="Clip info">
+        <ReadOnlyValue label="Duration" value={formatAudioTime(duration)} />
+        <ReadOnlyValue
+          label="Source start"
+          value={formatAudioTime(sourceStart)}
+        />
+      </PropertyGroup>
+    </>
+  );
+}
+
+function ReadOnlyValue({ label, value }: { label: string; value: string }) {
+  return (
+    <Row label={label}>
+      <span className="property-readonly-value">{value}</span>
+    </Row>
+  );
+}
+
+function formatAudioTime(value: number) {
+  const safe = Number.isFinite(value) ? Math.max(0, value) : 0;
+  const minutes = Math.floor(safe / 60);
+  const seconds = Math.floor(safe % 60);
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function TextControls({
@@ -236,72 +298,102 @@ function TextControls({
 
   return (
     <>
-      <Row label="Text content">
-        <textarea
-          value={content}
+      <PropertyGroup label="Content">
+        <Row label="Text content">
+          <textarea
+            value={content}
+            disabled={disabled}
+            rows={2}
+            style={{ ...textInput, resize: "vertical" }}
+            onChange={(e) => setContent(e.target.value)}
+            onBlur={() => {
+              const clamped = content.slice(0, MAX_TEXT_CONTENT);
+              if (clamped !== content) setContent(clamped);
+              if (clamped !== clip.textContent) {
+                onPropertyChange(clip.id, "textContent", clamped);
+              }
+            }}
+          />
+        </Row>
+        <Row label="Font" changed={style.font !== DEFAULT_TEXT_STYLE.font}>
+          <div className="property-inline-actions">
+            <CustomSelect
+              value={style.font}
+              disabled={disabled}
+              ariaLabel="Font"
+              className="property-select"
+              options={FONTS.map((font) => ({ value: font, label: font }))}
+              onChange={(font) =>
+                commitStyle({ ...style, font: font as TextFont })
+              }
+            />
+            <ResetFieldButton
+              label="Reset font"
+              disabled={disabled || style.font === DEFAULT_TEXT_STYLE.font}
+              onClick={() =>
+                commitStyle({ ...style, font: DEFAULT_TEXT_STYLE.font })
+              }
+            />
+          </div>
+        </Row>
+        <Row label="Size" changed={style.size !== DEFAULT_TEXT_STYLE.size}>
+          <div className="property-inline-actions">
+            <input
+              type="number"
+              value={style.size}
+              disabled={disabled}
+              min={MIN_TEXT_SIZE}
+              max={MAX_TEXT_SIZE}
+              style={{ ...textInput, width: 70 }}
+              onChange={(e) =>
+                setStyle({ ...style, size: Number(e.target.value) })
+              }
+              onBlur={() => {
+                const clamped = Math.min(
+                  MAX_TEXT_SIZE,
+                  Math.max(
+                    MIN_TEXT_SIZE,
+                    Math.round(style.size) || MIN_TEXT_SIZE,
+                  ),
+                );
+                commitStyle({ ...style, size: clamped });
+              }}
+            />
+            <ResetFieldButton
+              label="Reset size"
+              disabled={disabled || style.size === DEFAULT_TEXT_STYLE.size}
+              onClick={() =>
+                commitStyle({ ...style, size: DEFAULT_TEXT_STYLE.size })
+              }
+            />
+          </div>
+        </Row>
+        <ColorInput
+          value={style.color}
+          changed={style.color !== DEFAULT_TEXT_STYLE.color}
+          defaultValue={DEFAULT_TEXT_STYLE.color}
           disabled={disabled}
-          rows={2}
-          style={{ ...textInput, resize: "vertical" }}
-          onChange={(e) => setContent(e.target.value)}
-          onBlur={() => {
-            const clamped = content.slice(0, MAX_TEXT_CONTENT);
-            if (clamped !== content) setContent(clamped);
-            if (clamped !== clip.textContent) {
-              onPropertyChange(clip.id, "textContent", clamped);
-            }
-          }}
+          onCommit={(color) => commitStyle({ ...style, color })}
         />
-      </Row>
-      <Row label="Font">
-        <select
-          value={style.font}
+      </PropertyGroup>
+      <PropertyGroup label="Appearance">
+        <IntSlider
+          label="Opacity"
+          value={opacity}
+          defaultValue={100}
+          changed={opacity !== 100}
           disabled={disabled}
-          style={{ ...textInput, width: "auto" }}
-          onChange={(e) =>
-            commitStyle({ ...style, font: e.target.value as TextFont })
-          }
-        >
-          {FONTS.map((f) => (
-            <option key={f} value={f}>
-              {f}
-            </option>
-          ))}
-        </select>
-      </Row>
-      <Row label="Size">
-        <input
-          type="number"
-          value={style.size}
-          disabled={disabled}
-          min={MIN_TEXT_SIZE}
-          max={MAX_TEXT_SIZE}
-          style={{ ...textInput, width: 70 }}
-          onChange={(e) => setStyle({ ...style, size: Number(e.target.value) })}
-          onBlur={() => {
-            const clamped = Math.min(
-              MAX_TEXT_SIZE,
-              Math.max(MIN_TEXT_SIZE, Math.round(style.size) || MIN_TEXT_SIZE),
-            );
-            commitStyle({ ...style, size: clamped });
-          }}
+          onCommit={(v) => onPropertyChange(clip.id, "opacity", v)}
         />
-      </Row>
-      <ColorInput
-        value={style.color}
-        disabled={disabled}
-        onCommit={(color) => commitStyle({ ...style, color })}
-      />
-      <IntSlider
-        label="Opacity"
-        value={opacity}
-        disabled={disabled}
-        onCommit={(v) => onPropertyChange(clip.id, "opacity", v)}
-      />
-      <PositionInputs
-        value={pos}
-        disabled={disabled}
-        onCommit={(v) => onPropertyChange(clip.id, "position", v)}
-      />
+      </PropertyGroup>
+      <PropertyGroup label="Transform">
+        <PositionInputs
+          value={pos}
+          changed={pos.x !== 0 || pos.y !== 0}
+          disabled={disabled}
+          onCommit={(v) => onPropertyChange(clip.id, "position", v)}
+        />
+      </PropertyGroup>
     </>
   );
 }
@@ -309,13 +401,19 @@ function TextControls({
 function IntSlider({
   label,
   value,
+  defaultValue,
+  changed,
   disabled,
   onCommit,
+  compact = false,
 }: {
   label: string;
   value: number;
+  defaultValue?: number;
+  changed?: boolean;
   disabled?: boolean;
   onCommit: (value: number) => void;
+  compact?: boolean;
 }) {
   const [live, setLive] = useState(value);
   const ref = useRef<HTMLInputElement>(null);
@@ -336,9 +434,20 @@ function IntSlider({
     el.addEventListener("change", commit);
     return () => el.removeEventListener("change", commit);
   }, [value, onCommit]);
-  return (
-    <Row label={label}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+
+  if (compact) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+        <span
+          style={{
+            color: "var(--fb-text-mute)",
+            fontSize: 10.5,
+            flexShrink: 0,
+            width: 26,
+          }}
+        >
+          {label}
+        </span>
         <input
           ref={ref}
           type="range"
@@ -347,7 +456,35 @@ function IntSlider({
           step={1}
           value={live}
           disabled={disabled}
-          style={{ flex: 1 }}
+          style={{ flex: 1, minWidth: 0, accentColor: "var(--fb-accent-to)" }}
+          onInput={(e) => setLive(Number((e.target as HTMLInputElement).value))}
+        />
+        <span
+          style={{
+            width: 30,
+            textAlign: "right",
+            fontSize: 10.5,
+            fontVariantNumeric: "tabular-nums",
+          }}
+        >
+          {live}%
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <Row label={label} changed={changed}>
+      <div className="property-inline-actions">
+        <input
+          ref={ref}
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={live}
+          disabled={disabled}
+          style={{ flex: 1, "--val": `${live}%` } as React.CSSProperties}
           onInput={(e) => setLive(Number((e.target as HTMLInputElement).value))}
         />
         <span
@@ -359,6 +496,13 @@ function IntSlider({
         >
           {live}%
         </span>
+        {defaultValue !== undefined && (
+          <ResetFieldButton
+            label={`Reset ${label.toLowerCase()}`}
+            disabled={disabled || value === defaultValue}
+            onClick={() => onCommit(defaultValue)}
+          />
+        )}
       </div>
     </Row>
   );
@@ -366,50 +510,42 @@ function IntSlider({
 
 function ScaleSlider({
   value,
+  changed,
   disabled,
   onCommit,
 }: {
   value: number;
+  changed?: boolean;
   disabled?: boolean;
   onCommit: (value: number) => void;
 }) {
-  const [live, setLive] = useState(value);
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => setLive(value), [value]);
-  // Same native-"change"-not-React-onChange reasoning as IntSlider above.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const commit = () => {
-      const v = Math.round(Number(el.value) * 10) / 10;
-      if (v !== value) onCommit(v);
-    };
-    el.addEventListener("change", commit);
-    return () => el.removeEventListener("change", commit);
-  }, [value, onCommit]);
   return (
-    <Row label="Scale">
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
-        <input
-          ref={ref}
-          type="range"
+    <Row label="Scale" changed={changed}>
+      <div className="transform-field-actions">
+        <span
+          className="scale-link-lock"
+          title="Proportions locked — scale is uniform"
+          aria-label="Scale proportions locked"
+        >
+          <LinkSimple size={13} weight="bold" aria-hidden />
+        </span>
+        <ScrubbableNumberField
+          label="S"
+          ariaLabel="Scale"
+          value={value}
+          step={0.1}
           min={0.1}
           max={10}
-          step={0.1}
-          value={live}
+          decimals={1}
+          suffix="x"
           disabled={disabled}
-          style={{ flex: 1 }}
-          onInput={(e) => setLive(Number((e.target as HTMLInputElement).value))}
+          onCommit={onCommit}
         />
-        <span
-          style={{
-            width: 34,
-            textAlign: "right",
-            fontVariantNumeric: "tabular-nums",
-          }}
-        >
-          {live.toFixed(1)}x
-        </span>
+        <ResetFieldButton
+          label="Reset scale"
+          disabled={disabled || value === 1}
+          onClick={() => onCommit(1)}
+        />
       </div>
     </Row>
   );
@@ -417,10 +553,14 @@ function ScaleSlider({
 
 function ColorInput({
   value,
+  defaultValue,
+  changed,
   disabled,
   onCommit,
 }: {
   value: string;
+  defaultValue: string;
+  changed?: boolean;
   disabled?: boolean;
   onCommit: (value: string) => void;
 }) {
@@ -439,65 +579,216 @@ function ColorInput({
     return () => el.removeEventListener("change", commit);
   }, [value, onCommit]);
   return (
-    <Row label="Color">
-      <input
-        ref={ref}
-        type="color"
-        value={live}
-        disabled={disabled}
-        style={{
-          width: 40,
-          height: 24,
-          border: "none",
-          background: "none",
-          cursor: "pointer",
-        }}
-        onInput={(e) => setLive((e.target as HTMLInputElement).value)}
-      />
-    </Row>
-  );
-}
-
-function PositionInputs({
-  value,
-  disabled,
-  onCommit,
-}: {
-  value: Position;
-  disabled?: boolean;
-  onCommit: (value: Position) => void;
-}) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
-  return (
-    <Row label="Position">
-      <div style={{ display: "flex", gap: 6 }}>
+    <Row label="Color" changed={changed}>
+      <div className="property-inline-actions">
         <input
-          type="number"
-          value={local.x}
+          ref={ref}
+          type="color"
+          value={live}
           disabled={disabled}
-          style={{ ...textInput, width: 60 }}
-          onChange={(e) => setLocal({ ...local, x: Number(e.target.value) })}
-          onBlur={() => {
-            if (local.x !== value.x || local.y !== value.y) onCommit(local);
+          style={{
+            width: 40,
+            height: 24,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
           }}
+          onInput={(e) => setLive((e.target as HTMLInputElement).value)}
         />
-        <input
-          type="number"
-          value={local.y}
-          disabled={disabled}
-          style={{ ...textInput, width: 60 }}
-          onChange={(e) => setLocal({ ...local, y: Number(e.target.value) })}
-          onBlur={() => {
-            if (local.x !== value.x || local.y !== value.y) onCommit(local);
-          }}
+        <ResetFieldButton
+          label="Reset color"
+          disabled={disabled || value === defaultValue}
+          onClick={() => onCommit(defaultValue)}
         />
       </div>
     </Row>
   );
 }
 
-function Row({
+function PositionInputs({
+  value,
+  changed,
+  disabled,
+  onCommit,
+}: {
+  value: Position;
+  changed?: boolean;
+  disabled?: boolean;
+  onCommit: (value: Position) => void;
+}) {
+  return (
+    <Row label="Position" changed={changed}>
+      <div className="position-inputs">
+        <ScrubbableNumberField
+          label="X"
+          ariaLabel="Position X"
+          value={value.x}
+          step={1}
+          disabled={disabled}
+          onCommit={(x) => onCommit({ ...value, x })}
+        />
+        <ScrubbableNumberField
+          label="Y"
+          ariaLabel="Position Y"
+          value={value.y}
+          step={1}
+          disabled={disabled}
+          onCommit={(y) => onCommit({ ...value, y })}
+        />
+        <ResetFieldButton
+          label="Reset position"
+          disabled={disabled || (value.x === 0 && value.y === 0)}
+          onClick={() => onCommit(DEFAULT_POSITION)}
+        />
+      </div>
+    </Row>
+  );
+}
+
+function ResetFieldButton({
+  label,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  disabled?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="transform-reset-button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <ArrowCounterClockwise size={13} weight="bold" aria-hidden />
+    </button>
+  );
+}
+
+function ScrubbableNumberField({
+  label,
+  ariaLabel,
+  value,
+  step,
+  min = -100000,
+  max = 100000,
+  decimals = 0,
+  suffix,
+  disabled,
+  onCommit,
+}: {
+  label: string;
+  ariaLabel: string;
+  value: number;
+  step: number;
+  min?: number;
+  max?: number;
+  decimals?: number;
+  suffix?: string;
+  disabled?: boolean;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+  const [scrubbing, setScrubbing] = useState(false);
+  const [focused, setFocused] = useState(false);
+
+  useEffect(() => setDraft(String(value)), [value]);
+
+  function normalize(next: number) {
+    const bounded = Math.min(max, Math.max(min, next));
+    return Number(bounded.toFixed(decimals));
+  }
+
+  function commitDraft() {
+    const parsed = Number(draft);
+    const next = normalize(Number.isFinite(parsed) ? parsed : value);
+    setDraft(String(next));
+    if (next !== value) onCommit(next);
+  }
+
+  function stepBy(direction: number, multiplier = 1) {
+    const current = Number(draft);
+    const base = Number.isFinite(current) ? current : value;
+    const next = normalize(base + direction * step * multiplier);
+    setDraft(String(next));
+    if (next !== value) onCommit(next);
+  }
+
+  function beginScrub(event: React.PointerEvent<HTMLSpanElement>) {
+    if (disabled || event.button !== 0) return;
+    event.preventDefault();
+    const startX = event.clientX;
+    const startValue = value;
+    let latest = value;
+    setScrubbing(true);
+
+    const onMove = (moveEvent: PointerEvent) => {
+      const delta = moveEvent.clientX - startX;
+      latest = normalize(startValue + delta * step);
+      setDraft(String(latest));
+    };
+    const onUp = () => {
+      setScrubbing(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      if (latest !== value) onCommit(latest);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  }
+
+  const numericDraft = Number(draft);
+  const formatted = focused
+    ? draft
+    : `${(Number.isFinite(numericDraft) ? numericDraft : value).toFixed(decimals)}${suffix ?? ""}`;
+
+  return (
+    <label className={`scrub-field${scrubbing ? " is-scrubbing" : ""}`}>
+      <span
+        className="scrub-field-label"
+        title={`Drag to adjust ${ariaLabel.toLowerCase()}`}
+        onPointerDown={beginScrub}
+      >
+        {label}
+      </span>
+      <input
+        type="text"
+        inputMode="decimal"
+        aria-label={ariaLabel}
+        value={formatted}
+        disabled={disabled}
+        onFocus={() => {
+          setFocused(true);
+          setDraft(String(value));
+        }}
+        onChange={(event) =>
+          setDraft(event.target.value.replace(suffix ?? "", ""))
+        }
+        onBlur={() => {
+          setFocused(false);
+          commitDraft();
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+            event.preventDefault();
+            stepBy(event.key === "ArrowUp" ? 1 : -1, event.shiftKey ? 10 : 1);
+          } else if (event.key === "Enter") {
+            event.currentTarget.blur();
+          } else if (event.key === "Escape") {
+            setDraft(String(value));
+            event.currentTarget.blur();
+          }
+        }}
+      />
+    </label>
+  );
+}
+
+function PropertyGroup({
   label,
   children,
 }: {
@@ -505,25 +796,29 @@ function Row({
   children: React.ReactNode;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 10,
-        padding: "6px 0",
-        fontSize: 12,
-        borderBottom: "1px solid rgba(255,255,255,.04)",
-      }}
-    >
-      <span style={{ color: "var(--fb-text-mute)", flexShrink: 0 }}>
+    <details className="property-group" open>
+      <summary id={`property-${label}`}>
+        <CaretDown size={12} weight="bold" aria-hidden />
         {label}
-      </span>
-      <span
-        style={{ color: "var(--fb-text-body)", flex: 1, textAlign: "right" }}
-      >
-        {children}
-      </span>
+      </summary>
+      <div>{children}</div>
+    </details>
+  );
+}
+
+function Row({
+  label,
+  children,
+  changed = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  changed?: boolean;
+}) {
+  return (
+    <div className={`property-row${changed ? " is-changed" : ""}`}>
+      <span className="property-row-label">{label}</span>
+      <span className="property-row-control">{children}</span>
     </div>
   );
 }

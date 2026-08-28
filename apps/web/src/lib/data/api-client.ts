@@ -26,6 +26,7 @@ import type {
   MergeCounts,
   Timeline,
 } from "@framebranch/engine";
+import type { PendingOp } from "../../server/types";
 
 // ---------------------------------------------------------------------------
 // Envelope + error mapping
@@ -310,6 +311,24 @@ export function postOps(
 ): Promise<OpsResult> {
   const ticket = newTicket();
   return runMutation(() => postJson("/api/ops", { ...input, ticket }), hooks);
+}
+
+export type OpsHistoryResult = OpsResult & { operation?: PendingOp };
+
+export function postOpsHistory(
+  input: {
+    branch: string;
+    workingRev: number;
+    action: "undo" | "redo";
+    operation?: PendingOp;
+  },
+  hooks: RetryHooks,
+): Promise<OpsHistoryResult> {
+  const ticket = newTicket();
+  return runMutation(
+    () => postJson("/api/ops/history", { ...input, ticket }),
+    hooks,
+  );
 }
 
 export type MergeStartResult =
