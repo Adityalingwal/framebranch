@@ -92,3 +92,11 @@ The demo walks through the full system in nine steps, using a single project:
 7. **Resolve conflicts** — every conflict the merge produces is shown on screen, each one of the three types described earlier, with its own one-click buttons.
 8. **History** — the project's history shows every edit, marked with who made it — the person or the agent — including the merge itself, which shows both branches it came from. An earlier version can be restored from here.
 9. **Export** — the project exports to an OTIO file (a project format), not a rendered video file.
+
+## Known Limitations
+
+These are not bugs — everything below still works correctly. The data is always right; the UI just doesn't show or remember all of it yet:
+
+- **No visual preview of the original clip in a conflict.** The conflict screen shows "Yours" and "Agent's" versions side by side; the original ("Base") is a placeholder labelled "not available to preview." Choosing "Keep the original" still restores the correct data — you just can't see it before choosing.
+- **Branch tracking resets on a hard browser reload.** Which branch is active, and the list of known branches, are held in browser memory, not fetched from the server. A hard reload clears them from the UI (you fall back to manual pickers); nothing is lost in the database.
+- **Clips don't have their own name.** A clip's label in the timeline is derived from its source media filename. Two clips that use different trims of the same file will show the same label and aren't visually distinguishable.

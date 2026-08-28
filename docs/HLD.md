@@ -31,7 +31,32 @@ FrameBranch doesn't store video or audio files itself — a media reference is j
 
 ## Data Flow
 
-Every edit — from a person or the agent — follows the same path: the interface describes the edit, the API layer validates it, the domain engine applies it, and storage records the result before the interface updates. The agent's edits go through the identical path, tagged as coming from the agent.
+Most edits (7 of 8 operations) work like this:
+
+1. You make an edit — it shows up on screen immediately (checked locally first).
+2. At the same time, the edit is sent to the server.
+3. The server checks it and saves it.
+4. If the server says OK — nothing changes, what you already saw was correct.
+5. If the server rejects it — the screen undoes that edit and reloads the real, correct timeline.
+
+The agent's edits go through the same steps, tagged as coming from the agent.
+
+```mermaid
+sequenceDiagram
+    participant UI as Interface
+    participant API as API layer
+    participant Storage
+    UI->>UI: Local validation + optimistic paint
+    UI->>API: Edit request
+    API->>Storage: Validate + persist
+    Storage-->>API: Result
+    alt Success
+        API-->>UI: Confirmed
+    else Rejected
+        API-->>UI: Error
+        UI->>UI: Rollback preview + refetch
+    end
+```
 
 ## Storage & Data Model
 
@@ -59,7 +84,7 @@ Nothing is ever deleted or rewritten. Restoring an old version doesn't erase wha
 
 **How much does storing all this history cost?**
 
-Each version remembers only what changed since the version before it. If the system only ever stored changes, going back to an old version could mean replaying hundreds of small changes one by one. To avoid that, a full copy of the whole timeline is also saved every 10th version — so going back to any version never takes more than 9 small replays.
+Each version remembers only what changed since the version before it. If the system only ever stored changes, going back to an old version could mean replaying hundreds of small changes one by one. To avoid that, a full copy of the whole timeline is also saved periodically, so going back to any version never takes many replays (exact interval and table layout: LLD's Database Schema).
 
 **One more rule:** every save (a version, a merge, a restore) either fully succeeds or doesn't happen at all — there's no in-between broken state.
 
@@ -69,16 +94,16 @@ Each version remembers only what changed since the version before it. If the sys
 
 Other actions have their own endpoints: reading a timeline, history, or diff; branching; running the agent; merging; resolving conflicts; restoring; import/export.
 
-**Handling collisions.** Nothing is locked while editing. Each save checks: is the branch still where I started? If yes, it saves normally. If not, the edit becomes its own branch instead of being lost or silently merged — same review-and-merge screen as any two branches.
+**Handling collisions.** Nothing is locked while editing. Each save checks: is the branch still where I started? If yes, it saves normally. If not, the save is rejected — nothing is lost or silently overwritten. The interface rolls back its preview, refetches the latest timeline, and shows "Timeline updated." The edit has to be redone on the fresh state.
 
 ```mermaid
 flowchart TD
     A[Person saves an edit] --> B{Branch unchanged since I started?}
     B -->|Yes| C[Saved normally]
-    B -->|No| D[Becomes its own branch → review & merge]
+    B -->|No| D[Rejected → rollback + refetch latest timeline]
 ```
 
-**Safe retries.** Each edit carries a unique ID. A retried request with the same ID returns the original result instead of applying the edit twice.
+**Safe retries.** Every mutating request carries a unique ticket, so retrying it never applies the edit twice (exact mechanism and per-endpoint behavior: LLD's API Reference).
 
 ## OTIO Interoperability
 
@@ -95,14 +120,21 @@ flowchart LR
 
 ## Reliability
 
-- **Any request failure** (network or server — treated the same) shows one banner: "Connection lost — your saved work is safe. Reconnecting…" Editing pauses, then auto-retries. No offline mode.
+- **Request failures are not all handled the same way:**
+
+  | Failure type | What happens |
+  |---|---|
+  | Server rejects the edit (e.g. invalid, stale branch/head) | Shown as an error immediately. Not retried — the edit itself was invalid or out of date. |
+  | Network/transport failure (connection drops, bad response) | Retried automatically, twice, silently. |
+  | Retries exhausted | Banner shows: "Connection lost — your saved work is safe. Reconnecting…" Editing pauses; a manual Retry is offered. No offline mode. |
+  | Unexpected server failure | Surfaced as an error with context, not silently retried. |
 - **Agent runs are all-or-nothing** — a failed run saves nothing; the timeline stays untouched, with a retry option.
 - **Security** — every request is schema-validated before reaching the engine; each public demo visitor gets an isolated copy with a reset button; no login system; secrets live only in environment variables.
 - **Observability** — every request logs a structured line (actor, operation, branch, time, result) with a shared ID for tracing; errors include context, not just a code. No dashboards or alerts in this version.
 
 ## Scale & Deployment
 
-**Benchmarks.** The core engine — diff, merge, the eight operations — is pure computation with no database or network involved, so it's been tested directly at scale: a 10,000-clip timeline computes a diff in about 3 milliseconds and a full three-way merge in under a second, measured and reproducible, not estimated (full results in `packages/engine/benchmarks/REPORT.md`).
+**Benchmarks.** The core engine — diff, merge, the eight operations — is pure computation with no database or network involved, so it's been tested directly at scale: a 10,000-clip timeline computes a diff in **5.23 ms** and a full three-way merge in **550.01 ms** (median), measured and reproducible, not estimated. `packages/engine/benchmarks/REPORT.md` is the single source for these numbers — refer to it directly rather than copying figures, since they change whenever the benchmark is re-run.
 
 **What would need to be added for a real product.** This version runs for one person and one agent on one project — there's no rate limiting and no user accounts, and the interface itself is only built and polished for a small, demo-sized timeline (10-30 clips), even though the engine underneath is proven at 10,000. Turning this into a multi-user product would mean adding: a way to limit how fast requests can come in, login and permissions, and an interface that stays fast with far more clips on screen. The underlying architecture doesn't need to change for any of this — the API and engine are already stateless, so they scale by running more copies, not by being rewritten.
 

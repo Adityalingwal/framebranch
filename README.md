@@ -4,7 +4,7 @@ Semantic version-control engine for video timelines — branch, diff, and merge 
 
 Status: feature-complete. Engine (`packages/engine` — 8 verbs, diff, 3-way merge, OTIO import/export, benchmarks), server (`apps/web` — API routes, 8-table Postgres schema, merge/conflict resolution), and UI (timeline, editing, branch/merge/history panels) are all built and merged.
 
-> Semantic diff of a 10,000-clip timeline in 3.20 ms, 3-way merge in 724.75 ms, backed by 363 tests and 10,000 fuzz cases.
+> Semantic diff of a 10,000-clip timeline in 5.23 ms, 3-way merge in 550.01 ms, backed by 363 tests and 10,000 fuzz cases. Full numbers: [`packages/engine/benchmarks/REPORT.md`](packages/engine/benchmarks/REPORT.md).
 
 ## Documentation
 

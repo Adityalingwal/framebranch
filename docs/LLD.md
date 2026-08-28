@@ -10,21 +10,27 @@
 |---|---|---|
 | `RationalTime` | `value` (int), `rate` (int) | A single point in time. |
 | `TimeRange` | `start`, `duration` (both `RationalTime`) | A span of time. |
-| `MediaRef` | `id`, `kind` (video / audio / image), `url`, `hash`, `durationInSource` | A pointer to a media file — not the file itself. |
-| `Clip` | `id`, `mediaRefId`, `sourceRange`, `timelineRange`, `properties` | A piece of media placed on the timeline. `sourceRange` is which part of the file to use; `timelineRange` is where it sits on the timeline. |
-| `TextClip` | `id`, `timelineRange`, `textContent`, `textStyle` | A caption or text element — a clip without a media file. |
+| `MediaRef` | `id`, `kind` (video / audio / image), `url`, `hash`, `sourceRate`, `durationInSource`, `sourceStartInFile` (optional) | A pointer to a media file — not the file itself. `sourceRate` and `sourceStartInFile` exist to bridge OTIO import/export; they don't affect diff/merge logic. |
+| `Lineage` | `rootId`, `span` (`TimeRange`) | Tracks where a clip came from when it was produced by a Split. See Algorithms for how this is used. |
+| `Clip` | `id`, `mediaRefId`, `sourceRange`, `timelineRange`, `properties`, `lineage` | A piece of media placed on the timeline. `sourceRange` is which part of the file to use; `timelineRange` is where it sits on the timeline. |
+| `TextClip` | `id`, `timelineRange`, `textContent`, `textStyle`, `properties` (optional), `lineage` | A caption or text element — a clip without a media file. |
 | `Track` | `id`, `kind`, `clips` | A lane holding a sequence of clips. |
 | `Timeline` | `projectRate`, `tracks`, `mediaRefs` | The whole project. |
 
-A clip's `id` never changes for as long as that clip exists — it's how diff and merge recognize "this is the same clip" across two versions.
+A clip's `id` never changes for as long as that clip exists — it's how diff and merge recognize "this is the same clip" across two versions. Every `Clip` and `TextClip` also carries a `lineage`, set once when the clip is created (by an Add, or by a Split producing two new clips) and never changed after — this is what lets split matching and three-way merge tell "these two clips came from the same original piece" apart from "these two clips just happen to look similar."
 
 **Images have no natural length** — unlike video or audio, an image could be shown for 2 seconds or 2 minutes, both valid. So `durationInSource` is empty ("unlimited") only for images; it's always a real number for video and audio.
 
-**Rules that always hold, for every timeline:**
+**Rules that always hold, for every timeline** (the shared invariant sweep in `invariants.ts`, checked after every command and after every merge):
 
-- No two clips on the same track overlap.
-- A clip's source range never points outside the length of its source file (skipped for images, which have no fixed length).
-- Every span of time has a duration greater than zero — nothing is zero-length or backwards.
+1. No two clips on the same track overlap.
+2. A clip's source range never points outside the length of its source file (skipped for images, which have no fixed length).
+3. Every span of time has a duration greater than zero — nothing is zero-length or backwards.
+4. A clip's timeline start is never negative.
+5. For media clips, the source range's duration equals the timeline range's duration — no speed changes in this version.
+6. A text clip's content is never empty.
+
+These are the true global invariants — they hold for every timeline, always. Separate from these are preconditions checked per-operation (for example, "Slip doesn't apply to images" or "a property must apply to this kind of clip") — those are enforced at the point an operation or import runs, not swept globally.
 
 ## Operations
 
@@ -39,6 +45,7 @@ Every operation is checked before it runs — if a check fails, nothing changes 
 | Slip | clip ID, how much | The new source window stays fully inside the file | Only which part of the file is shown changes — timeline position is untouched | Slip back the same amount |
 | Change a property | clip ID, property, value | The property applies to this kind of clip; the value is in range | Only that one property changes | Set it back to the old value |
 | Ripple delete | clip ID | Clip exists | Clip disappears, and everything after it on the same track shifts left to close the gap | Shift everything back right, then add the clip back |
+| Split | clip ID, cut point (time) | Clip exists; cut point is strictly inside the clip — a cut exactly on either edge is rejected (`E_SPLIT_AT_BOUNDARY`), as is a cut outside the clip's range (`E_SPLIT_OUT_OF_RANGE`); a 1-frame clip can't be split at all | Clip becomes two: the left piece keeps the original ID, the right piece gets a new ID chained from the cut's root-local lineage coordinate (extended deterministically if that ID is already in use). Both pieces get their own `lineage.span`. See Algorithms for why the ID uses the lineage coordinate, not the timeline position | A single atomic composite: remove the right piece, then restore the left piece from its pre-split state |
 
 **Move is same-track only.** Moving a clip to a different track isn't supported in this version — it isn't needed for the demo, and it would open up a new family of diff and merge cases that don't otherwise exist.
 
@@ -62,15 +69,68 @@ Eight tables, each with one clear job.
 | `tickets` | One row per request, so a retried request is never applied twice | which action it was, the stored result |
 
 ```mermaid
-flowchart TD
-    P[projects] --> B[branches]
-    B --> C[commits]
-    C --> O[ops]
-    C --> S[snapshots]
-    B --> W[working_state]
-    P --> M[merge_attempts]
-    P --> T[tickets]
+erDiagram
+    projects ||--o{ branches : "has"
+    projects ||--o{ commits : "has"
+    projects ||--o{ merge_attempts : "has"
+    projects ||--o{ tickets : "has"
+    commits ||--o{ ops : "contains"
+    commits ||--o| snapshots : "may have"
+    commits ||--o| commits : "parent / parent2 (merge)"
+    branches ||--|| working_state : "has exactly one"
+    commits ||--o{ working_state : "base for"
+    branches ||--o{ merge_attempts : "branch_into / branch_from"
+
+    projects {
+        uuid id PK
+        text owner_token UK
+        int project_rate
+    }
+    branches {
+        uuid id PK
+        uuid project_id FK
+        text name
+        text head_commit_id
+    }
+    commits {
+        text id PK
+        uuid project_id FK
+        text parent_id FK
+        text parent2_id FK "merge commits only"
+        text actor
+    }
+    ops {
+        uuid id PK
+        uuid project_id FK
+        text commit_id FK
+        int seq
+    }
+    snapshots {
+        text commit_id PK,FK
+        uuid project_id FK
+        jsonb timeline
+    }
+    working_state {
+        uuid branch_id PK,FK "one-to-one with branches"
+        uuid project_id FK
+        text base_commit_id FK
+        int working_rev
+    }
+    merge_attempts {
+        uuid id PK
+        uuid project_id FK
+        uuid branch_into FK
+        uuid branch_from FK
+        text status
+    }
+    tickets {
+        uuid ticket UK "globally unique"
+        uuid project_id FK
+        text endpoint
+    }
 ```
+
+`branches_project_id_name_key` and `projects_owner_token_key` are the other unique constraints worth knowing about: a branch name is unique per project, and an owner token identifies exactly one project. Full column list is `apps/web/src/db/schema.ts`; this diagram is for relationships, not every field.
 
 ## API Reference
 
@@ -93,6 +153,28 @@ flowchart TD
 | Request errors | The request itself couldn't be understood, or something unexpected happened on the server | malformed request, branch name already taken, unexpected failure |
 
 Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_REV`) — the interface reacts to the code, not the message.
+
+**Endpoint matrix.** Every route below shares the envelope and ticket rules already described. Request/response fields are shortened to the essentials — the full shape is in each route's Zod schema.
+
+| Path | Method | Mutating? | Ticket? | Main input | Main output | Stale/idempotency behavior |
+|---|---|---|---|---|---|---|
+| `/api/timeline` | GET | no | no | `branch` | timeline, working rev, pending count | n/a — read-only |
+| `/api/history` | GET | no | no | (project from context) | commits: id, name, actor, time, parents | n/a — read-only |
+| `/api/diff` | GET | no | no | `from`, `to` | diff entries + plain-English sentences | n/a — read-only |
+| `/api/ops` | POST | yes | yes | `branch`, `workingRev`, `command` | new working rev, pending count | working-rev mismatch → `E_STALE_REV` |
+| `/api/commit` | POST | yes | yes | `branch`, `name?` | commit id, name | CAS on branch head → `E_STALE_HEAD`; no-op if branch is already clean |
+| `/api/branch` | POST | yes | yes | `name`, `from` | branch id, head commit id | seals the source branch first → `E_STALE_HEAD` possible; `E_BRANCH_EXISTS` if name taken |
+| `/api/branch/switch` | POST | yes (may seal) | yes | `from`, `to` | timeline, working rev, pending count | seals dirty state before switching → `E_STALE_HEAD` possible |
+| `/api/agent/simulate` | POST | yes | yes | `branch`, `script` | commit id, ops applied | CAS on branch head → `E_STALE_HEAD` |
+| `/api/merge` | POST | yes | yes | `into`, `from` | attempt id + conflicts, or an auto-finalized commit if there are none | pre-merge seals → `E_STALE_HEAD`; unresolvable start → `E_MERGE_PRECONDITION` |
+| `/api/merge/resolve` | POST | yes | yes | `attemptId`, `conflictId`, `choice` | remaining conflicts, or the finalized commit | invalid/duplicate choice → `E_MERGE_PRECONDITION`; finalizing the last conflict can hit `E_STALE_HEAD` |
+| `/api/merge/abort` | POST | yes (discard) | yes | `attemptId` | `{ aborted: true }` | missing attempt → `E_MERGE_PRECONDITION` |
+| `/api/restore` | POST | yes | yes | `branch`, `commitId` | new commit id, name | seals before restoring → `E_STALE_HEAD` possible |
+| `/api/import` | POST | yes | yes | `branch`, `otioJson` | commit id, skipped items | seals first → `E_STALE_HEAD`; import failure writes nothing |
+| `/api/export` | POST | yes (may seal) | yes | `branch` | OTIO JSON, commit id | seals first → `E_STALE_HEAD` possible |
+| `/api/demo/reset` | POST | yes (discard) | yes | (none) | `{ done: true }` | deletes and reseeds the project's rows |
+
+Every mutating route requires a `ticket` field, replayed through `runWithTicket`: the same ticket on the same endpoint returns the stored result instead of re-applying the change; the same ticket reused on a *different* endpoint is rejected with `E_TICKET_REUSED`.
 
 ## OTIO Adapter Details
 
@@ -130,30 +212,3 @@ packages/engine/src/
 **One narrow door in.** Everything outside the engine — the interface, the API layer — only ever imports from `index.ts`, never reaches into the internal files directly. `index.ts` exposes exactly seven functions: apply a command, compute a diff, start a merge, apply a conflict choice, check if a merge can finalize, import OTIO, export OTIO. As long as those seven keep working the same way, anything inside the engine can be reorganized freely without breaking anything outside it.
 
 **No database, no network, no interface code anywhere in the engine.** Every function here takes a timeline in and returns a timeline (or a diff, or a merge result) out — which is what makes it possible to test and benchmark the engine directly, without running a server or a browser.
-
-## Demo Script
-
-The exact edits behind the walkthrough in the PRD's Demo Story — precise enough to reproduce, not just describe.
-
-**The fixture.** A 5-clip project: an interview clip, a b-roll clip, a logo image, a music track, and a caption reading "Welcome."
-
-**The edits, scripted so every conflict type is guaranteed to appear:**
-
-| Who | Edits |
-|---|---|
-| Person, on the main branch | Clip A's volume → 80; the caption's text is edited; the logo clip is moved to 0:20 |
-| Agent, on a new branch | Clip A's volume → 40; the caption is deleted; a new clip is added at 0:20 on the same track as the logo (guaranteeing an overlap); clip B is trimmed shorter at the end |
-
-**The 9 steps:**
-
-| Step | Action | Expected result |
-|---|---|---|
-| 1 | Import the project | 5 clips, no warnings |
-| 2 | Create a branch and switch to it | Now on the new branch |
-| 3 | Make the person's edits on main, commit; make the agent's edits on the new branch | Both branches have their own committed changes |
-| 4 | Preview a single clip | Plays back |
-| 5 | View the diff between the two branches | One sentence per change, all of them |
-| 6 | Start a merge | Exactly 3 conflicts appear — a value conflict (volume), a delete conflict (caption), and an overlap conflict (logo vs. the new clip); clip B's trim merges automatically, no conflict |
-| 7 | Resolve all 3 conflicts | Merge commit is created automatically after the last one |
-| 8 | View history, restore an older version | Every entry marked person or agent; restoring creates a new version |
-| 9 | Export, then re-import the result | Comes back identical — nothing lost |
