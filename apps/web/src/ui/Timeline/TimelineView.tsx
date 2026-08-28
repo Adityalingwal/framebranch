@@ -3,13 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { Command, Timeline, Track, TrackKind } from "@framebranch/engine";
-import {
-  Cursor,
-  Magnet,
-  Minus,
-  Plus,
-  Scissors,
-} from "@phosphor-icons/react";
+import { Cursor, Magnet, Minus, Plus, Scissors } from "@phosphor-icons/react";
 
 import type { AnyClip } from "../../lib/clip-helpers";
 import {
@@ -444,7 +438,11 @@ export function TimelineView({
                   onClick={() => addTrack(kind)}
                 >
                   <Plus size={11} weight="bold" aria-hidden />
-                  {kind === "video" ? "Video" : kind === "audio" ? "Audio" : "Text"}
+                  {kind === "video"
+                    ? "Video"
+                    : kind === "audio"
+                      ? "Audio"
+                      : "Text"}
                 </button>
               ))}
             </div>

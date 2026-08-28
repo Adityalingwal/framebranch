@@ -181,8 +181,7 @@ export function TrackRow({
       // Measure the rendered menu — its height varies by track kind (the
       // add-clip items). If it doesn't fit below the button, flip it above.
       const menuHeight = popupRef.current?.offsetHeight ?? 300;
-      const fitsBelow =
-        rect.bottom + 5 + menuHeight <= window.innerHeight - 8;
+      const fitsBelow = rect.bottom + 5 + menuHeight <= window.innerHeight - 8;
       setMenuPosition({
         top: fitsBelow
           ? rect.bottom + 5

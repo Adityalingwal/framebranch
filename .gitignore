@@ -11,3 +11,5 @@ next-env.d.ts
 .vercel/
 briefs/
 *commandcode/
+AGENTS.md
+CLAUDE.md
