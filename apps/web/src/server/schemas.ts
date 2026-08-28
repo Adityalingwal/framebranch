@@ -113,6 +113,13 @@ const split = z
   })
   .strict();
 
+const replaceTracks = z
+  .object({
+    op: z.literal("replaceTracks"),
+    tracks: z.array(z.unknown()),
+  })
+  .strict();
+
 export const commandSchema = z.union([
   addClipMedia,
   addClipText,
@@ -123,6 +130,7 @@ export const commandSchema = z.union([
   propertyChange,
   rippleDelete,
   split,
+  replaceTracks,
 ]) as unknown as z.ZodType<Command>;
 
 /** C6(1) — the ticket is a browser `crypto.randomUUID()`. */
@@ -139,6 +147,32 @@ export const opsBodySchema = z
     command: commandSchema,
   })
   .strict();
+
+export const opsHistoryBodySchema = z
+  .object({
+    branch: branchName,
+    workingRev: z.number().int().nonnegative(),
+    ticket,
+    action: z.enum(["undo", "redo"]),
+    operation: z
+      .object({
+        id: z.uuid(),
+        actor: z.enum(["user", "agent"]),
+        command: commandSchema,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((body, context) => {
+    if (body.action === "redo" && !body.operation) {
+      context.addIssue({
+        code: "custom",
+        message: "redo requires an operation",
+        path: ["operation"],
+      });
+    }
+  });
 
 export const commitBodySchema = z
   .object({

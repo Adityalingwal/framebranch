@@ -18,7 +18,8 @@ import {
 import { queryKeys } from "../../lib/data/query-keys";
 import { showToast } from "../../lib/state/toast-status";
 import { ConfirmDialog } from "../ConfirmDialog";
-import { primaryButton, secondaryButton, textInput } from "../styles";
+import { CustomSelect } from "../CustomSelect";
+import { primaryButton, secondaryButton } from "../styles";
 
 /**
  * Merge panel — three-bar side-by-side conflict view.
@@ -192,17 +193,16 @@ export function MergePanel({
               }}
             >
               <span>Merge</span>
-              <select
+              <CustomSelect
                 value={fromBranch}
-                onChange={(e) => setFromBranch(e.target.value)}
-                style={{ ...textInput, width: "auto", flex: 1 }}
-              >
-                {otherBranches.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
-              </select>
+                ariaLabel="Branch to merge"
+                className="panel-select"
+                options={otherBranches.map((branch) => ({
+                  value: branch,
+                  label: branch,
+                }))}
+                onChange={setFromBranch}
+              />
               <span>into &ldquo;{currentBranch}&rdquo;</span>
             </label>
             <button

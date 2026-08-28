@@ -81,6 +81,9 @@ export type TrackKind = "video" | "audio" | "text";
 export type Track = {
   id: string;
   kind: TrackKind;
+  name?: string;
+  color?: string;
+  height?: number;
   clips: Clip[] | TextClip[];
 };
 
@@ -174,6 +177,11 @@ export type SplitCommand = {
   at: RationalTime;
 };
 
+export type ReplaceTracksCommand = {
+  op: "replaceTracks";
+  tracks: Track[];
+};
+
 export type Command =
   | AddClipMediaCommand
   | AddClipTextCommand
@@ -183,7 +191,8 @@ export type Command =
   | SlipCommand
   | PropertyChangeCommand
   | RippleDeleteCommand
-  | SplitCommand;
+  | SplitCommand
+  | ReplaceTracksCommand;
 
 // Engine-internal only — never accepted from the API, never part of the public Command union.
 export type RestoreClipCommand = {

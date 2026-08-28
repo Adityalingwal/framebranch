@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Robot, User } from "@phosphor-icons/react";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
 import { useHeadCommits } from "../../lib/state/head-tracking";
 import { useDiffQuery, useHistoryQuery } from "../../lib/data/hooks";
 import { relativeTime } from "../../lib/format";
-import { textInput } from "../styles";
+import { CustomSelect } from "../CustomSelect";
 
 /**
  * §6 — Changes panel: pick two versions, `GET /api/diff`, render
@@ -171,21 +172,24 @@ function VersionPicker({
       }}
     >
       <span style={{ width: 32, flexShrink: 0 }}>{label}</span>
-      <select
+      <CustomSelect
         value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        style={{ ...textInput, width: "auto", flex: 1 }}
-      >
-        <option value="" disabled>
-          Choose a version…
-        </option>
-        {commits.map((c) => (
-          <option key={c.commitId} value={c.commitId}>
-            {c.actor === "agent" ? "🤖" : "👤"} {c.name} —{" "}
-            {relativeTime(c.createdAt)}
-          </option>
-        ))}
-      </select>
+        placeholder="Choose a version…"
+        ariaLabel={`${label} version`}
+        className="panel-select"
+        options={commits.map((commit) => ({
+          value: commit.commitId,
+          label: commit.name,
+          description: relativeTime(commit.createdAt),
+          icon:
+            commit.actor === "agent" ? (
+              <Robot size={15} weight="duotone" aria-hidden />
+            ) : (
+              <User size={15} weight="duotone" aria-hidden />
+            ),
+        }))}
+        onChange={onChange}
+      />
     </label>
   );
 }

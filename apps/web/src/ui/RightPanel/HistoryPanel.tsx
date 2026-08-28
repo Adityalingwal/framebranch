@@ -34,7 +34,7 @@ export function HistoryPanel({ currentBranch }: { currentBranch: string }) {
       <p
         style={{
           fontSize: 11,
-          color: "var(--fb-text-mute)",
+          color: "var(--fb-text-dim)",
           margin: 0,
           marginBottom: 12,
           lineHeight: 1.4,
@@ -107,7 +107,7 @@ function CommitRow({
       <div
         style={{
           fontSize: 10.5,
-          color: "var(--fb-text-mute)",
+          color: "var(--fb-text-dim)",
           marginTop: 4,
         }}
       >

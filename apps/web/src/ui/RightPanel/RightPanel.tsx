@@ -1,5 +1,7 @@
 "use client";
 
+import { ArrowLeft } from "@phosphor-icons/react";
+
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { MergePanel } from "./MergePanel";
@@ -21,6 +23,8 @@ export function RightPanel({
   pendingCount,
   onHighlightClip,
   onBranchTouched,
+  hasInspector,
+  onCloseToInspector,
 }: {
   view: PanelView;
   onViewChange: (view: PanelView) => void;
@@ -29,17 +33,36 @@ export function RightPanel({
   pendingCount: number;
   onHighlightClip: (clipId: string | null) => void;
   onBranchTouched: (branch: string) => void;
+  hasInspector?: boolean;
+  onCloseToInspector?: () => void;
 }) {
   return (
     <div
       className="surface-lg"
       style={{
+        flex: 1,
         display: "flex",
         flexDirection: "column",
         minHeight: 0,
         overflow: "hidden",
       }}
     >
+      <div className="version-panel-header">
+        <div>
+          <h2>Version control</h2>
+          <span>{currentBranch}</span>
+        </div>
+        {hasInspector && onCloseToInspector && (
+          <button
+            type="button"
+            className="version-panel-back"
+            onClick={onCloseToInspector}
+          >
+            <ArrowLeft size={14} weight="bold" aria-hidden />
+            Inspector
+          </button>
+        )}
+      </div>
       <div
         role="tablist"
         style={{
@@ -57,7 +80,7 @@ export function RightPanel({
             role="tab"
             aria-selected={view === tab.id}
             onClick={() => onViewChange(tab.id)}
-            className="motion-hover"
+            className="motion-hover right-panel-tab"
             style={{
               flex: 1,
               padding: "6px 10px",

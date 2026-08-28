@@ -95,6 +95,21 @@ const COMMANDS: { name: string; command: Command }[] = [
   },
   { name: "deleteClip", command: { op: "deleteClip", clipId: "B" } },
   { name: "rippleDelete", command: { op: "rippleDelete", clipId: "A" } },
+  {
+    name: "replaceTracks",
+    command: {
+      op: "replaceTracks",
+      tracks: [
+        {
+          ...fixtureTimeline().tracks[0],
+          name: "Primary video",
+          color: "#38bdf8",
+          height: 64,
+        },
+        fixtureTimeline().tracks[1],
+      ],
+    },
+  },
   // A rejected command must also match — rollback depends on the ERROR
   // being identical, not just the success path.
   {
@@ -123,6 +138,7 @@ describe("optimistic.ts — optimistic result == server result", () => {
         "deleteClip",
         "move",
         "propertyChange",
+        "replaceTracks",
         "rippleDelete",
         "slip",
         "split",
