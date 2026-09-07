@@ -12,8 +12,7 @@
 import { startMerge } from "@framebranch/engine";
 
 import { mergeAttempts } from "../../../db/schema";
-import { isDirty, loadBranchView } from "../../../server/branches";
-import { createCommit } from "../../../server/commits";
+import { loadBranchView } from "../../../server/branches";
 import { ApiError } from "../../../server/envelope";
 import { handleRequest, readBody } from "../../../server/handler";
 import {
@@ -21,16 +20,26 @@ import {
   finalizeMerge,
   loadMergeSides,
 } from "../../../server/merge";
-import { SEAL_BEFORE_MERGE } from "../../../server/naming";
 import { mergeBodySchema } from "../../../server/schemas";
+import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, mergeBodySchema);
+
+    // F1 (patched 2026-09-06) + F2a impl-note 4: Bring in lands on `main`
+    // only. Rejected at the door — before any lock, seal or attempt row —
+    // so a wrong target never leaves a card or a draft behind.
+    if (body.into !== "main") {
+      throw new ApiError(
+        "E_BAD_REQUEST",
+        `Bring in only lands on "main" (got "${body.into}")`,
+      );
+    }
 
     return runWithTicket(db, project.id, "merge", body.ticket, async (tx) => {
       // Two branches are locked here. They are locked in a deterministic
@@ -39,17 +48,7 @@ export async function POST(request: Request): Promise<Response> {
       const order = [body.into, body.from].sort();
       for (const name of order) {
         const view = await loadBranchView(tx, project.id, name, true);
-        if (isDirty(view)) {
-          await createCommit({
-            tx,
-            projectId: project.id,
-            branch: view.branch,
-            working: view.working,
-            timeline: view.timeline,
-            name: SEAL_BEFORE_MERGE,
-            actor: "user",
-          });
-        }
+        await sealIfDirty(tx, project.id, view, editorName);
       }
 
       // Re-read AFTER the seals: the rows loaded above are stale the moment
@@ -82,6 +81,7 @@ export async function POST(request: Request): Promise<Response> {
           headFrom,
           sides,
           choices: result.choices,
+          actorName: editorName,
         });
       }
 

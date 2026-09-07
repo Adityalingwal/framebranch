@@ -1,51 +1,34 @@
 /**
- * naming.ts — commit names.
+ * naming.ts — generated card names (copy sheet sub-table G4-N).
  *
- * Names come from deterministic templates only, never from AI. Detail lives
- * in the op-log, not in the name. The UI word for a commit is "version".
+ * Names come from deterministic templates only, never from AI. Every
+ * template used anywhere in the server is in this one file so the whole
+ * vocabulary can be read at a glance. Per kind:
  *
- * Every template used anywhere in the server is in this one file so the
- * whole vocabulary can be read at a glance.
+ *   mark      → the user's text (required — C2; see api/commit)
+ *   auto      → the presenter's summary (`3 clips moved, 1 trimmed`) — seal.ts
+ *   agent-run → the preset's display name (`Tighten intro`) — agent-scripts.ts
+ *   bring-in  → `Brought "‹cut›" into main`
+ *   restore   → `Restored "‹card›"`
+ *   seed      → the preset's name (`Travel vlog`) — presets.ts
+ *   import    → `Imported timeline` (API-only)
  */
 
-/** The seed commit of a new project. */
-export const IMPORT_COMMIT_NAME = 'Imported "demo.otio"';
-
-/**
- * The name of the commit a user-supplied `POST import` writes. The seed
- * import above names its file; a user import is not tied to one fixture.
- */
+/** The card a user-supplied `POST import` writes (API-only, G1). */
 export const IMPORTED_TIMELINE_COMMIT_NAME = "Imported timeline";
 
 /**
- * Boundary auto-seals — the "before X" family. There are six boundary
- * endpoints that auto-seal when dirty, so there are exactly six of these.
+ * C4 / C1(4) — the bring-in card (the only card with two parents). Reads
+ * `Brought "priya-music" into main`; `into` is spelled out rather than
+ * hard-coded so the name stays honest until B3 makes main the only target.
  */
-export const SEAL_BEFORE_BRANCH_SWITCH = "Auto — before branch switch";
-export const SEAL_BEFORE_BRANCH_CREATE = "Auto — before new branch";
-export const SEAL_BEFORE_MERGE = "Auto — before merge";
-export const SEAL_BEFORE_RESTORE = "Auto — before restore";
-export const SEAL_BEFORE_AGENT_RUN = "Auto — before agent run";
-export const SEAL_BEFORE_IMPORT = "Auto — before import";
-export const SEAL_BEFORE_EXPORT = "Auto — before export";
-
-/** The merge commit itself (the only commit with two parents — C3). */
-export const mergeCommitName = (from: string, into: string): string =>
-  `Merged "${from}" into "${into}"`;
+/** F1/C4: Bring in only ever lands on `main`; the card says so literally. */
+export const mergeCommitName = (from: string): string =>
+  `Brought "${from}" into main`;
 
 /**
- * Restore: a NEW commit whose content is an old version. `name` is the
- * name of the version that was restored FROM.
+ * B5-2b / C1(5) — restore: a NEW card whose content is an old version.
+ * `name` is the name of the card that was restored FROM.
  */
 export const restoreCommitName = (name: string): string =>
-  `Restored version "${name}"`;
-
-/** An agent run is one auto-commit named for its script. */
-export const agentCommitName = (script: string): string =>
-  `Agent run — "${script}"`;
-
-/**
- * Default name for a user's explicit save when they do not type one.
- * `n` = how many versions the project has after this one.
- */
-export const versionName = (n: number): string => `Version ${n}`;
+  `Restored "${name}"`;

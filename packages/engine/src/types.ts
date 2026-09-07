@@ -43,6 +43,12 @@ export type Lineage = {
 
 export type Clip = {
   id: string; // stable — diff and merge identity lives on this
+  /**
+   * Display name (from the OTIO clip name). NON-SEMANTIC: diff, merge,
+   * invariants and verbs ignore it; it only exists so the UI never has to
+   * show a raw id. Absent when the source document had no name.
+   */
+  name?: string;
   mediaRefId: string;
   sourceRange: TimeRange;
   timelineRange: TimeRange;
@@ -65,6 +71,8 @@ export type TextClipProperties = {
 
 export type TextClip = {
   id: string;
+  /** Display name — see `Clip.name`. Non-semantic. */
+  name?: string;
   timelineRange: TimeRange;
   textContent: string;
   textStyle: TextStyle;
@@ -81,6 +89,7 @@ export type TrackKind = "video" | "audio" | "text";
 export type Track = {
   id: string;
   kind: TrackKind;
+  /** Display name (from the OTIO track name). Non-semantic, like Clip.name. */
   name?: string;
   color?: string;
   height?: number;

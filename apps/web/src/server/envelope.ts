@@ -59,10 +59,21 @@ const TRANSPORT_CODES = [
   "E_INTERNAL",
 ] as const;
 
+/**
+ * B0 codes:
+ * - E_NAME_REQUIRED    — C2: a Mark (`kind=mark`) with a missing or
+ *                        whitespace-only name. 400.
+ * - E_COMMIT_NOT_FOUND — `GET /api/diff` asked about a commit this project
+ *                        does not have. 404 (the brief's edge case); the
+ *                        older `loadCommitRow` path keeps E_BAD_REQUEST.
+ */
+const B0_CODES = ["E_NAME_REQUIRED", "E_COMMIT_NOT_FOUND"] as const;
+
 export const ERROR_CODES = [
   ...VERB_CODES,
   ...SYSTEM_CODES,
   ...TRANSPORT_CODES,
+  ...B0_CODES,
 ] as const;
 
 export type ApiErrorCode = (typeof ERROR_CODES)[number];
@@ -83,6 +94,7 @@ const STATUS_BY_CODE: Partial<Record<ApiErrorCode, number>> = {
   E_PAYLOAD_TOO_LARGE: 413,
   E_BRANCH_EXISTS: 409,
   E_INTERNAL: 500,
+  E_COMMIT_NOT_FOUND: 404,
 };
 
 /** Every designed failure path throws one of these. */

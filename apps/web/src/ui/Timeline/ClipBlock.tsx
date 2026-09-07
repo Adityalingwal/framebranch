@@ -11,7 +11,7 @@ import {
 } from "@phosphor-icons/react";
 
 import {
-  clipLabel,
+  clipDisplayName,
   filmstripFrameUrl,
   isTextClip,
   thumbnailUrl,
@@ -94,7 +94,7 @@ export function ClipBlock({
 
   const height = trackHeight;
   const text = isTextClip(clip);
-  const label = clipLabel(clip, mediaRef);
+  const label = clipDisplayName(clip, mediaRef);
   const isAudio = trackKind === "audio" || mediaRef?.kind === "audio";
   const isImage = mediaRef?.kind === "image";
   const hasThumb = !text && !!mediaRef && !isAudio;

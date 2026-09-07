@@ -1,28 +1,26 @@
 /**
  * POST /api/branch/switch — a boundary door. If the source is dirty it is
- * auto-sealed, then returns the target branch's working view. One transaction.
+ * auto-sealed (an `auto` card named by what changed; skipped when the
+ * pending edits cancel out), then returns the target branch's working view.
+ * One transaction.
  *
  * Nothing is stored server-side about which branch is "current" — the
  * switch is complete because the client sends the new branch name in its
  * next request.
  */
 
-import {
-  isDirty,
-  loadBranch,
-  loadBranchView,
-} from "../../../../server/branches";
-import { createCommit } from "../../../../server/commits";
+import { loadBranch, loadBranchView } from "../../../../server/branches";
+import { appendEvent } from "../../../../server/events";
 import { handleRequest, readBody } from "../../../../server/handler";
-import { SEAL_BEFORE_BRANCH_SWITCH } from "../../../../server/naming";
 import { branchSwitchBodySchema } from "../../../../server/schemas";
+import { sealIfDirty } from "../../../../server/seal";
 import { runWithTicket } from "../../../../server/tickets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, branchSwitchBodySchema);
 
     return runWithTicket(
@@ -36,22 +34,17 @@ export async function POST(request: Request): Promise<Response> {
         // fails the whole transaction instead of leaving a seal behind.
         await loadBranch(tx, project.id, body.to);
 
-        let sealedCommitId: string | undefined;
-        if (isDirty(source)) {
-          const sealed = await createCommit({
-            tx,
-            projectId: project.id,
-            branch: source.branch,
-            working: source.working,
-            timeline: source.timeline,
-            name: SEAL_BEFORE_BRANCH_SWITCH,
-            actor: "user",
-          });
-          sealedCommitId = sealed.commitId;
-        }
+        const seal = await sealIfDirty(tx, project.id, source, editorName);
+        const sealedCommitId = seal.sealed ? seal.commitId : undefined;
 
         // Re-read AFTER the seal: when from === to, the seal changed it.
         const target = await loadBranchView(tx, project.id, body.to, true);
+
+        await appendEvent(tx, project.id, "branch-switched", {
+          from: body.from,
+          to: body.to,
+          editorName,
+        });
 
         return {
           timeline: target.timeline,

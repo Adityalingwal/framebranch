@@ -28,7 +28,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, mergeResolveBodySchema);
 
     return runWithTicket(
@@ -84,6 +84,7 @@ export async function POST(request: Request): Promise<Response> {
           sides,
           choices: result.choices,
           attemptId: attempt.id,
+          actorName: editorName,
         });
       },
     );

@@ -8,8 +8,8 @@ import type { MergeChoice, MergeConflict, Timeline } from "@framebranch/engine";
 import { ApiClientError } from "../../lib/data/api-client";
 import { findClipById, isTextClip, type AnyClip } from "../../lib/clip-helpers";
 import { formatTimecode } from "../../lib/format";
-import { recordHead } from "../../lib/state/head-tracking";
 import {
+  refreshBranches,
   useMergeAbortMutation,
   useMergeResolveMutation,
   useMergeStartMutation,
@@ -66,7 +66,7 @@ export function MergePanel({
     queryClient.invalidateQueries({
       queryKey: queryKeys.timeline(currentBranch),
     });
-    queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+    refreshBranches(queryClient);
   }
 
   function startMerge() {
@@ -86,10 +86,10 @@ export function MergePanel({
           queryClient.invalidateQueries({
             queryKey: queryKeys.timeline(mergingFrom),
           });
-          queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+          // A1a patch (a): merge START seals both cuts → heads may move.
+          refreshBranches(queryClient);
 
           if ("done" in data) {
-            recordHead(currentBranch, data.mergeCommitId);
             showToast("Merge complete — no conflicts.");
             return;
           }
@@ -112,7 +112,6 @@ export function MergePanel({
       {
         onSuccess: (data) => {
           if ("done" in data) {
-            recordHead(currentBranch, data.mergeCommitId);
             finalizeInvalidate();
             setAttempt(null);
             showToast("Merge complete.");

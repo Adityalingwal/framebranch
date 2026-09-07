@@ -1,8 +1,9 @@
 /**
- * schema.ts — the 8 table schema.
+ * schema.ts — the 10 table schema (8 original + project_events + presence).
  */
 
 import {
+  bigserial,
   index,
   integer,
   jsonb,
@@ -17,7 +18,7 @@ import {
 import type { Timeline } from "@framebranch/engine";
 import type { ImportWarning } from "@framebranch/engine";
 
-import type { PendingOp } from "../server/types";
+import type { CommitKind, PendingOp } from "../server/types";
 
 /**
  * (1) projects — capability token identification + 100-project cap.
@@ -51,6 +52,18 @@ export const branches = pgTable(
       .references(() => projects.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     headCommitId: text("head_commit_id").notNull(),
+    /** F2a — display name of whoever created the cut; seeded `main` has none. */
+    createdBy: text("created_by"),
+    /**
+     * F3(4) — "Ready for main". Ready = `ready_at IS NOT NULL`; the four
+     * columns are set and cleared together. `ready_working_rev` is the
+     * working_state.working_rev at the moment of marking: "Edited since
+     * ready" = the working rev moved, not the head.
+     */
+    readyNote: text("ready_note"),
+    readyBy: text("ready_by"),
+    readyAt: timestamp("ready_at", { withTimezone: true }),
+    readyWorkingRev: integer("ready_working_rev"),
   },
   (table) => [
     index("branches_project_id_idx").on(table.projectId),
@@ -75,6 +88,17 @@ export const commits = pgTable(
     parent2Id: text("parent2_id"),
     name: text("name").notNull(),
     actor: text("actor").$type<"user" | "agent">().notNull(),
+    /**
+     * B4 — which kind of card this is. Every createCommit caller names one
+     * explicitly; there is no default. `actor` (user/agent) stays as-is.
+     */
+    kind: text("kind").$type<CommitKind>().notNull(),
+    /**
+     * F2a — display name of who made this card (`Agent` for agent runs).
+     * NULL only on `seed` cards: the seed is written before the first-visit
+     * name box exists, so its meta shows `Start · ‹time›` only (C1(6)).
+     */
+    actorName: text("actor_name"),
     snapshotDistance: integer("snapshot_distance").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -145,6 +169,8 @@ export const workingState = pgTable(
       .references(() => commits.id, { onDelete: "cascade" }),
     pendingOps: jsonb("pending_ops").$type<PendingOp[]>().notNull(),
     workingRev: integer("working_rev").notNull(),
+    /** F2a/F4 — display name of the last editor whose op was accepted. */
+    lastEditorName: text("last_editor_name"),
   },
   (table) => [index("working_state_project_id_idx").on(table.projectId)],
 );
@@ -211,5 +237,54 @@ export const tickets = pgTable(
     // the database is simply told the truth. [ADDED 2026-08-05, M7a review
     // finding F1 — owner chose the index over relaxing the doc.]
     uniqueIndex("tickets_ticket_key").on(table.ticket),
+  ],
+);
+
+/**
+ * (9) project_events — J1's sync feed. Appended INSIDE the transaction of
+ * every commit / branch create / branch switch / restore / merge finalize /
+ * import (server/events.ts). `id` is the cursor a poller resumes from.
+ * No route reads it in B0.
+ */
+export const projectEvents = pgTable(
+  "project_events",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("project_events_project_id_id_idx").on(table.projectId, table.id),
+  ],
+);
+
+/**
+ * (10) presence — J1's live presence, one row per (project, browser tab).
+ * Display-only: never read by any CAS. No route reads or writes it in B0.
+ */
+export const presence = pgTable(
+  "presence",
+  {
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    tabId: text("tab_id").notNull(),
+    name: text("name").notNull(),
+    cut: text("cut").notNull(),
+    playheadFrame: integer("playhead_frame").notNull(),
+    colourSeed: integer("colour_seed").notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull(),
+  },
+  (table) => [
+    primaryKey({
+      name: "presence_project_id_tab_id_pk",
+      columns: [table.projectId, table.tabId],
+    }),
   ],
 );

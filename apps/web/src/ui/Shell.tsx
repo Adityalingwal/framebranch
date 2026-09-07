@@ -8,7 +8,7 @@ import type { PendingOp } from "../server/types";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import { ApiClientError } from "../lib/data/api-client";
-import { clipLabel, findClipById, findMediaRef } from "../lib/clip-helpers";
+import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import {
   useOpsHistoryMutation,
@@ -17,6 +17,7 @@ import {
 } from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
 import { IconRail } from "./IconRail";
+import { NameGate } from "./NameGate";
 import { PreviewPane } from "./PreviewPane";
 import { RightPanel, type PanelView } from "./RightPanel/RightPanel";
 import { TimelineView } from "./Timeline/TimelineView";
@@ -459,6 +460,8 @@ export function Shell() {
         overflow: "hidden",
       }}
     >
+      {/* F2a — asks for a display name once per tab, before any edit. */}
+      <NameGate />
       <TopBar
         currentBranch={currentBranch}
         knownBranches={knownBranches}
@@ -570,7 +573,7 @@ export function Shell() {
               ) : (
                 <ClipProperties
                   clip={selectedClip}
-                  displayName={clipLabel(selectedClip, mediaRef)}
+                  displayName={clipDisplayName(selectedClip, mediaRef)}
                   mediaKind={mediaRef?.kind}
                   disabled={editingPaused}
                   resetToken={propertyErrorTick}

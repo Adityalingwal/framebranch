@@ -4,11 +4,13 @@
  * is itself undoable. The commit carries a full snapshot.
  */
 
-import { isDirty, loadBranchView } from "../../../server/branches";
+import { loadBranchView } from "../../../server/branches";
 import { createCommit, loadCommitRow } from "../../../server/commits";
+import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
-import { SEAL_BEFORE_RESTORE, restoreCommitName } from "../../../server/naming";
+import { restoreCommitName } from "../../../server/naming";
 import { restoreBodySchema } from "../../../server/schemas";
+import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
 import { loadCommitTimeline } from "../../../server/timeline";
 
@@ -16,7 +18,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, restoreBodySchema);
 
     return runWithTicket(db, project.id, "restore", body.ticket, async (tx) => {
@@ -27,22 +29,12 @@ export async function POST(request: Request): Promise<Response> {
       const target = await loadCommitRow(tx, project.id, body.commitId);
       const restored = await loadCommitTimeline(tx, project.id, target.id);
 
-      if (isDirty(view)) {
-        await createCommit({
-          tx,
-          projectId: project.id,
-          branch: view.branch,
-          working: view.working,
-          timeline: view.timeline,
-          name: SEAL_BEFORE_RESTORE,
-          actor: "user",
-        });
-      }
+      await sealIfDirty(tx, project.id, view, editorName);
 
       // Re-read after the seal: the branch head and the working record moved.
       const fresh = await loadBranchView(tx, project.id, body.branch, true);
 
-      return createCommit({
+      const commit = await createCommit({
         tx,
         projectId: project.id,
         branch: fresh.branch,
@@ -50,8 +42,19 @@ export async function POST(request: Request): Promise<Response> {
         timeline: restored,
         name: restoreCommitName(target.name),
         actor: "user",
+        kind: "restore",
+        actorName: editorName,
         forceSnapshot: true,
       });
+
+      await appendEvent(tx, project.id, "restore", {
+        branch: body.branch,
+        commitId: commit.commitId,
+        restoredFrom: target.id,
+        editorName,
+      });
+
+      return commit;
     });
   });
 }

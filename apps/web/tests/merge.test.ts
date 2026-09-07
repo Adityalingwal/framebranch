@@ -68,7 +68,12 @@ async function edit(
 
 async function save(s: Session, branch: string): Promise<string> {
   const data = expectOk(
-    await post(postCommit, "/api/commit", { branch, ticket: ticket() }, s),
+    await post(
+      postCommit,
+      "/api/commit",
+      { branch, name: `Marked on ${branch}`, ticket: ticket() },
+      s,
+    ),
   ) as { commitId: string };
   return data.commitId;
 }
@@ -145,6 +150,26 @@ const startMergeCall = async (s: Session, t = ticket()) =>
   post(postMerge, "/api/merge", { from: AGENT, into: "main", ticket: t }, s);
 
 describe("C4 (4) — POST merge", () => {
+  it("F1: Bring in only lands on main — any other `into` is rejected at the door, nothing written", async () => {
+    const s = await session();
+    await oneSidedBranches(s);
+    const headInto = await headOf("main");
+    const headFrom = await headOf(AGENT);
+    const commitsBefore = (await getDb().select().from(commits)).length;
+
+    const err = expectError(
+      await post(postMerge, "/api/merge", { from: "main", into: AGENT, ticket: ticket() }, s),
+    );
+    expect(err.code).toBe("E_BAD_REQUEST");
+    expect(err.message).toContain('"main"');
+
+    // no seal, no card, no attempt row, heads untouched
+    expect(await headOf("main")).toBe(headInto);
+    expect(await headOf(AGENT)).toBe(headFrom);
+    expect((await getDb().select().from(commits)).length).toBe(commitsBefore);
+    expect((await getDb().select().from(mergeAttempts)).length).toBe(0);
+  });
+
   it("F6: a merge with ZERO conflicts finalizes immediately and leaves no draft row", async () => {
     const s = await session();
     await oneSidedBranches(s);
@@ -340,7 +365,7 @@ describe("C4 (4) — POST merge", () => {
     const sealed = await getDb()
       .select()
       .from(commits)
-      .where(eq(commits.name, "Auto — before merge"));
+      .where(eq(commits.kind, "auto"));
     expect(sealed).toHaveLength(2);
     expect(await commitCount()).toBe(before + 2);
     const mainView = expectOk(

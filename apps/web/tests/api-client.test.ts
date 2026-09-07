@@ -73,10 +73,10 @@ describe("api-client — envelope + error mapping", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      postCommit({ branch: "main" }, noopHooks()),
+      postCommit({ branch: "main", name: "Client pick" }, noopHooks()),
     ).rejects.toBeInstanceOf(ApiClientError);
     await expect(
-      postCommit({ branch: "main" }, noopHooks()),
+      postCommit({ branch: "main", name: "Client pick" }, noopHooks()),
     ).rejects.toMatchObject({ message: "clips would overlap" });
   });
 
@@ -104,17 +104,17 @@ describe("api-client — C6 retry ladder", () => {
       .mockRejectedValueOnce(new TypeError("network error"))
       .mockRejectedValueOnce(new TypeError("network error"))
       .mockResolvedValueOnce(
-        jsonResponse({ ok: true, data: { commitId: "c1", name: "Version 2" } }),
+        jsonResponse({ ok: true, data: { commitId: "c1", name: "Client pick" } }),
       );
     vi.stubGlobal("fetch", fetchMock);
     const hooks = noopHooks();
 
-    const resultPromise = postCommit({ branch: "main" }, hooks);
+    const resultPromise = postCommit({ branch: "main", name: "Client pick" }, hooks);
     await vi.advanceTimersByTimeAsync(1000); // first silent retry
     await vi.advanceTimersByTimeAsync(3000); // second silent retry
     const result = await resultPromise;
 
-    expect(result).toEqual({ commitId: "c1", name: "Version 2" });
+    expect(result).toEqual({ commitId: "c1", name: "Client pick" });
     expect(fetchMock).toHaveBeenCalledTimes(3);
     const tickets = fetchMock.mock.calls.map(ticketOf);
     expect(new Set(tickets).size).toBe(1); // every retry reused the SAME ticket
@@ -128,7 +128,7 @@ describe("api-client — C6 retry ladder", () => {
       .mockRejectedValueOnce(new TypeError("network error")) // silent retry @1s
       .mockRejectedValueOnce(new TypeError("network error")) // silent retry @3s
       .mockResolvedValueOnce(
-        jsonResponse({ ok: true, data: { commitId: "c1", name: "Version 2" } }),
+        jsonResponse({ ok: true, data: { commitId: "c1", name: "Client pick" } }),
       ); // manual [Retry] press
     vi.stubGlobal("fetch", fetchMock);
 
@@ -140,7 +140,7 @@ describe("api-client — C6 retry ladder", () => {
       onConnectionRestored: vi.fn(),
     };
 
-    const resultPromise = postCommit({ branch: "main" }, hooks);
+    const resultPromise = postCommit({ branch: "main", name: "Client pick" }, hooks);
     await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(3000);
 
@@ -152,7 +152,7 @@ describe("api-client — C6 retry ladder", () => {
     capturedRetry!();
     const result = await resultPromise;
 
-    expect(result).toEqual({ commitId: "c1", name: "Version 2" });
+    expect(result).toEqual({ commitId: "c1", name: "Client pick" });
     expect(fetchMock).toHaveBeenCalledTimes(4);
     const tickets = fetchMock.mock.calls.map(ticketOf);
     expect(new Set(tickets).size).toBe(1);
@@ -176,7 +176,7 @@ describe("api-client — C6 retry ladder", () => {
     // rejection (which lands mid-`advanceTimersByTimeAsync`) is never
     // briefly unhandled from Node's point of view.
     const assertion = expect(
-      postCommit({ branch: "main" }, hooks),
+      postCommit({ branch: "main", name: "Client pick" }, hooks),
     ).rejects.toMatchObject({
       code: "E_STALE_HEAD",
       message: "This version moved — reload and try again.",

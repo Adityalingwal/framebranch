@@ -1,25 +1,90 @@
 /**
- * POST /api/branch — a boundary door. Creates a branch starting at the
- * source branch's current head, and returns its working view. If the source
- * is dirty it is auto-sealed first. Create + working record are one
- * transaction.
+ * /api/branch
+ *
+ * GET — A1a/A1b: every cut with its head, creator and Ready state, `main`
+ * first then A→Z. The ONE source of "which cuts exist / where is each head"
+ * for the UI (no client-side head bookkeeping). Read-only, no ticket.
+ *
+ * POST — a boundary door. Creates a branch starting at the source branch's
+ * current head, and returns its working view. If the source is dirty it is
+ * auto-sealed first. Create + working record are one transaction.
  */
 
+import { eq } from "drizzle-orm";
+
 import { branches, workingState } from "../../../db/schema";
-import { findBranch, isDirty, loadBranchView } from "../../../server/branches";
-import { createCommit } from "../../../server/commits";
+import { findBranch, loadBranchView } from "../../../server/branches";
 import { ApiError } from "../../../server/envelope";
+import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
-import { SEAL_BEFORE_BRANCH_CREATE } from "../../../server/naming";
 import { INITIAL_WORKING_REV } from "../../../server/project";
 import { branchCreateBodySchema } from "../../../server/schemas";
+import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request): Promise<Response> {
+export type BranchListItem = {
+  name: string;
+  /** A1b — the head commit id; the UI resolves name/kind via History. */
+  head: string;
+  /** F2a — who created the cut; `main` (seeded) has none. */
+  createdBy: string | null;
+  /** F3(4) — null unless marked Ready. */
+  ready: null | {
+    note: string;
+    by: string;
+    at: string;
+    /** The working rev moved since Ready was marked (edits, not head). */
+    editedSince: boolean;
+  };
+};
+
+/** A1a patch (d): `main` first, the rest by name A→Z. */
+function byMainThenName(a: { name: string }, b: { name: string }): number {
+  if (a.name === "main") return b.name === "main" ? 0 : -1;
+  if (b.name === "main") return 1;
+  return a.name.localeCompare(b.name);
+}
+
+export async function GET(request: Request): Promise<Response> {
   return handleRequest(request, async ({ db, project }) => {
+    const rows = await db
+      .select({
+        name: branches.name,
+        head: branches.headCommitId,
+        createdBy: branches.createdBy,
+        readyNote: branches.readyNote,
+        readyBy: branches.readyBy,
+        readyAt: branches.readyAt,
+        readyWorkingRev: branches.readyWorkingRev,
+        workingRev: workingState.workingRev,
+      })
+      .from(branches)
+      .innerJoin(workingState, eq(workingState.branchId, branches.id))
+      .where(eq(branches.projectId, project.id));
+
+    const list: BranchListItem[] = rows.sort(byMainThenName).map((row) => ({
+      name: row.name,
+      head: row.head,
+      createdBy: row.createdBy,
+      ready:
+        row.readyAt === null
+          ? null
+          : {
+              note: row.readyNote ?? "",
+              by: row.readyBy ?? "",
+              at: row.readyAt.toISOString(),
+              editedSince: row.workingRev !== row.readyWorkingRev,
+            },
+    }));
+    return { branches: list };
+  });
+}
+
+export async function POST(request: Request): Promise<Response> {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, branchCreateBodySchema);
 
     return runWithTicket(
@@ -42,23 +107,20 @@ export async function POST(request: Request): Promise<Response> {
 
         let sealedCommitId: string | undefined;
         let headCommitId = source.branch.headCommitId;
-        if (isDirty(source)) {
-          const sealed = await createCommit({
-            tx,
-            projectId: project.id,
-            branch: source.branch,
-            working: source.working,
-            timeline: source.timeline,
-            name: SEAL_BEFORE_BRANCH_CREATE,
-            actor: "user",
-          });
-          sealedCommitId = sealed.commitId;
-          headCommitId = sealed.commitId;
+        const seal = await sealIfDirty(tx, project.id, source, editorName);
+        if (seal.sealed) {
+          sealedCommitId = seal.commitId;
+          headCommitId = seal.commitId;
         }
 
         const [created] = await tx
           .insert(branches)
-          .values({ projectId: project.id, name: body.name, headCommitId })
+          .values({
+            projectId: project.id,
+            name: body.name,
+            headCommitId,
+            createdBy: editorName,
+          })
           .returning();
 
         await tx.insert(workingState).values({
@@ -67,6 +129,13 @@ export async function POST(request: Request): Promise<Response> {
           baseCommitId: headCommitId,
           pendingOps: [],
           workingRev: INITIAL_WORKING_REV,
+        });
+
+        await appendEvent(tx, project.id, "branch-created", {
+          branch: created.name,
+          from: body.from,
+          head: headCommitId,
+          createdBy: editorName,
         });
 
         return {

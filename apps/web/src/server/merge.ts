@@ -13,10 +13,12 @@ import { and, eq } from "drizzle-orm";
 import { finalizeCheck } from "@framebranch/engine";
 import type { MergeChoices, Timeline } from "@framebranch/engine";
 
-import { commits, mergeAttempts } from "../db/schema";
+import { mergeAttempts } from "../db/schema";
+import { ancestorsOf, loadParentMap } from "./ancestry";
 import { loadBranchById, loadWorkingState } from "./branches";
 import { createCommit } from "./commits";
 import { ApiError } from "./envelope";
+import { appendEvent } from "./events";
 import { mergeCommitName } from "./naming";
 import { loadCommitTimeline } from "./timeline";
 import type { Tx } from "./tx";
@@ -34,43 +36,6 @@ export type MergeSides = {
   ours: Timeline;
   theirs: Timeline;
 };
-
-type ParentMap = Map<string, string[]>;
-
-async function loadParentMap(tx: Tx, projectId: string): Promise<ParentMap> {
-  // Project-scoped, like every query. One read of this project's commit
-  // graph — the demo-scale DAG is tiny and this keeps the walk pure.
-  const rows = await tx
-    .select({
-      id: commits.id,
-      parentId: commits.parentId,
-      parent2Id: commits.parent2Id,
-    })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
-
-  const map: ParentMap = new Map();
-  for (const row of rows) {
-    map.set(
-      row.id,
-      [row.parentId, row.parent2Id].filter((id): id is string => id !== null),
-    );
-  }
-  return map;
-}
-
-/** Every commit reachable from `start` through parent_id AND parent2_id. */
-function ancestorsOf(map: ParentMap, start: string): Set<string> {
-  const seen = new Set<string>();
-  const stack = [start];
-  while (stack.length > 0) {
-    const id = stack.pop() as string;
-    if (seen.has(id)) continue; // the visited set is what makes this terminate
-    seen.add(id);
-    for (const parent of map.get(id) ?? []) stack.push(parent);
-  }
-  return seen;
-}
 
 /**
  * The merge base = the common ancestor of the two heads.
@@ -149,6 +114,8 @@ export type FinalizeInput = {
   headFrom: string;
   sides: MergeSides;
   choices: MergeChoices;
+  /** F2a — who pressed the button; stored on the bring-in card. */
+  actorName: string;
   /** Present when a draft row exists; it is deleted in this transaction. */
   attemptId?: string;
 };
@@ -171,6 +138,7 @@ export async function finalizeMerge({
   headFrom,
   sides,
   choices,
+  actorName,
   attemptId,
 }: FinalizeInput): Promise<{ done: true; mergeCommitId: string }> {
   const check = finalizeCheck({
@@ -212,14 +180,23 @@ export async function finalizeMerge({
     branch: into,
     working,
     timeline: check.timeline,
-    name: mergeCommitName(from.name, into.name),
+    name: mergeCommitName(from.name),
     actor: "user",
+    kind: "bring-in",
+    actorName,
     // The second parent exists ONLY on merge commits (in the commits table,
     // parent2Id is non-null only here).
     parent2Id: headFrom,
     // Merge commits are always full snapshots — a merge is not expressible
     // as ops, and a snapshot removes two-parent replay ambiguity.
     forceSnapshot: true,
+  });
+
+  await appendEvent(tx, projectId, "merge-finalized", {
+    into: into.name,
+    from: from.name,
+    commitId: commit.commitId,
+    actorName,
   });
 
   if (attemptId !== undefined) {

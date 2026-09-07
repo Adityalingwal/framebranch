@@ -8,6 +8,21 @@ import type { Command } from "@framebranch/engine";
 export type Actor = "user" | "agent";
 
 /**
+ * B4 — the seven card kinds. Every createCommit caller names one; the TS
+ * union makes forgetting one a compile error, never a runtime default.
+ */
+export const COMMIT_KINDS = [
+  "mark",
+  "auto",
+  "agent-run",
+  "bring-in",
+  "restore",
+  "seed",
+  "import",
+] as const;
+export type CommitKind = (typeof COMMIT_KINDS)[number];
+
+/**
  * One entry of `working_state.pending_ops` (and, once sealed, one `ops`
  * row). `id` is minted when the edit is accepted and NEVER changes — it is
  * what makes replay deterministic: the engine's id minting for `addClip`
@@ -36,4 +51,5 @@ export type TicketEndpoint =
   | "branch-create"
   | "branch-switch"
   | "demo-reset"
+  | "project-new"
   | "restore";

@@ -22,6 +22,8 @@ export { closeDb, getDb };
 
 const TABLES = [
   "tickets",
+  "presence",
+  "project_events",
   "merge_attempts",
   "working_state",
   "snapshots",
@@ -82,11 +84,17 @@ export async function post<T = unknown>(
   path: string,
   body: unknown,
   session: Session = { token: null },
+  /** Extra request headers, e.g. `{ "X-Editor-Name": "Priya" }` (F2a). */
+  headers: Record<string, string> = {},
 ): Promise<Call<T>> {
   const response = await handler(
     new Request(`${BASE}${path}`, {
       method: "POST",
-      headers: { "content-type": "application/json", ...cookieHeader(session) },
+      headers: {
+        "content-type": "application/json",
+        ...cookieHeader(session),
+        ...headers,
+      },
       body: JSON.stringify(body),
     }),
   );

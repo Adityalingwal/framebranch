@@ -24,7 +24,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, opsBodySchema);
 
     return runWithTicket(db, project.id, "ops", body.ticket, async (tx) => {
@@ -65,9 +65,14 @@ export async function POST(request: Request): Promise<Response> {
       const pending = [...view.pending, op];
       const nextRev = view.working.workingRev + 1;
 
+      // F2a/F4 — who last touched this cut's working area (F4 reads it).
       await tx
         .update(workingState)
-        .set({ pendingOps: pending, workingRev: nextRev })
+        .set({
+          pendingOps: pending,
+          workingRev: nextRev,
+          lastEditorName: editorName,
+        })
         .where(
           and(
             eq(workingState.branchId, view.branch.id),

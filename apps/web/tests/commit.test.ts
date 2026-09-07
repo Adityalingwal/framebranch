@@ -12,6 +12,7 @@ import { POST as postCommit } from "../src/app/api/commit/route";
 import { POST as postOps } from "../src/app/api/ops/route";
 import {
   closeDb,
+  expectError,
   expectOk,
   get,
   getDb,
@@ -66,7 +67,7 @@ describe("C4 (4) — POST commit", () => {
       await post(
         postCommit,
         "/api/commit",
-        { branch: "main", ticket: ticket() },
+        { branch: "main", name: "Marked", ticket: ticket() },
         s,
       ),
     ) as CommitData;
@@ -100,7 +101,7 @@ describe("C4 (4) — POST commit", () => {
       await post(
         postCommit,
         "/api/commit",
-        { branch: "main", ticket: ticket() },
+        { branch: "main", name: "Marked", ticket: ticket() },
         s,
       ),
     ) as CommitData;
@@ -119,7 +120,7 @@ describe("C4 (4) — POST commit", () => {
         await post(
           postCommit,
           "/api/commit",
-          { branch: "main", ticket: ticket() },
+          { branch: "main", name: "Marked", ticket: ticket() },
           s,
         ),
       ) as CommitData;
@@ -147,25 +148,51 @@ describe("C4 (4) — POST commit", () => {
     expect(view.pendingCount).toBe(0);
   });
 
-  it("Item 6a(5): the default name is a deterministic template, never AI", async () => {
+  it("C2: a Mark needs a name — missing or whitespace-only is 400 E_NAME_REQUIRED, one character is enough", async () => {
     const s = await session();
     await edit(s, 0, 55);
-    const commit = expectOk(
+
+    const missing = await post(
+      postCommit,
+      "/api/commit",
+      { branch: "main", ticket: ticket() },
+      s,
+    );
+    expect(missing.status).toBe(400);
+    expect(expectError(missing).code).toBe("E_NAME_REQUIRED");
+
+    const blank = await post(
+      postCommit,
+      "/api/commit",
+      { branch: "main", name: "   ", ticket: ticket() },
+      s,
+    );
+    expect(blank.status).toBe(400);
+    expect(expectError(blank).code).toBe("E_NAME_REQUIRED");
+    // nothing was written: still only the seed card, edit still pending
+    expect(await getDb().select().from(commits)).toHaveLength(1);
+    const view = expectOk(
+      await get(getTimeline, "/api/timeline?branch=main", s),
+    ) as TimelineData;
+    expect(view.pendingCount).toBe(1);
+
+    const one = expectOk(
       await post(
         postCommit,
         "/api/commit",
-        { branch: "main", ticket: ticket() },
+        { branch: "main", name: "x", ticket: ticket() },
         s,
       ),
     ) as CommitData;
-    expect(commit.name).toBe("Version 2");
+    expect(one.name).toBe("x");
 
+    // the name is stored trimmed
     await edit(s, 1, 44);
     const named = expectOk(
       await post(
         postCommit,
         "/api/commit",
-        { branch: "main", name: "Tighter intro", ticket: ticket() },
+        { branch: "main", name: "  Tighter intro ", ticket: ticket() },
         s,
       ),
     ) as CommitData;

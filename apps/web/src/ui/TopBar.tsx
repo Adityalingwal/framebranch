@@ -186,13 +186,15 @@ export function TopBar({
         <button
           type="button"
           style={
-            busy || editingPaused
+            busy || editingPaused || versionName.trim().length === 0
               ? { ...primaryButton, opacity: 0.45 }
               : primaryButton
           }
-          disabled={busy || editingPaused}
+          // C2: a Mark needs a name — the button stays off while it is empty
+          // (the server refuses an empty one too, E_NAME_REQUIRED).
+          disabled={busy || editingPaused || versionName.trim().length === 0}
           onClick={() =>
-            saveVersion.mutate(versionName.trim() || undefined, {
+            saveVersion.mutate(versionName.trim(), {
               onSuccess: () => setVersionName(""),
             })
           }

@@ -4,23 +4,23 @@ import { useEffect, useState } from "react";
 import { Robot, User } from "@phosphor-icons/react";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
-import { useHeadCommits } from "../../lib/state/head-tracking";
-import { useDiffQuery, useHistoryQuery } from "../../lib/data/hooks";
+import {
+  useBranchesQuery,
+  useDiffQuery,
+  useHistoryQuery,
+} from "../../lib/data/hooks";
 import { relativeTime } from "../../lib/format";
 import { CustomSelect } from "../CustomSelect";
 
 /**
- * §6 — Changes panel: pick two versions, `GET /api/diff`, render
- * `sentences` verbatim (C1 — never reworded/resorted/filtered here).
+ * §6 — Changes panel: pick two versions, `GET /api/diff`, render the shared
+ * presenter's rows one per line (D4(1); the server orders older → newer, so
+ * whichever way the pickers are set the reading is the same).
  *
- * Default pair = "this branch's head vs its parent" when known (see
- * head-tracking.ts for why "known" needs a caveat — no endpoint reports a
- * branch's head commit id, so this is client-side bookkeeping from mutation
- * responses, good for the live session, lost on a hard reload). Either
- * dropdown can always be changed by hand to ANY commit in the project's
- * history — that is what makes "main head vs tighten-intro head" (the demo
- * step) reachable even when the default guess is wrong or unknown, with no
- * server change required.
+ * The default pair = "this cut's head vs its parent". The head comes from
+ * `GET /api/branch` (A1b — the one source; no client-side bookkeeping), the
+ * parent from the cut's History (B2). B2 rewrites this panel into the
+ * Compare view (Now as a side, lanes); B0 only moves it onto the new APIs.
  */
 export function ChangesPanel({
   currentBranch,
@@ -31,18 +31,20 @@ export function ChangesPanel({
   pendingCount: number;
   onHighlightClip: (clipId: string | null) => void;
 }) {
-  const history = useHistoryQuery();
-  const heads = useHeadCommits();
+  const history = useHistoryQuery(currentBranch);
+  const branches = useBranchesQuery();
 
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [defaulted, setDefaulted] = useState(false);
 
   const commits = history.data?.commits ?? [];
+  const head = branches.data?.branches.find(
+    (b) => b.name === currentBranch,
+  )?.head;
 
-  // Apply the default exactly once per branch, once history + a known head
-  // are both available — after that the user's own picks are never
-  // overwritten out from under them.
+  // Apply the default exactly once per cut, once History + the head are
+  // both known — after that the user's own picks are never overwritten.
   useEffect(() => {
     setDefaulted(false);
     setFrom(null);
@@ -50,18 +52,16 @@ export function ChangesPanel({
   }, [currentBranch]);
 
   useEffect(() => {
-    if (defaulted || commits.length === 0) return;
-    const head = heads[currentBranch];
-    if (!head) return;
+    if (defaulted || commits.length === 0 || !head) return;
     const headCommit = commits.find((c) => c.commitId === head);
     if (!headCommit) return;
-    const parent = headCommit.parents[0] ?? head; // root commit → vs itself
+    const parent = headCommit.parents[0] ?? head; // root card → vs itself
     setFrom(parent);
     setTo(head);
     setDefaulted(true);
-  }, [defaulted, commits, heads, currentBranch]);
+  }, [defaulted, commits, head]);
 
-  const diff = useDiffQuery(from, to);
+  const diff = useDiffQuery(currentBranch, from, to);
 
   return (
     <div>
@@ -108,7 +108,7 @@ export function ChangesPanel({
         <Empty>Loading…</Empty>
       ) : diff.isError ? (
         <Empty>Couldn&rsquo;t load this diff.</Empty>
-      ) : diff.data && diff.data.sentences.length === 0 ? (
+      ) : diff.data && diff.data.count === 0 ? (
         <Empty>No changes.</Empty>
       ) : (
         <ul
@@ -121,13 +121,11 @@ export function ChangesPanel({
             gap: 4,
           }}
         >
-          {diff.data?.sentences.map((sentence, i) => {
-            const entry = diff.data!.entries[i];
-            const clipId =
-              entry && "clipId" in entry ? (entry.clipId ?? null) : null;
+          {diff.data?.rows.map((row) => {
+            const clipId = row.clipIds[0] ?? null;
             return (
               <li
-                key={i}
+                key={row.key}
                 onMouseEnter={() => clipId && onHighlightClip(clipId)}
                 onMouseLeave={() => onHighlightClip(null)}
                 onClick={() => clipId && onHighlightClip(clipId)}
@@ -140,7 +138,8 @@ export function ChangesPanel({
                 }}
                 className={clipId ? "motion-hover" : undefined}
               >
-                {sentence}
+                {row.clipName} · {row.text}
+                {row.where ? ` · ${row.where}` : ""}
               </li>
             );
           })}

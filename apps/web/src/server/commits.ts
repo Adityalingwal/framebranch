@@ -6,7 +6,8 @@
  *   started from (compare-and-swap), else E_STALE_HEAD.
  * - Snapshot cadence: every 10th commit is a full snapshot; import / restore /
  *   merge commits are always full snapshots.
- * - Names are deterministic templates (see naming.ts).
+ * - Names are deterministic templates or presenter summaries (naming.ts,
+ *   seal.ts); every card carries an explicit `kind` (B4).
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -16,8 +17,9 @@ import type { ImportWarning, Timeline } from "@framebranch/engine";
 
 import { branches, commits, ops, snapshots, workingState } from "../db/schema";
 import { ApiError } from "./envelope";
+import { appendEvent } from "./events";
 import type { BranchRow, WorkingStateRow } from "./branches";
-import type { Actor, PendingOp } from "./types";
+import type { Actor, CommitKind, PendingOp } from "./types";
 import type { Tx } from "./tx";
 
 /** Snapshot interval: every Nth commit is a full snapshot. */
@@ -42,6 +44,14 @@ export type CreateCommitInput = {
   timeline: Timeline;
   name: string;
   actor: Actor;
+  /** B4 — the card kind. Explicit on every call; there is no default. */
+  kind: CommitKind;
+  /**
+   * F2a — display name of who made the card. `Agent` for agent runs; the
+   * request's editor name otherwise. Only the seed (written elsewhere) is
+   * null.
+   */
+  actorName: string | null;
   /** The second parent — non-null ONLY on merge commits. */
   parent2Id?: string | null;
   /**
@@ -77,6 +87,8 @@ export async function createCommit({
   timeline,
   name,
   actor,
+  kind,
+  actorName,
   parent2Id = null,
   forceSnapshot = false,
   importWarnings = null,
@@ -116,6 +128,8 @@ export async function createCommit({
     parent2Id,
     name,
     actor,
+    kind,
+    actorName,
     snapshotDistance,
     importWarnings,
   });
@@ -170,6 +184,15 @@ export async function createCommit({
       ),
     );
 
+  // J1 — the event rides in the same transaction as the card.
+  await appendEvent(tx, projectId, "commit-created", {
+    commitId,
+    kind,
+    name,
+    branch: branch.name,
+    actorName,
+  });
+
   return { commitId, name };
 }
 
@@ -199,13 +222,4 @@ export async function loadCommitRow(
     );
   }
   return rows[0];
-}
-
-/** How many versions this project has (used by the `Version N` template). */
-export async function countCommits(tx: Tx, projectId: string): Promise<number> {
-  const rows = await tx
-    .select({ id: commits.id })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
-  return rows.length;
 }

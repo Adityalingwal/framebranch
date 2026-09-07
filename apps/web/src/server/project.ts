@@ -1,8 +1,8 @@
 /**
  * project.ts — demo isolation: the capability token, the first-visit
- * bootstrap, and the 100-project cap sweep.
+ * bootstrap, seeding/resetting from a preset, and the 100-project cap sweep.
  *
- * HLD #14 LOCK: first visit → new project row + a demo-fixture seed COPY +
+ * HLD #14 LOCK: first visit → new project row + a preset seed COPY +
  * a random unguessable owner_token in an HTTP-only cookie. Every later
  * request matches token → project; a MISMATCH IS 404 (never 403, never
  * another project's data). Different visitors are different project rows =
@@ -15,20 +15,26 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 
-import { importOtio } from "@framebranch/engine";
-import type { ImportWarning, Timeline } from "@framebranch/engine";
-
 import type { Db } from "../db/client";
 import {
   branches,
   commits,
+  mergeAttempts,
+  ops,
+  presence,
+  projectEvents,
   projects,
   snapshots,
   workingState,
 } from "../db/schema";
 import { mintCommitId } from "./commits";
-import { demoOtioJson } from "./demo-fixture";
-import { IMPORT_COMMIT_NAME } from "./naming";
+import { appendEvent } from "./events";
+import {
+  DEFAULT_PRESET_ID,
+  importPreset,
+  presetById,
+  type Preset,
+} from "./presets";
 import type { Tx } from "./tx";
 
 export const TOKEN_COOKIE = "fb_token";
@@ -88,45 +94,36 @@ export async function findProjectByToken(
   return rows[0] ?? null;
 }
 
-/**
- * The demo fixture, imported through the engine exactly as a user document
- * would be. The fixture is ours and is covered by a test; if this ever fails
- * the deployment is broken, not the request.
- */
-function importDemoFixture(): {
-  timeline: Timeline;
-  warnings: ImportWarning[];
-} {
-  const imported = importOtio(demoOtioJson());
-  if (!imported.ok) {
-    throw new Error(
-      `demo.otio failed to import: ${imported.error.code} ${imported.error.message}`,
-    );
-  }
-  return { timeline: imported.timeline, warnings: imported.warnings };
-}
+export type SeededProject = {
+  preset: Preset;
+  commitId: string;
+  branchId: string;
+};
 
 /**
- * Seed ONE project's state from `demo.otio`: the import commit (Q1: ALWAYS a
- * full snapshot, snapshot_distance = 0, carrying its F7 import_warnings —
- * an import has no parent, so ops cannot express it), `main` pointing at it,
- * and an open working record. `project_rate` is refreshed from the imported
- * OTIO (A1.2 — never hardcoded).
+ * Seed ONE project's state from a preset: the seed commit (kind `seed`,
+ * named after the preset — C1(6); Q1: ALWAYS a full snapshot,
+ * snapshot_distance = 0, carrying its F7 import_warnings — a seed has no
+ * parent, so ops cannot express it; `actor_name` NULL — it is written before
+ * anyone has a name), `main` pointing at it, and an open working record.
+ * `project_rate` is refreshed from the imported OTIO (A1.2 — never
+ * hardcoded; C7: every preset is 24 fps, guarded by a test, never at runtime).
  *
- * ONE function serves both callers: the first-visit bootstrap below and
- * `POST demo/reset`, which wipes this project's state and re-seeds it in
- * place. A second copy of the seed logic is exactly what this exists to
- * prevent.
+ * ONE function serves every caller: the first-visit bootstrap below,
+ * `POST project/new` and its alias `POST demo/reset` (both via
+ * `resetProjectToPreset`). A second copy of the seed logic is exactly what
+ * this exists to prevent.
  *
- * Precondition: the project's branches / commits / ops / snapshots /
- * working_state / merge_attempts rows are already gone (fresh project, or
- * demo/reset's delete).
+ * Precondition: the project's per-project rows are already gone (fresh
+ * project, or `resetProjectToPreset`'s delete).
  */
-export async function seedProjectFromDemo(
+export async function seedProjectFromPreset(
   tx: Tx,
   projectId: string,
-): Promise<{ commitId: string; branchId: string }> {
-  const imported = importDemoFixture();
+  presetId: string,
+): Promise<SeededProject> {
+  const preset = presetById(presetId);
+  const imported = importPreset(preset);
 
   await tx
     .update(projects)
@@ -137,7 +134,7 @@ export async function seedProjectFromDemo(
     projectId,
     parentId: null,
     parent2Id: null,
-    name: IMPORT_COMMIT_NAME,
+    name: preset.name,
     actor: "user",
     ops: [],
     nonce: randomUUID(),
@@ -147,12 +144,14 @@ export async function seedProjectFromDemo(
     projectId,
     parentId: null,
     parent2Id: null,
-    name: IMPORT_COMMIT_NAME,
+    name: preset.name,
     actor: "user",
+    kind: "seed",
+    actorName: null,
     snapshotDistance: 0,
     // F7 — the itemized skipped-list's permanent home; NULL on every
-    // commit that is not an import (the fixture is clean, so this is an
-    // empty list, not null: "we imported and skipped nothing").
+    // commit that is not an import/seed (the fixture is clean, so this is
+    // an empty list, not null: "we imported and skipped nothing").
     importWarnings: imported.warnings,
   });
   await tx
@@ -172,18 +171,51 @@ export async function seedProjectFromDemo(
     workingRev: INITIAL_WORKING_REV,
   });
 
-  return { commitId, branchId: branch.id };
+  await appendEvent(tx, projectId, "commit-created", {
+    commitId,
+    kind: "seed",
+    name: preset.name,
+    branch: "main",
+    actorName: null,
+  });
+
+  return { preset, commitId, branchId: branch.id };
+}
+
+/**
+ * "New project" (G1): wipe this project's state and re-seed it in place
+ * from `presetId`, keeping the project row, owner token and cookie. Explicit
+ * deletes in FK order (children first); every WHERE is project-scoped.
+ * Tickets survive so the calling endpoint stays idempotent.
+ */
+export async function resetProjectToPreset(
+  tx: Tx,
+  projectId: string,
+  presetId: string,
+): Promise<SeededProject> {
+  // Validate first so an unknown preset deletes nothing.
+  presetById(presetId);
+  await tx.delete(presence).where(eq(presence.projectId, projectId));
+  await tx.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
+  await tx.delete(mergeAttempts).where(eq(mergeAttempts.projectId, projectId));
+  await tx.delete(workingState).where(eq(workingState.projectId, projectId));
+  await tx.delete(branches).where(eq(branches.projectId, projectId));
+  await tx.delete(ops).where(eq(ops.projectId, projectId));
+  await tx.delete(snapshots).where(eq(snapshots.projectId, projectId));
+  await tx.delete(commits).where(eq(commits.projectId, projectId));
+  return seedProjectFromPreset(tx, projectId, presetId);
 }
 
 /**
  * First visit: one transaction that creates the project row, seeds it from
- * the fixture (above) and enforces the 100-project cap.
+ * the default preset (G1 patch (a): no choice on first visit) and enforces
+ * the 100-project cap.
  */
 export async function bootstrapProject(
   db: Db,
 ): Promise<{ project: ProjectRow; token: string }> {
   const token = mintOwnerToken();
-  const imported = importDemoFixture();
+  const imported = importPreset(presetById(DEFAULT_PRESET_ID));
 
   return db.transaction(async (tx) => {
     const [project] = await tx
@@ -191,14 +223,14 @@ export async function bootstrapProject(
       .values({
         ownerToken: token,
         // A1.2: the project rate comes from the imported OTIO. Never
-        // hardcoded. (seedProjectFromDemo writes the same value again — the
-        // insert needs a NOT NULL value, and one seeding function is worth
-        // one idempotent UPDATE.)
+        // hardcoded. (seedProjectFromPreset writes the same value again —
+        // the insert needs a NOT NULL value, and one seeding function is
+        // worth one idempotent UPDATE.)
         projectRate: imported.timeline.projectRate,
       })
       .returning();
 
-    await seedProjectFromDemo(tx, project.id);
+    await seedProjectFromPreset(tx, project.id, DEFAULT_PRESET_ID);
     await enforceProjectCap(tx);
 
     return { project, token };
@@ -208,10 +240,10 @@ export async function bootstrapProject(
 /**
  * HLD #15 — keep the newest PROJECT_CAP projects, delete the rest. The
  * cookie of a deleted project is simply gone (its owner gets a fresh demo
- * on the next visit, which "Reset demo" would have done anyway).
+ * on the next visit, which "New project" would have done anyway).
  *
  * Every other table hangs off `projects` with ON DELETE CASCADE, so one
- * DELETE cannot leave an orphan row behind in the other seven.
+ * DELETE cannot leave an orphan row behind in the other nine.
  */
 async function enforceProjectCap(tx: Tx): Promise<void> {
   await tx.execute(sql`

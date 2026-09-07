@@ -26,8 +26,14 @@ import { ApiError } from "./envelope";
 /** `Track.clips` is `Clip[] | TextClip[]`; positional lookup needs neither. */
 type AnyClip = Clip | TextClip;
 
+/** F2a — the agent is always shown as `Agent`, never a user's name. */
+export const AGENT_ACTOR_NAME = "Agent";
+
 export type AgentScript = {
+  /** The script id the API accepts. */
   name: string;
+  /** C1(3) — the card name of an agent-run commit. */
+  displayName: string;
   /** Build the run's commands against the branch's current timeline. */
   build: (timeline: Timeline) => Command[];
 };
@@ -90,6 +96,7 @@ const frames = (seconds: number, rate: number): number => seconds * rate;
  */
 const tightenIntro: AgentScript = {
   name: "tighten-intro",
+  displayName: "Tighten intro",
   build: (timeline) => {
     const rate = timeline.projectRate;
     const video = trackOfKind(timeline, "video");

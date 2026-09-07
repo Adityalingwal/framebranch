@@ -14,7 +14,7 @@ import {
 
 import type { MediaRef } from "@framebranch/engine";
 
-import { clipLabel, isTextClip, type AnyClip } from "../lib/clip-helpers";
+import { clipDisplayName, isTextClip, type AnyClip } from "../lib/clip-helpers";
 import { toSeconds } from "../lib/format";
 
 const FONT_BY_TEXT_FONT: Record<string, string> = {
@@ -157,7 +157,7 @@ export function PreviewPane({
       <Frame>
         <AudioClipMedia
           url={mediaRef.url}
-          label={clipLabel(clip, mediaRef)}
+          label={clipDisplayName(clip, mediaRef)}
           start={start}
           end={end}
           volume={volume}

@@ -4,7 +4,9 @@ import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { importOtio } from "@framebranch/engine";
-import type { DiffResult, ImportWarning, Timeline } from "@framebranch/engine";
+import type { ImportWarning, Timeline } from "@framebranch/engine";
+
+import type { DiffResponse as DiffData } from "../src/app/api/diff/route";
 
 import { commits, ops, projects, snapshots } from "../src/db/schema";
 import { POST as postAgent } from "../src/app/api/agent/simulate/route";
@@ -63,9 +65,19 @@ async function edit(
   return data.workingRev;
 }
 
-async function save(s: Session, branch = "main"): Promise<CommitData> {
+/** A Mark — C2: every Mark carries a name. */
+async function save(
+  s: Session,
+  branch = "main",
+  name = "Marked",
+): Promise<CommitData> {
   return expectOk(
-    await post(postCommit, "/api/commit", { branch, ticket: ticket() }, s),
+    await post(
+      postCommit,
+      "/api/commit",
+      { branch, name, ticket: ticket() },
+      s,
+    ),
   ) as CommitData;
 }
 
@@ -86,7 +98,7 @@ const view = async (s: Session, branch = "main"): Promise<TimelineData> =>
 
 /** The session's OWN root (import) commit, read through the public door. */
 const rootCommitOf = async (s: Session): Promise<string> => {
-  const data = expectOk(await get(getHistory, "/api/history", s)) as {
+  const data = expectOk(await get(getHistory, "/api/history?cut=main", s)) as {
     commits: { commitId: string; parents: string[] }[];
   };
   const root = data.commits.find((c) => c.parents.length === 0);
@@ -125,7 +137,7 @@ describe("C4 (4) — POST restore", () => {
 
     // A NEW commit — not the one restored from (history moves forward).
     expect(restored.commitId).not.toBe(v2.commitId);
-    expect(restored.name).toBe(`Restored version "${v2.name}"`);
+    expect(restored.name).toBe(`Restored "${v2.name}"`);
     expect(await commitCount()).toBe(before + 1);
 
     const row = (
@@ -173,11 +185,13 @@ describe("C4 (4) — POST restore", () => {
       ),
     );
 
+    // B4/C1(2): the seal is an `auto` card named by what changed.
     const sealed = await getDb()
       .select()
       .from(commits)
-      .where(eq(commits.name, "Auto — before restore"));
+      .where(eq(commits.kind, "auto"));
     expect(sealed).toHaveLength(1);
+    expect(sealed[0].name).toBe("Interview volume 80% → 33%");
     expect((await view(s)).pendingCount).toBe(0);
   });
 
@@ -398,15 +412,16 @@ describe("C4 (4) — POST export", () => {
       ),
     ) as { otioJson: unknown; commitId: string; name: string };
 
-    // The seal uses the deterministic export boundary name.
-    expect(data.name).toBe("Auto — before export");
+    // The seal is an `auto` card named by what changed (C1(2)).
+    expect(data.name).toBe("Interview volume 100% → 80%");
     expect(await commitCount()).toBe(before + 1);
     expect((await view(s)).pendingCount).toBe(0);
     // …and the returned commitId IS the branch's head.
     const head = (
       await getDb().select().from(commits).where(eq(commits.id, data.commitId))
     )[0];
-    expect(head.name).toBe("Auto — before export");
+    expect(head.kind).toBe("auto");
+    expect(head.name).toBe("Interview volume 100% → 80%");
 
     // mediaWarnings is optional; there is no honest signal for it here, so the
     // field is omitted entirely.
@@ -445,7 +460,8 @@ describe("C4 (4) — POST export", () => {
       ),
     ) as { commitId: string; name: string };
     expect(await commitCount()).toBe(before);
-    expect(data.name).toBe('Imported "demo.otio"');
+    // C1(6): the seed card is named after its preset.
+    expect(data.name).toBe("Travel vlog");
   });
 });
 
@@ -490,7 +506,8 @@ describe("C4 (4) — POST agent/simulate", () => {
     ) as { commitId: string; name: string; actor: string; opsApplied: number };
 
     expect(data.actor).toBe("agent");
-    expect(data.name).toBe('Agent run — "tighten-intro"');
+    // C1(3): the card is named after the preset's display name.
+    expect(data.name).toBe("Tighten intro");
     expect(data.opsApplied).toBe(4); // C8: volume, caption delete, add D, B trim
     expect(await commitCount()).toBe(before + 1);
 
@@ -637,41 +654,51 @@ describe("C4 (4) — POST demo/reset", () => {
 // GET diff
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-describe("C4 (2) — GET diff", () => {
-  it("C1: the engine's sentences come back verbatim, 1:1 with entries", async () => {
+describe("C4 (2) — GET diff (cut-scoped, presenter rows, older → newer)", () => {
+  it("D4: rows come from the shared presenter, and the server puts the older side first whichever way it is asked", async () => {
     const s = await session();
     const root = (await getDb().select().from(commits))[0].id;
     await edit(s, "main", 0, volume("clip-1", 80));
     const v2 = await save(s);
 
     const data = expectOk(
-      await get(getDiff, `/api/diff?from=${root}&to=${v2.commitId}`, s),
-    ) as DiffResult;
+      await get(getDiff, `/api/diff?cut=main&a=${root}&b=${v2.commitId}`, s),
+    ) as DiffData;
 
-    expect(data.entries).toHaveLength(1);
-    expect(data.sentences).toHaveLength(1);
-    expect(data.entries[0].kind).toBe("propertyChanged");
-    expect(data.sentences[0]).toContain("olume");
+    expect(data.count).toBe(1);
+    expect(data.rows).toHaveLength(1);
+    expect(data.rows[0].kind).toBe("property");
+    expect(data.rows[0].text).toBe("Volume 100% → 80%");
+    expect(data.rows[0].clipName).toBe("Interview"); // OTIO name, never an id
+    expect(data.older).toBe("a");
 
-    // The other direction is a real diff too (and it is not the same text).
+    // Asked the other way round: SAME rows, the server just reports that
+    // `b` was the older input (D4(12): the reading never inverts).
     const back = expectOk(
-      await get(getDiff, `/api/diff?from=${v2.commitId}&to=${root}`, s),
-    ) as DiffResult;
-    expect(back.sentences).toHaveLength(1);
-    expect(back.sentences[0]).not.toBe(data.sentences[0]);
+      await get(getDiff, `/api/diff?cut=main&a=${v2.commitId}&b=${root}`, s),
+    ) as DiffData;
+    expect(back.rows).toEqual(data.rows);
+    expect(back.older).toBe("b");
   });
 
-  it("C1: diffing a commit against itself is empty", async () => {
+  it("D2: diffing a point against itself is empty (a commit, and now vs now)", async () => {
     const s = await session();
     const root = (await getDb().select().from(commits))[0].id;
     const data = expectOk(
-      await get(getDiff, `/api/diff?from=${root}&to=${root}`, s),
-    ) as DiffResult;
-    expect(data.entries).toEqual([]);
-    expect(data.sentences).toEqual([]);
+      await get(getDiff, `/api/diff?cut=main&a=${root}&b=${root}`, s),
+    ) as DiffData;
+    expect(data.rows).toEqual([]);
+    expect(data.count).toBe(0);
+
+    await edit(s, "main", 0, volume("clip-1", 80)); // pending, uncommitted
+    const now = expectOk(
+      await get(getDiff, `/api/diff?cut=main&a=now&b=now`, s),
+    ) as DiffData;
+    expect(now.rows).toEqual([]);
+    expect(now.count).toBe(0);
   });
 
-  it("another project's commit is never readable through diff", async () => {
+  it("another project's commit is never readable through diff (404, not her data)", async () => {
     const alice = await session();
     const hers = await rootCommitOf(alice);
     const bob = await session();
@@ -680,19 +707,24 @@ describe("C4 (2) — GET diff", () => {
 
     // Alice's commit id is simply not there for Bob — not readable, not an
     // authorization error, and never her data.
-    const call = await get(getDiff, `/api/diff?from=${hers}&to=${his}`, bob);
-    expect(expectError(call).code).toBe("E_BAD_REQUEST");
+    const call = await get(getDiff, `/api/diff?cut=main&a=${hers}&b=${his}`, bob);
+    expect(call.status).toBe(404);
+    expect(expectError(call).code).toBe("E_COMMIT_NOT_FOUND");
 
     // …and it still works inside her own project.
-    expect(
-      expectOk(await get(getDiff, `/api/diff?from=${hers}&to=${hers}`, alice)),
-    ).toEqual({ entries: [], sentences: [] });
+    const own = expectOk(
+      await get(getDiff, `/api/diff?cut=main&a=${hers}&b=${hers}`, alice),
+    ) as DiffData;
+    expect(own.rows).toEqual([]);
+    expect(own.count).toBe(0);
   });
 
   it("E_BAD_REQUEST: a missing query parameter is refused at the door", async () => {
     const s = await session();
     const root = (await getDb().select().from(commits))[0].id;
-    const call = await get(getDiff, `/api/diff?from=${root}`, s);
+    const call = await get(getDiff, `/api/diff?cut=main&a=${root}`, s);
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
+    const noCut = await get(getDiff, `/api/diff?a=${root}&b=now`, s);
+    expect(expectError(noCut).code).toBe("E_BAD_REQUEST");
   });
 });
