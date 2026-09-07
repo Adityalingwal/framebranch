@@ -237,10 +237,19 @@ function Card({
                 })}
           >
             <LineThumb line={line} />
-            <span className="bring-in-line-label">{line.label}</span>
-            {line.value !== "" && (
-              <span className="bring-in-line-value">{line.value}</span>
-            )}
+            {/* ONE inline run, so the line really reads `main · "…"` in the
+                page's text (#138/#141/#144) — the separator is a text node,
+                not a CSS `::before` nobody can read or copy. No dot when the
+                value is empty (position / text style: look in the player). */}
+            <span className="bring-in-line-text">
+              <span className="bring-in-line-label">{line.label}</span>
+              {line.value !== "" && (
+                <>
+                  <span className="bring-in-line-sep">{" · "}</span>
+                  <span className="bring-in-line-value">{line.value}</span>
+                </>
+              )}
+            </span>
           </div>
         );
       })}

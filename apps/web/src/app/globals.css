@@ -2813,7 +2813,7 @@ input:disabled {
 
 .bring-in-line {
   display: grid;
-  grid-template-columns: 34px auto 1fr;
+  grid-template-columns: 34px 1fr;
   align-items: center;
   gap: 8px;
   padding: 4px 6px;
@@ -2838,9 +2838,21 @@ input:disabled {
   background: transparent;
 }
 
+/* Label, separator and value are ONE inline run: the rendered line is a
+   sentence (`main · "Welcome — 40% off"`), not three cells. */
+.bring-in-line-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .bring-in-line-label {
   color: var(--fb-text-dim);
-  white-space: nowrap;
+}
+
+.bring-in-line-sep {
+  color: var(--fb-text-dim);
 }
 
 .bring-in-line.is-main .bring-in-line-label {
@@ -2852,10 +2864,6 @@ input:disabled {
 }
 
 .bring-in-line-value {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--fb-text-body);
   font-variant-numeric: tabular-nums;
 }
