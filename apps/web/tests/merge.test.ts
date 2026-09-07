@@ -737,6 +737,49 @@ describe("F4 — the staleness refusal (#151, #152)", () => {
     expect(err.details).toEqual({ side: "cut", who: "Priya" });
   });
 
+  // The two mirror cases: the CUT's head, and MAIN's working rev. Together
+  // with the two above they cover both sides × both kinds of movement.
+  it("the cut's head moved: #152 names the marker, not the last editor", async () => {
+    const s = await session();
+    await oneSided(s);
+    const answer = await preview(s);
+    const cutHead = await headOf(CUT);
+
+    await edit(s, CUT, 1, volume(MUSIC, 55), PRIYA);
+    await mark(s, CUT, "Quieter still", PRIYA);
+    expect(await headOf(CUT)).not.toBe(cutHead);
+
+    const before = await commitCount();
+    const call = await land(s, { token: answer.token });
+    expect(call.status).toBe(409);
+    const err = expectError(call);
+    expect(err.code).toBe("E_STALE_HEAD");
+    expect(err.message).toBe(
+      `Priya changed "${CUT}" while you were working on this. Start again to include their change.`,
+    );
+    expect(err.details).toEqual({ side: "cut", who: "Priya" });
+    expect(await commitCount()).toBe(before);
+    expect(await mergeCommits()).toHaveLength(0);
+  });
+
+  it("main's working rev moved (no head move): #151 with the last editor", async () => {
+    const s = await session();
+    await oneSided(s);
+    const answer = await preview(s);
+    const mainHead = await headOf("main");
+
+    await edit(s, "main", 0, volume(INTERVIEW, 70), PRIYA);
+    expect(await headOf("main")).toBe(mainHead); // an edit does not mark
+
+    const err = expectError(await land(s, { token: answer.token }));
+    expect(err.code).toBe("E_STALE_HEAD");
+    expect(err.message).toBe(
+      "Priya changed main while you were working on this. Start the bring-in again to include their change.",
+    );
+    expect(err.details).toEqual({ side: "main", who: "Priya" });
+    expect(await mergeCommits()).toHaveLength(0);
+  });
+
   it("nobody's name is known: the fallback sentence claims no one", async () => {
     const s = await session();
     await oneSided(s);
