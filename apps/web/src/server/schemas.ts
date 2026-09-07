@@ -202,7 +202,14 @@ export const mergeChoiceSchema = z.enum([
 ]);
 
 /**
- * C4 (4) — POST merge `{ from, into }`: `from` is merged INTO `into`.
+ * C4 (4) + B3 lock (3) — POST merge: the LANDING. `from` is brought into
+ * `into` (always `main`, F1 — kept in the body so the door can refuse a
+ * wrong target explicitly rather than by omission).
+ *
+ * `token` is the four plain fields the preview handed out (both heads, both
+ * working revs); the route revalidates them before any write, which is F4's
+ * whole mechanism. `choices` is the complete answer set — the server holds
+ * no draft, so the request carries everything.
  *
  * The `from !== into` refusal is a SHAPE rule (two distinct branch names are
  * required), not a merge rule: merging a branch into itself would write a
@@ -210,10 +217,21 @@ export const mergeChoiceSchema = z.enum([
  * baap" cannot mean. Rejected at the door → E_BAD_REQUEST (reported as an
  * assumption).
  */
+export const bringInTokenSchema = z
+  .object({
+    mainHead: z.string().min(1),
+    cutHead: z.string().min(1),
+    mainRev: z.number().int().nonnegative(),
+    cutRev: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const mergeBodySchema = z
   .object({
     from: branchName,
     into: branchName,
+    token: bringInTokenSchema,
+    choices: z.record(z.string(), mergeChoiceSchema).default({}),
     ticket,
   })
   .strict()

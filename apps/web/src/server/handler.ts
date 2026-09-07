@@ -84,7 +84,7 @@ export async function handleRequest(
     return okResponse(data, headers);
   } catch (error) {
     if (error instanceof ApiError) {
-      return errorResponse(error.code, error.message, headers);
+      return errorResponse(error.code, error.message, headers, error.details);
     }
     // Unexpected — our bug, not the caller's. Log the real thing, tell the
     // client only that it happened (C4 (1): the envelope has no exceptions).

@@ -58,7 +58,15 @@ function captureToken(session: Session, response: Response): void {
 
 export type Envelope<T = unknown> =
   | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string } };
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        /** B3 — present only on the bring-in staleness refusal. */
+        details?: Record<string, unknown>;
+      };
+    };
 
 export type Call<T = unknown> = {
   status: number;
@@ -110,7 +118,11 @@ export function expectOk<T>(call: Call<T>): T {
   return call.body.data;
 }
 
-export function expectError(call: Call): { code: string; message: string } {
+export function expectError(call: Call): {
+  code: string;
+  message: string;
+  details?: Record<string, unknown>;
+} {
   if (call.body.ok) {
     throw new Error(`expected an error, got ok: ${JSON.stringify(call.body)}`);
   }
