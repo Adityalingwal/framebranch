@@ -20,7 +20,7 @@ The exact edits behind the walkthrough in the PRD's Demo Story — precise enoug
 | 3 | Make the person's edits on main, commit; make the agent's edits on the new branch | Both branches have their own committed changes |
 | 4 | Preview a single clip | Plays back |
 | 5 | Compare the two versions | Two lanes, before above and after below, with one row per change beside them |
-| 6 | Start a merge | Exactly 3 conflicts appear — a value conflict (volume), a delete conflict (caption), and an overlap conflict (logo vs. the new clip); clip B's trim merges automatically, no conflict |
-| 7 | Resolve all 3 conflicts | Merge commit is created automatically after the last one |
+| 6 | Open the bring-in preview | Exactly 3 conflict cards appear — a value conflict (volume), a delete conflict (caption), and an overlap conflict (logo vs. the new clip); clip B's trim merges automatically, no conflict |
+| 7 | Decide all 3, then land it | One merge commit, with both branches as parents |
 | 8 | View history, restore an older version | Every entry marked person or agent; restoring creates a new version |
 | 9 | Export, then re-import the result | Comes back identical — nothing lost |

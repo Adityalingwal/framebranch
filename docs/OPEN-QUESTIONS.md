@@ -26,7 +26,7 @@ Two approaches are possible: keep ripple-delete track-only, and leave cross-trac
 
 ## Could AI-generated naming ever safely replace or supplement the fixed templates?
 
-Commit and branch names are currently built from fixed templates ("Auto — before merge") with detail pulled straight from the operation log ("2 trims, 1 move"). AI naming was deliberately left out of version 1 for the same reason AI was kept out of the diff engine: a template can never be wrong, but an AI-generated name can — and a misleading name in a version-control history is a trust problem, not a cosmetic one.
+Commit and branch names are currently built from fixed templates with detail pulled straight from what actually changed ("2 trims, 1 move"). AI naming was deliberately left out of version 1 for the same reason AI was kept out of the diff engine: a template can never be wrong, but an AI-generated name can — and a misleading name in a version-control history is a trust problem, not a cosmetic one.
 
 Adding AI naming later would also mean adding a network call to an AI model on the naming path — where naming today is instant and happens entirely on the machine, an AI-generated name would depend on an external request completing, with its own latency and cost, every time.
 
