@@ -1331,6 +1331,83 @@ body.workspace-is-resizing-horizontal * {
 }
 
 
+
+/* ── B5-1 View bar — sits where the clip-edit toolbar sits ───────── */
+.view-bar {
+  min-height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 12px;
+  border-bottom: 1px solid rgba(79, 162, 255, 0.25);
+  background: rgba(79, 162, 255, 0.07);
+}
+
+.view-bar-text {
+  min-width: 0;
+  color: var(--fb-text-body-2);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.view-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.view-bar-button {
+  min-height: 28px;
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--fb-radius-sm);
+  color: var(--fb-text-body);
+  background: rgba(255, 255, 255, 0.045);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    color 0.12s var(--fb-ease-hover),
+    border-color 0.12s var(--fb-ease-hover),
+    background 0.12s var(--fb-ease-hover);
+}
+
+.view-bar-button:hover,
+.view-bar-button:focus-visible {
+  color: var(--fb-text-body-2);
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.view-bar-close {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--fb-radius-sm);
+  color: var(--fb-text-dim);
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.view-bar-close:hover,
+.view-bar-close:focus-visible {
+  color: var(--fb-text-body-2);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
+}
+
 /* ── B4-2 History panel: cards, in-place folds, Now-line ─────────── */
 .history-now-line {
   display: flex;

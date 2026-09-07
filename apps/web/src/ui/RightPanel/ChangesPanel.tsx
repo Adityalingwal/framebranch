@@ -4,62 +4,77 @@ import { useEffect, useState } from "react";
 import { Robot, User } from "@phosphor-icons/react";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
-import {
-  useBranchesQuery,
-  useDiffQuery,
-  useHistoryQuery,
-} from "../../lib/data/hooks";
+import { NOW_SIDE } from "../../lib/data/api-client";
+import { useDiffQuery, useHistoryQuery } from "../../lib/data/hooks";
 import { formatClock } from "../../lib/format";
 import { CustomSelect } from "../CustomSelect";
 
 /**
- * §6 — Changes panel: pick two versions, `GET /api/diff`, render the shared
+ * §6 — Changes panel: pick two points, `GET /api/diff`, render the shared
  * presenter's rows one per line (D4(1); the server orders older → newer, so
  * whichever way the pickers are set the reading is the same).
  *
- * The default pair = "this cut's head vs its parent". The head comes from
- * `GET /api/branch` (A1b — the one source; no client-side bookkeeping), the
- * parent from the cut's History (B2). B2 rewrites this panel into the
- * Compare view (Now as a side, lanes); B0 only moves it onto the new APIs.
+ * D2/D3: `Now` — the working timeline — is a side like any card, and the
+ * DEFAULT pair is `head → Now`, which is exactly what the top-bar chip
+ * counts, so the chip and this panel can never tell different stories.
+ * B2 rewrites the inside of this panel (lanes, row redesign, summary
+ * line); B1 only gives it `Now`, the default, and the Compare preselect.
  */
 export function ChangesPanel({
   currentBranch,
-  pendingCount,
+  head,
+  preselect,
+  onPreselectConsumed,
   onHighlightClip,
 }: {
   currentBranch: string;
-  pendingCount: number;
+  /** This cut's head commit id (A1b), or null while it is unknown. */
+  head: string | null;
+  /** B5 IMPL-NOTE (d) — the pair the View bar's Compare button asks for. */
+  preselect: { from: string; to: string } | null;
+  onPreselectConsumed: () => void;
   onHighlightClip: (clipId: string | null) => void;
 }) {
   const history = useHistoryQuery(currentBranch);
-  const branches = useBranchesQuery();
 
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [defaulted, setDefaulted] = useState(false);
 
   const commits = history.data?.commits ?? [];
-  const head = branches.data?.branches.find(
-    (b) => b.name === currentBranch,
-  )?.head;
 
-  // Apply the default exactly once per cut, once History + the head are
-  // both known — after that the user's own picks are never overwritten.
+  // Switching cuts throws the pair away — a commit id means nothing on
+  // another cut's chain.
   useEffect(() => {
     setDefaulted(false);
     setFrom(null);
     setTo(null);
   }, [currentBranch]);
 
+  // Compare wins over the default: it is an explicit request, and it may
+  // arrive before or after the default would have applied.
   useEffect(() => {
-    if (defaulted || commits.length === 0 || !head) return;
-    const headCommit = commits.find((c) => c.commitId === head);
-    if (!headCommit) return;
-    const parent = headCommit.parents[0] ?? head; // root card → vs itself
-    setFrom(parent);
-    setTo(head);
+    if (!preselect) return;
+    setFrom(preselect.from);
+    setTo(preselect.to);
     setDefaulted(true);
-  }, [defaulted, commits, head]);
+    onPreselectConsumed();
+  }, [preselect, onPreselectConsumed]);
+
+  // D3a — the default pair, applied once per cut: `head → Now`. After
+  // that the user's own picks are never overwritten.
+  //
+  // `preselect` is checked here as well as above because on the render
+  // that mounts this panel BOTH effects run before either `setState` is
+  // visible: `defaulted` is still false in this closure, so without the
+  // guard the default would land on top of the pair Compare just asked
+  // for.
+  useEffect(() => {
+    if (preselect || defaulted || !head) return;
+    setFrom(head);
+    setTo(NOW_SIDE);
+    setDefaulted(true);
+  }, [preselect, defaulted, head]);
 
   const diff = useDiffQuery(currentBranch, from, to);
 
@@ -86,21 +101,6 @@ export function ChangesPanel({
           onChange={setTo}
         />
       </div>
-
-      {pendingCount > 0 && (
-        <p
-          style={{
-            fontSize: 11,
-            color: "var(--fb-text-mute)",
-            margin: "0 0 12px",
-            lineHeight: 1.4,
-          }}
-        >
-          This branch has {pendingCount} unsaved{" "}
-          {pendingCount === 1 ? "change" : "changes"} not shown here — diffs
-          compare saved versions. Save a version first to include them.
-        </p>
-      )}
 
       {!from || !to ? (
         <Empty>Pick two versions to compare.</Empty>
@@ -176,19 +176,23 @@ function VersionPicker({
         placeholder="Choose a version…"
         ariaLabel={`${label} version`}
         className="panel-select"
-        options={commits.map((commit) => ({
-          value: commit.commitId,
-          label: commit.name,
-          description: formatClock(commit.createdAt),
-          // `actor` is gone from the History item (B1); the badge is the
-          // card KIND now — only an agent run gets the robot.
-          icon:
-            commit.kind === "agent-run" ? (
-              <Robot size={15} weight="duotone" aria-hidden />
-            ) : (
-              <User size={15} weight="duotone" aria-hidden />
-            ),
-        }))}
+        options={[
+          // D3b — the picker list is History's list with `Now` on top.
+          { value: NOW_SIDE, label: "Now" },
+          ...commits.map((commit) => ({
+            value: commit.commitId,
+            label: commit.name,
+            description: formatClock(commit.createdAt),
+            // `actor` is gone from the History item (B1); the badge is the
+            // card KIND now — only an agent run gets the robot.
+            icon:
+              commit.kind === "agent-run" ? (
+                <Robot size={15} weight="duotone" aria-hidden />
+              ) : (
+                <User size={15} weight="duotone" aria-hidden />
+              ),
+          })),
+        ]}
         onChange={onChange}
       />
     </label>

@@ -10,14 +10,18 @@ import { ApiClientError } from "../lib/data/api-client";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { NOW_SIDE } from "../lib/data/api-client";
+import { showToast } from "../lib/state/toast-status";
 import {
   useBranchesQuery,
   useDiffQuery,
   useHistoryQuery,
   useOpsMutation,
+  useRestoreMutation,
+  useTimelineAtQuery,
   useTimelineQuery,
 } from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { IconRail } from "./IconRail";
 import { NameGate } from "./NameGate";
 import { PreviewPane } from "./PreviewPane";
@@ -64,12 +68,23 @@ export function Shell() {
     commitId: string;
     name: string;
   } | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  // B5 IMPL-NOTE (d) — the pair the Compare button hands to the Changes
+  // panel; consumed once, then cleared by the panel.
+  const [comparePreselect, setComparePreselect] = useState<{
+    from: string;
+    to: string;
+  } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const timeline = useTimelineQuery(currentBranch);
   const opsMutation = useOpsMutation(currentBranch);
   const connectionLost = useConnectionStatus().lost;
-  const editingPaused = connectionLost;
+  // B5-1 / B5 IMPL-NOTE (b): while a card is being viewed the editor is
+  // read-only, exactly as it is while the connection is lost. ONE derived
+  // flag drives every consumer that used to read the connection store on
+  // its own, so nothing can be locked in one place and live in another.
+  const editingPaused = connectionLost || viewing !== null;
 
   // ---- A1a/A1b/D2: cuts, head and the ONE changes number, derived here --
   // Every consumer (top bar, rail badge, History, Restore box) is handed
@@ -103,6 +118,19 @@ export function Shell() {
     head !== null && historyCommits[0]?.commitId === head
       ? historyCommits[0]
       : null;
+
+  // B5-1 — the frozen content behind View mode. The LIVE query stays
+  // mounted throughout, so ✕ is instant and never flashes a refetch.
+  const frozen = useTimelineAtQuery(currentBranch, viewing?.commitId ?? null);
+  const restore = useRestoreMutation(currentBranch);
+
+  /** Leaving View: ✕, a successful Restore, a cut switch, a reset. */
+  const closeView = useCallback(() => {
+    setViewing(null);
+    setRestoreOpen(false);
+    setSelectedClipId(null);
+    setPlayheadFrame(0);
+  }, []);
 
   const clampWorkspaceLayout = useCallback(
     (next: typeof DEFAULT_WORKSPACE_LAYOUT) => {
@@ -247,6 +275,10 @@ export function Shell() {
     setCurrentBranch(branch);
     setSelectedClipId(null);
     setPlayheadFrame(0);
+    // A cut switch leaves View: the card you were looking at belongs to
+    // the chain you just left.
+    setViewing(null);
+    setRestoreOpen(false);
   }, []);
 
   // A1a patch (e): the cut you are standing on stopped existing (a demo
@@ -269,35 +301,55 @@ export function Shell() {
     setCurrentBranch("main");
     setSelectedClipId(null);
     setPlayheadFrame(0);
+    setViewing(null);
+    setRestoreOpen(false);
   }, []);
 
+  /**
+   * What the preview, the timeline and the inspector are looking at: the
+   * live working view normally, that card's frozen content while viewing.
+   * Until the frozen answer arrives the live one stays on screen — the
+   * LOCK is what makes View safe, and it is on from the first click.
+   */
+  const displayedTimeline =
+    viewing !== null && frozen.data
+      ? frozen.data.timeline
+      : (timeline.data?.timeline ?? null);
+
   const selectedClip = useMemo(() => {
-    if (!selectedClipId || !timeline.data) return null;
-    return findClipById(timeline.data.timeline, selectedClipId) ?? null;
-  }, [selectedClipId, timeline.data]);
+    if (!selectedClipId || !displayedTimeline) return null;
+    return findClipById(displayedTimeline, selectedClipId) ?? null;
+  }, [selectedClipId, displayedTimeline]);
 
   // A clip that no longer exists (deleted, or split into new ids) cannot
   // stay selected — the panel would otherwise render stale/undefined data.
   useEffect(() => {
-    if (selectedClipId && timeline.data && !selectedClip) {
+    if (selectedClipId && displayedTimeline && !selectedClip) {
       setSelectedClipId(null);
     }
-  }, [selectedClipId, selectedClip, timeline.data]);
+  }, [selectedClipId, selectedClip, displayedTimeline]);
 
   const mediaRef = useMemo(() => {
-    if (!selectedClip || !timeline.data) return undefined;
+    if (!selectedClip || !displayedTimeline) return undefined;
     if ("textContent" in selectedClip) return undefined;
-    return findMediaRef(timeline.data.timeline, selectedClip.mediaRefId);
-  }, [selectedClip, timeline.data]);
+    return findMediaRef(displayedTimeline, selectedClip.mediaRefId);
+  }, [selectedClip, displayedTimeline]);
 
-  const rate = timeline.data?.timeline.projectRate ?? 1;
+  const rate = displayedTimeline?.projectRate ?? 1;
 
   const emit = useCallback(
     (command: Command, options?: { onError?: () => void }) => {
-      if (editingPaused) return; // C6: editing paused while connection is lost
+      // ONE funnel: every edit verb (add/move/trim/slip/split/delete/
+      // ripple-delete/property/replaceTracks) comes through here, so this
+      // is the only place the two read-only states have to be enforced.
+      if (viewing !== null) {
+        showToast("You're viewing an old version. Close it to edit.");
+        return;
+      }
+      if (connectionLost) return; // C6: editing paused while the connection is lost
       opsMutation.mutate(command, options);
     },
-    [editingPaused, opsMutation],
+    [connectionLost, viewing, opsMutation],
   );
 
   // Bumped whenever a propertyChange is rejected, so ClipProperties can
@@ -392,6 +444,9 @@ export function Shell() {
       ) {
         return;
       }
+      // The lock covers the keyboard too (B5 IMPL-NOTE b): while a card is
+      // being viewed, Delete and Ctrl+K do nothing at all.
+      if (editingPaused) return;
       const shortcut = e.ctrlKey || e.metaKey;
       if (shortcut && e.key.toLowerCase() === "k" && selectedClip) {
         const start = selectedClip.timelineRange.start.value;
@@ -411,6 +466,7 @@ export function Shell() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    editingPaused,
     selectedClip,
     selectedClipId,
     playheadFrame,
@@ -560,11 +616,12 @@ export function Shell() {
                   view={view}
                   onViewChange={setView}
                   currentBranch={currentBranch}
-                  pendingCount={data.pendingCount}
                   head={head}
                   headCardName={headCard?.name ?? null}
                   changesCount={changesCount}
                   viewingCommitId={viewing?.commitId ?? null}
+                  comparePreselect={comparePreselect}
+                  onComparePreselectConsumed={() => setComparePreselect(null)}
                   onHighlightClip={setHighlightedClipId}
                   onViewCard={(commit) =>
                     setViewing({
@@ -608,6 +665,51 @@ export function Shell() {
             className="surface-lg timeline-workspace-shell"
             style={{ height: "100%", minWidth: 0, overflow: "hidden" }}
           >
+            {/* B5-1 (#85-#88) — the View bar. Minimal on purpose: what you
+                are looking at, and the only three things you can do from
+                here. Restore is HIDDEN on the current card (B1: never on
+                the card you are standing on); Compare always shows. */}
+            {viewing && (
+              <div className="view-bar" aria-label="Viewing an old version">
+                <span className="view-bar-text">
+                  Viewing &ldquo;{viewing.name}&rdquo;
+                </span>
+                <span className="view-bar-actions">
+                  <button
+                    type="button"
+                    className="view-bar-button"
+                    onClick={() => {
+                      setComparePreselect({
+                        from: viewing.commitId,
+                        to: NOW_SIDE,
+                      });
+                      setView("changes");
+                      setRightPanelMode("versioning");
+                    }}
+                  >
+                    Compare
+                  </button>
+                  {viewing.commitId !== head && (
+                    <button
+                      type="button"
+                      className="view-bar-button"
+                      onClick={() => setRestoreOpen(true)}
+                    >
+                      Restore this version
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="view-bar-close"
+                    aria-label="Back to editing"
+                    onClick={closeView}
+                  >
+                    ✕
+                  </button>
+                </span>
+              </div>
+            )}
+
             {/* Clip action strip — only visible when a clip is selected */}
             {selectedClip &&
               (() => {
@@ -667,7 +769,7 @@ export function Shell() {
                 );
               })()}
             <TimelineView
-              timeline={data.timeline}
+              timeline={displayedTimeline ?? data.timeline}
               selectedClipId={selectedClipId}
               highlightedClipId={highlightedClipId}
               playheadFrame={playheadFrame}
@@ -697,6 +799,37 @@ export function Shell() {
           </div>
         </div>
       </div>
+
+      {/* B5-2b (#90-#92) — the box says all three things the lock demands:
+          a new version goes ON TOP, the edits since the current card are
+          kept, nothing is deleted. The middle sentence appears only when
+          there ARE such edits. */}
+      <ConfirmDialog
+        open={restoreOpen && viewing !== null}
+        onOpenChange={setRestoreOpen}
+        title={`Restore "${viewing?.name ?? ""}"?`}
+        description={[
+          "A new version with this content goes on top of History.",
+          changesCount !== undefined && changesCount > 0 && headCard
+            ? `Your edits since "${headCard.name}" are kept in an auto-save.`
+            : null,
+          "Nothing is deleted.",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        confirmLabel="Restore"
+        busy={restore.isPending}
+        onConfirm={() => {
+          if (!viewing) return;
+          const restored = viewing.name;
+          restore.mutate(viewing.commitId, {
+            onSuccess: () => {
+              closeView();
+              showToast(`Restored "${restored}" — added as a new version.`);
+            },
+          });
+        }}
+      />
     </div>
   );
 }

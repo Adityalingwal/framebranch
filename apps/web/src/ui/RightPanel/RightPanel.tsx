@@ -20,11 +20,12 @@ export function RightPanel({
   view,
   onViewChange,
   currentBranch,
-  pendingCount,
   head,
   headCardName,
   changesCount,
   viewingCommitId,
+  comparePreselect,
+  onComparePreselectConsumed,
   onHighlightClip,
   onViewCard,
   hasInspector,
@@ -33,11 +34,12 @@ export function RightPanel({
   view: PanelView;
   onViewChange: (view: PanelView) => void;
   currentBranch: string;
-  pendingCount: number;
   head: string | null;
   headCardName: string | null;
   changesCount: number | undefined;
   viewingCommitId: string | null;
+  comparePreselect: { from: string; to: string } | null;
+  onComparePreselectConsumed: () => void;
   onHighlightClip: (clipId: string | null) => void;
   onViewCard: (commit: HistoryCommit) => void;
   hasInspector?: boolean;
@@ -111,7 +113,9 @@ export function RightPanel({
         {view === "changes" && (
           <ChangesPanel
             currentBranch={currentBranch}
-            pendingCount={pendingCount}
+            head={head}
+            preselect={comparePreselect}
+            onPreselectConsumed={onComparePreselectConsumed}
             onHighlightClip={onHighlightClip}
           />
         )}
