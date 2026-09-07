@@ -161,6 +161,12 @@ type Normalized = {
   rootId: string;
   sourceClipId: string;
   mediaRefId?: string;
+  /**
+   * The clip's display name. NON-SEMANTIC: it is not an atom, `normalizedEqual`
+   * ignores it, and no conflict is ever raised for it. It rides along only so
+   * that a merged timeline still calls a clip what its editor called it.
+   */
+  name?: string;
   atoms: AtomMap;
 };
 
@@ -320,6 +326,7 @@ function normalize(loc: LocatedClip): Normalized {
       trackId: loc.trackId,
       rootId: clip.lineage.rootId,
       sourceClipId: clip.id,
+      ...(clip.name === undefined ? {} : { name: clip.name }),
       atoms,
     };
   }
@@ -347,6 +354,7 @@ function normalize(loc: LocatedClip): Normalized {
     rootId: clip.lineage.rootId,
     sourceClipId: clip.id,
     mediaRefId: clip.mediaRefId,
+    ...(clip.name === undefined ? {} : { name: clip.name }),
     atoms,
   };
 }
@@ -685,12 +693,16 @@ function mergeNormalized(
     if (merged === null) return null;
     atoms[field] = merged;
   }
+  // A name is not content: nothing here can conflict, so main's wins, then
+  // the cut's, then the Original's.
+  const name = input.ours.name ?? input.theirs.name ?? input.base.name;
   return {
     kind: input.base.kind,
     trackId: input.base.trackId,
     rootId: input.base.rootId,
     sourceClipId: input.base.sourceClipId,
     mediaRefId: input.base.mediaRefId,
+    ...(name === undefined ? {} : { name }),
     atoms,
   };
 }
@@ -729,6 +741,7 @@ function toClip(
       properties.position = clone(position.value as Position);
     const clip: TextClip = {
       id,
+      ...(normalized.name === undefined ? {} : { name: normalized.name }),
       timelineRange,
       textContent: normalized.atoms["text-content"]!.value as string,
       textStyle: clone(normalized.atoms["text-style"]!.value as TextStyle),
@@ -749,6 +762,7 @@ function toClip(
   const srcOffset = normalized.atoms["source-offset"]!.value as number;
   return {
     id,
+    ...(normalized.name === undefined ? {} : { name: normalized.name }),
     mediaRefId: normalized.mediaRefId!,
     sourceRange: {
       start: { value: srcOffset + start, rate },

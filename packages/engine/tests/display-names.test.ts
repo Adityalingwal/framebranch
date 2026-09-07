@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { computeDiff } from "../src/diff";
 import { checkInvariants } from "../src/invariants";
-import { startMerge } from "../src/merge";
+import { applyChoice, startMerge } from "../src/merge";
 import { exportOtio, importOtio } from "../src/otio";
 import type { OtioJson } from "../src/otio";
 import { applyCommand } from "../src/verbs";
@@ -23,6 +23,7 @@ import {
 } from "./otio-fixtures";
 
 type AnyClip = Clip | TextClip;
+const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 const clipsOf = (tl: Timeline, trackIndex: number): AnyClip[] =>
   tl.tracks[trackIndex].clips as AnyClip[];
 
@@ -177,5 +178,122 @@ describe("OTIO round-trip of names", () => {
       "Filler",
       "",
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// B3 fix 5 — a merged timeline still calls a clip what its editor called it
+// ---------------------------------------------------------------------------
+
+describe("names survive the merge", () => {
+  /** Every clip renamed with one prefix. Nothing else differs. */
+  const named = (tl: Timeline, prefix: string): Timeline => ({
+    ...tl,
+    tracks: tl.tracks.map(
+      (track): Track => ({
+        ...track,
+        clips: (track.clips as AnyClip[]).map((clip) => ({
+          ...clip,
+          name: `${prefix} ${clip.id}`,
+        })) as Track["clips"],
+      }),
+    ),
+  });
+
+  const nameOf = (tl: Timeline, clipId: string): string | undefined =>
+    tl.tracks
+      .flatMap((track) => track.clips as AnyClip[])
+      .find((clip) => clip.id === clipId)?.name;
+
+  it("both sides renamed: main's name wins, and no clip loses its name", () => {
+    const base = baseTimeline();
+    // main stretches A past its Original span — that span exists on ONE side
+    // only, which is its own path through the merge.
+    const ours = applyCommand(named(base, "main"), {
+      op: "trim",
+      clipId: "A",
+      edge: "end",
+      delta: t(5),
+    });
+    if (!ours.ok) throw new Error("fixture trim failed");
+    const theirs = applyCommand(named(base, "cut"), {
+      op: "move",
+      clipId: "B",
+      newStart: t(60),
+    });
+    if (!theirs.ok) throw new Error("fixture move failed");
+
+    const merge = startMerge({
+      base,
+      ours: ours.timeline,
+      theirs: theirs.timeline,
+    });
+    expect(merge.ok).toBe(true);
+    if (!merge.ok) return;
+    expect(merge.conflicts).toEqual([]);
+
+    const clips = merge.timeline.tracks.flatMap(
+      (track) => track.clips as AnyClip[],
+    );
+    expect(clips.length).toBeGreaterThan(0);
+    // Not one nameless clip anywhere.
+    expect(clips.filter((clip) => clip.name === undefined)).toEqual([]);
+    // A is main's alone; B was renamed by both — main's wins.
+    expect(nameOf(merge.timeline, "A")).toBe("main A");
+    expect(nameOf(merge.timeline, "B")).toBe("main B");
+    expect(nameOf(merge.timeline, "TX")).toBe("main TX");
+  });
+
+  it("only the cut renamed it: the cut's name is carried", () => {
+    const base = baseTimeline();
+    const theirs = named(base, "cut");
+    const merge = startMerge({ base, ours: clone(base), theirs });
+    expect(merge.ok).toBe(true);
+    if (!merge.ok) return;
+    expect(nameOf(merge.timeline, "A")).toBe("cut A");
+    // …and renaming alone is neither a conflict nor a change.
+    expect(merge.conflicts).toEqual([]);
+    expect(computeDiff(base, merge.timeline).entries).toEqual([]);
+  });
+
+  it("a family that went through a bucket-1 choice keeps main's name", () => {
+    const base = baseTimeline();
+    const ours = applyCommand(named(base, "main"), {
+      op: "propertyChange",
+      clipId: "A",
+      property: "volume",
+      value: 40,
+    });
+    const theirs = applyCommand(named(base, "cut"), {
+      op: "propertyChange",
+      clipId: "A",
+      property: "volume",
+      value: 60,
+    });
+    if (!ours.ok || !theirs.ok) throw new Error("fixture property failed");
+    const sides = {
+      base,
+      ours: ours.timeline,
+      theirs: theirs.timeline,
+    };
+    const open = startMerge(sides);
+    expect(open.ok).toBe(true);
+    if (!open.ok) return;
+    expect(open.conflicts).toHaveLength(1);
+
+    // The CUT's value wins the conflict; the name is not part of the answer.
+    const decided = applyChoice({
+      ...sides,
+      choices: {},
+      conflictId: open.conflicts[0].conflictId,
+      choice: "theirs",
+    });
+    expect(decided.ok).toBe(true);
+    if (!decided.ok) return;
+    const a = decided.timeline.tracks
+      .flatMap((track) => track.clips as AnyClip[])
+      .find((clip) => clip.id === "A") as Clip;
+    expect(a.properties.volume).toBe(60);
+    expect(a.name).toBe("main A");
   });
 });

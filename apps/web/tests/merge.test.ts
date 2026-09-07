@@ -577,6 +577,12 @@ describe("F3(1) — the landing", () => {
       properties: { volume?: number };
     };
     expect(music.properties.volume).toBe(40);
+    // A merge rebuilds every clip — it must not rebuild them nameless: the
+    // After lane used to show `Broll` (the media filename) where the Before
+    // lane said `B-roll`.
+    expect((clipIn(merged, BROLL) as unknown as { name?: string }).name).toBe(
+      "B-roll",
+    );
   });
 
   it("dirty sides: BOTH are sealed in the same transaction as the bring-in", async () => {
