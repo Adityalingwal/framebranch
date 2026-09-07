@@ -14,6 +14,8 @@
 
 import { eq } from "drizzle-orm";
 
+import type { Timeline } from "@framebranch/engine";
+
 import { commits } from "../../../db/schema";
 import { chainOf } from "../../../server/ancestry";
 import { loadBranchView } from "../../../server/branches";
@@ -35,6 +37,14 @@ export type DiffResponse = {
   runtime: { before: string; after: string };
   /** Which INPUT ended up as the Before lane. */
   older: "a" | "b";
+  /**
+   * B2 lock (4) — only with `timelines=1`: the two materialised timelines
+   * the rows were computed from, so the Compare lanes and the rows come
+   * from ONE snapshot and can never drift. Left out otherwise, so the top
+   * bar's count query stays as light as it is today.
+   */
+  before?: Timeline;
+  after?: Timeline;
 };
 
 export async function GET(request: Request): Promise<Response> {
@@ -42,6 +52,9 @@ export async function GET(request: Request): Promise<Response> {
     const cut = requiredQuery(request, "cut");
     const a = requiredQuery(request, "a");
     const b = requiredQuery(request, "b");
+    // B2 §2.2 — opt-in, so the chip's count query is unchanged.
+    const withTimelines =
+      new URL(request.url).searchParams.get("timelines") === "1";
 
     return db.transaction(async (tx): Promise<DiffResponse> => {
       // Unknown cut → E_BRANCH_NOT_FOUND, like every cut-scoped read.
@@ -96,6 +109,7 @@ export async function GET(request: Request): Promise<Response> {
         count: presented.count,
         runtime: presented.runtime,
         older,
+        ...(withTimelines ? { before, after } : {}),
       };
     });
   });

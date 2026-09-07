@@ -265,8 +265,19 @@ export function getHistory(cut: string): Promise<HistoryData> {
   return get<HistoryData>(`/api/history?cut=${encodeURIComponent(cut)}`);
 }
 
-export function getDiff(cut: string, a: string, b: string): Promise<DiffData> {
+/**
+ * B2 §2.2 — `timelines: true` additionally brings back the two materialised
+ * timelines the rows were computed from (the Compare lanes). Without it the
+ * answer is exactly what B1 asked for, so the chip's count stays light.
+ */
+export function getDiff(
+  cut: string,
+  a: string,
+  b: string,
+  options: { timelines?: boolean } = {},
+): Promise<DiffData> {
   const q = new URLSearchParams({ cut, a, b });
+  if (options.timelines) q.set("timelines", "1");
   return get<DiffData>(`/api/diff?${q.toString()}`);
 }
 

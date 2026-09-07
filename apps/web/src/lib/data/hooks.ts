@@ -110,6 +110,23 @@ export function useDiffQuery(cut: string, a: string | null, b: string | null) {
   });
 }
 
+/**
+ * B2 §2.2 — the Compare view's ONE query: rows, count, runtime, `older` AND
+ * both timelines, from a single snapshot. Its key is a child of
+ * `diffAll(cut)`, so an edit refreshes lanes and rows together.
+ */
+export function useCompareQuery(
+  cut: string,
+  a: string | null,
+  b: string | null,
+) {
+  return useQuery({
+    queryKey: queryKeys.compare(cut, a ?? "", b ?? ""),
+    queryFn: () => api.getDiff(cut, a as string, b as string, { timelines: true }),
+    enabled: a !== null && b !== null,
+  });
+}
+
 export function useSaveVersionMutation(branch: string) {
   const queryClient = useQueryClient();
   return useMutation({

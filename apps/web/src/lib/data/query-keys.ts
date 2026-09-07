@@ -22,4 +22,12 @@ export const queryKeys = {
   diffAll: (cut?: string) =>
     cut === undefined ? (["diff"] as const) : (["diff", cut] as const),
   diff: (cut: string, a: string, b: string) => ["diff", cut, a, b] as const,
+  /**
+   * B2 §2.2 — the Compare view's own answer (rows AND both timelines) for a
+   * pair. A CHILD of `diffAll(cut)` on purpose: `useOpsMutation` already
+   * invalidates that prefix after every edit, so lanes and rows refresh
+   * together from one query.
+   */
+  compare: (cut: string, a: string, b: string) =>
+    ["diff", cut, "compare", a, b] as const,
 };
