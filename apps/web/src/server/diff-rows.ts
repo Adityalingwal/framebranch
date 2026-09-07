@@ -24,6 +24,9 @@
  *   (first)` with the N names as children. Grouping happens once, before
  *   counting. `count = rows.length`, always.
  * - a raw clip id is never shown (clipDisplayName).
+ * - B2: every row also carries `jump` (which side + frame + clip the player
+ *   goes to when the row is clicked — lock (3)) and `laneIds` (the clips the
+ *   row touches on each lane, for colour and the two-way highlight).
  */
 
 import { computeDiff } from "@framebranch/engine";
@@ -58,6 +61,26 @@ export type DiffRowKind =
   | "raw"
   | "ripple";
 
+/**
+ * B2 lock (3) — where the player goes when this row is clicked. `frame` is
+ * the frame behind the LAST timecode the row prints (the "new" one), so the
+ * player lands exactly where the row's own text says the clip now is.
+ * `Removed` is the one row whose answer lives on the Before side.
+ */
+export type DiffJump = {
+  side: "before" | "after";
+  frame: number;
+  /** The clip to focus, or null for track/timeline-scope rows. */
+  clipId: string | null;
+};
+
+/**
+ * B2 §2.6 — the clip ids this row touches on EACH lane. Lane colour and the
+ * two-way highlight read THIS, never `clipIds` (which stays one id per row
+ * so `summaryName` keeps counting distinct clips per verb).
+ */
+export type DiffLaneIds = { before: string[]; after: string[] };
+
 export type DiffRow = {
   /** Stable per row: `‹clipId›:‹kind›[:‹sub›]`, or the ripple group id. */
   key: string;
@@ -76,6 +99,10 @@ export type DiffRow = {
   trackName: string;
   /** Ripple only: the shifted clips, names only (copy #124b). */
   children?: { clipId: string; clipName: string }[];
+  /** B2 lock (3) — row click → player side + playhead frame + focus clip. */
+  jump: DiffJump;
+  /** B2 §2.6 — which clips this row lights up in each lane. */
+  laneIds: DiffLaneIds;
 };
 
 export type DiffPresentation = {
@@ -207,9 +234,15 @@ export function presentDiff(
     sub: string,
     text: string,
     where: string,
+    overrides: { jump?: DiffJump; laneIds?: DiffLaneIds } = {},
   ): DiffRow => {
     const clipId = entry.clipId;
     const trackId = entry.trackId ?? "";
+    // The default answer covers every row whose clip sits on BOTH sides and
+    // whose printed position is simply where the clip is now (property, raw,
+    // slipped `stays at`, `Moved to track`). Kinds that move, appear or
+    // disappear pass their own — see the call sites.
+    const afterClip = clipId ? b.byId.get(clipId)?.clip : undefined;
     return {
       key: `${clipId ?? (trackId || "timeline")}:${kind}${sub ? `:${sub}` : ""}`,
       kind,
@@ -224,6 +257,16 @@ export function presentDiff(
       where,
       trackId,
       trackName: entry.trackId ? trackNameOf(entry.trackId) : "",
+      jump:
+        overrides.jump ??
+        (clipId
+          ? { side: "after", frame: afterClip ? start(afterClip) : 0, clipId }
+          : { side: "after", frame: 0, clipId: null }),
+      laneIds:
+        overrides.laneIds ??
+        (clipId
+          ? { before: [clipId], after: [clipId] }
+          : { before: [], after: [] }),
     };
   };
 
@@ -289,6 +332,13 @@ export function presentDiff(
             trackId: track.id,
             trackName: trackNameOf(track.id),
             children: run.map((c) => ({ clipId: c.id, clipName: nameOf(c.id) })),
+            // The row prints the FIRST shifted clip's move, so that is
+            // where the player goes; the lanes light every shifted clip.
+            jump: { side: "after", frame: first.toStart, clipId: run[0].id },
+            laneIds: {
+              before: run.map((c) => c.id),
+              after: run.map((c) => c.id),
+            },
           });
         }
       }
@@ -312,10 +362,24 @@ export function presentDiff(
         const next = idx >= 0 ? order[idx + 1] : undefined;
         const prev = idx > 0 ? order[idx - 1] : undefined;
         const where = `${tc(e.fromStart)} → ${tc(e.toStart)}`;
+        // Every shape of this row prints the NEW start last.
+        const jump: DiffJump = {
+          side: "after",
+          frame: e.toStart,
+          clipId: e.clipId,
+        };
         if (next) {
-          rows.push(row(e, "moved", "", `Moved before ${quote(next.id)}`, where));
+          rows.push(
+            row(e, "moved", "", `Moved before ${quote(next.id)}`, where, {
+              jump,
+            }),
+          );
         } else if (prev) {
-          rows.push(row(e, "moved", "", `Moved after ${quote(prev.id)}`, where));
+          rows.push(
+            row(e, "moved", "", `Moved after ${quote(prev.id)}`, where, {
+              jump,
+            }),
+          );
         } else {
           rows.push(
             row(
@@ -324,6 +388,7 @@ export function presentDiff(
               "",
               `Moved to ${tc(e.toStart)} (was ${tc(e.fromStart)})`,
               "",
+              { jump },
             ),
           );
         }
@@ -345,6 +410,16 @@ export function presentDiff(
             e.edge,
             `${edge} ${verb} by ${plural(e.frames, "frame")}`,
             where,
+            // The frame behind the printed `now starts` / `now ends`.
+            cur
+              ? {
+                  jump: {
+                    side: "after",
+                    frame: e.edge === "start" ? start(cur) : end(cur),
+                    clipId: e.clipId,
+                  },
+                }
+              : {},
           ),
         );
         break;
@@ -377,13 +452,28 @@ export function presentDiff(
             "",
             prev ? `Added after ${quote(prev.id)}` : "Added first",
             `at ${tc(e.start)} · ${tc(e.duration)}`,
+            {
+              jump: { side: "after", frame: e.start, clipId: e.clipId },
+              laneIds: { before: [], after: [e.clipId] },
+            },
           ),
         );
         break;
       }
       case "removed":
         rows.push(
-          row(e, "removed", "", "Removed", `was at ${tc(e.start)} · ${tc(e.duration)}`),
+          row(
+            e,
+            "removed",
+            "",
+            "Removed",
+            `was at ${tc(e.start)} · ${tc(e.duration)}`,
+            // The only row whose answer is on the Before side (lock (3)).
+            {
+              jump: { side: "before", frame: e.start, clipId: e.clipId },
+              laneIds: { before: [e.clipId], after: [] },
+            },
+          ),
         );
         break;
       case "split": {
@@ -392,9 +482,9 @@ export function presentDiff(
         const pieces = e.pieceIds
           .map((id) => b.byId.get(id)?.clip)
           .filter((c): c is AnyClip => c !== undefined);
-        const positions = e.cuts.map((cut) => {
+        const positionFrames = e.cuts.map((cut) => {
           const piece = pieces.find((p) => p.lineage.span.start.value === cut);
-          return tc(piece ? start(piece) : cut);
+          return piece ? start(piece) : cut;
         });
         rows.push(
           row(
@@ -402,7 +492,17 @@ export function presentDiff(
             "split",
             "",
             `Split into ${e.cuts.length + 1} clips`,
-            `at ${positions.join(", ")}`,
+            `at ${positionFrames.map(tc).join(", ")}`,
+            {
+              // The first cut is the frame the row prints first; the clip to
+              // focus is the ORIGINAL id, which survives as the first piece.
+              jump: {
+                side: "after",
+                frame: positionFrames[0] ?? 0,
+                clipId: e.clipId,
+              },
+              laneIds: { before: [e.clipId], after: [...e.pieceIds] },
+            },
           ),
         );
         break;
@@ -429,6 +529,7 @@ type RowFn = (
   sub: string,
   text: string,
   where: string,
+  overrides?: { jump?: DiffJump; laneIds?: DiffLaneIds },
 ) => DiffRow;
 
 const pct = (v: number): string => `${Math.round(v * 100) / 100}%`;
