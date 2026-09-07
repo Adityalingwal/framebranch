@@ -16,8 +16,9 @@ import type { ImportWarning, Timeline } from "@framebranch/engine";
 
 import { branches, commits, ops, snapshots, workingState } from "../db/schema";
 import { ApiError } from "./envelope";
+import { appendEvent } from "./events";
 import type { BranchRow, WorkingStateRow } from "./branches";
-import type { Actor, PendingOp } from "./types";
+import type { Actor, CommitKind, PendingOp } from "./types";
 import type { Tx } from "./tx";
 
 /** Snapshot interval: every Nth commit is a full snapshot. */
@@ -42,6 +43,14 @@ export type CreateCommitInput = {
   timeline: Timeline;
   name: string;
   actor: Actor;
+  /** B4 — the card kind. Explicit on every call; there is no default. */
+  kind: CommitKind;
+  /**
+   * F2a — display name of who made the card. `Agent` for agent runs; the
+   * request's editor name otherwise. Only the seed (written elsewhere) is
+   * null.
+   */
+  actorName: string | null;
   /** The second parent — non-null ONLY on merge commits. */
   parent2Id?: string | null;
   /**
@@ -77,6 +86,8 @@ export async function createCommit({
   timeline,
   name,
   actor,
+  kind,
+  actorName,
   parent2Id = null,
   forceSnapshot = false,
   importWarnings = null,
@@ -116,6 +127,8 @@ export async function createCommit({
     parent2Id,
     name,
     actor,
+    kind,
+    actorName,
     snapshotDistance,
     importWarnings,
   });
@@ -169,6 +182,15 @@ export async function createCommit({
         eq(workingState.projectId, projectId),
       ),
     );
+
+  // J1 — the event rides in the same transaction as the card.
+  await appendEvent(tx, projectId, "commit-created", {
+    commitId,
+    kind,
+    name,
+    branch: branch.name,
+    actorName,
+  });
 
   return { commitId, name };
 }

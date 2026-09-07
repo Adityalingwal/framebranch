@@ -28,6 +28,7 @@ import {
 } from "../db/schema";
 import { mintCommitId } from "./commits";
 import { demoOtioJson } from "./demo-fixture";
+import { appendEvent } from "./events";
 import { IMPORT_COMMIT_NAME } from "./naming";
 import type { Tx } from "./tx";
 
@@ -149,6 +150,10 @@ export async function seedProjectFromDemo(
     parent2Id: null,
     name: IMPORT_COMMIT_NAME,
     actor: "user",
+    // C1(6) — the seed card: kind `seed`, and NO actor name (it is written
+    // before the first-visit name box, so nobody "made" it).
+    kind: "seed",
+    actorName: null,
     snapshotDistance: 0,
     // F7 — the itemized skipped-list's permanent home; NULL on every
     // commit that is not an import (the fixture is clean, so this is an
@@ -170,6 +175,14 @@ export async function seedProjectFromDemo(
     baseCommitId: commitId,
     pendingOps: [],
     workingRev: INITIAL_WORKING_REV,
+  });
+
+  await appendEvent(tx, projectId, "commit-created", {
+    commitId,
+    kind: "seed",
+    name: IMPORT_COMMIT_NAME,
+    branch: "main",
+    actorName: null,
   });
 
   return { commitId, branchId: branch.id };

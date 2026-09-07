@@ -17,6 +17,7 @@ import { importOtio } from "@framebranch/engine";
 import { isDirty, loadBranchView } from "../../../server/branches";
 import { createCommit } from "../../../server/commits";
 import { ApiError } from "../../../server/envelope";
+import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
 import {
   IMPORTED_TIMELINE_COMMIT_NAME,
@@ -29,7 +30,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, importBodySchema);
 
     return runWithTicket(db, project.id, "import", body.ticket, async (tx) => {
@@ -51,6 +52,8 @@ export async function POST(request: Request): Promise<Response> {
           timeline: view.timeline,
           name: SEAL_BEFORE_IMPORT,
           actor: "user",
+          kind: "auto",
+          actorName: editorName,
         });
       }
 
@@ -65,8 +68,17 @@ export async function POST(request: Request): Promise<Response> {
         timeline: imported.timeline,
         name: IMPORTED_TIMELINE_COMMIT_NAME,
         actor: "user",
+        kind: "import",
+        actorName: editorName,
         forceSnapshot: true,
         importWarnings: imported.warnings,
+      });
+
+      await appendEvent(tx, project.id, "import", {
+        branch: body.branch,
+        commitId: commit.commitId,
+        skipped: imported.warnings.length,
+        editorName,
       });
 
       return { commitId: commit.commitId, skippedItems: imported.warnings };

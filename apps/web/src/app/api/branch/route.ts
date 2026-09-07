@@ -9,6 +9,7 @@ import { branches, workingState } from "../../../db/schema";
 import { findBranch, isDirty, loadBranchView } from "../../../server/branches";
 import { createCommit } from "../../../server/commits";
 import { ApiError } from "../../../server/envelope";
+import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
 import { SEAL_BEFORE_BRANCH_CREATE } from "../../../server/naming";
 import { INITIAL_WORKING_REV } from "../../../server/project";
@@ -19,7 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, branchCreateBodySchema);
 
     return runWithTicket(
@@ -51,6 +52,8 @@ export async function POST(request: Request): Promise<Response> {
             timeline: source.timeline,
             name: SEAL_BEFORE_BRANCH_CREATE,
             actor: "user",
+            kind: "auto",
+            actorName: editorName,
           });
           sealedCommitId = sealed.commitId;
           headCommitId = sealed.commitId;
@@ -58,7 +61,12 @@ export async function POST(request: Request): Promise<Response> {
 
         const [created] = await tx
           .insert(branches)
-          .values({ projectId: project.id, name: body.name, headCommitId })
+          .values({
+            projectId: project.id,
+            name: body.name,
+            headCommitId,
+            createdBy: editorName,
+          })
           .returning();
 
         await tx.insert(workingState).values({
@@ -67,6 +75,13 @@ export async function POST(request: Request): Promise<Response> {
           baseCommitId: headCommitId,
           pendingOps: [],
           workingRev: INITIAL_WORKING_REV,
+        });
+
+        await appendEvent(tx, project.id, "branch-created", {
+          branch: created.name,
+          from: body.from,
+          head: headCommitId,
+          createdBy: editorName,
         });
 
         return {

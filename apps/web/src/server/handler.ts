@@ -28,7 +28,28 @@ import type { ProjectRow } from "./project";
 export type RequestContext = {
   db: Db;
   project: ProjectRow;
+  /**
+   * F2a — the caller's display name, from the `X-Editor-Name` header the
+   * web client sends on every mutating request. Reads never need it.
+   */
+  editorName: string;
 };
+
+/** The one header that carries identity. No login, no user table. */
+export const EDITOR_NAME_HEADER = "X-Editor-Name";
+
+/**
+ * B0 is lenient: a mutating request without the header (tests, curl,
+ * agent/simulate today) is attributed to `Editor` instead of being
+ * refused. The web client always sends the header.
+ */
+export const FALLBACK_EDITOR_NAME = "Editor";
+
+export function readEditorName(request: Request): string {
+  const raw = request.headers.get(EDITOR_NAME_HEADER);
+  const trimmed = raw?.trim() ?? "";
+  return trimmed.length > 0 ? trimmed.slice(0, 100) : FALLBACK_EDITOR_NAME;
+}
 
 export async function handleRequest(
   request: Request,
@@ -36,6 +57,7 @@ export async function handleRequest(
 ): Promise<Response> {
   const db = getDb();
   const token = readTokenCookie(request);
+  const editorName = readEditorName(request);
 
   let project: ProjectRow;
   let headers: HeadersInit | undefined;
@@ -58,7 +80,7 @@ export async function handleRequest(
   }
 
   try {
-    const data = await work({ db, project });
+    const data = await work({ db, project, editorName });
     return okResponse(data, headers);
   } catch (error) {
     if (error instanceof ApiError) {

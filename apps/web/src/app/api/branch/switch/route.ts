@@ -13,6 +13,7 @@ import {
   loadBranchView,
 } from "../../../../server/branches";
 import { createCommit } from "../../../../server/commits";
+import { appendEvent } from "../../../../server/events";
 import { handleRequest, readBody } from "../../../../server/handler";
 import { SEAL_BEFORE_BRANCH_SWITCH } from "../../../../server/naming";
 import { branchSwitchBodySchema } from "../../../../server/schemas";
@@ -22,7 +23,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, branchSwitchBodySchema);
 
     return runWithTicket(
@@ -46,12 +47,20 @@ export async function POST(request: Request): Promise<Response> {
             timeline: source.timeline,
             name: SEAL_BEFORE_BRANCH_SWITCH,
             actor: "user",
+            kind: "auto",
+            actorName: editorName,
           });
           sealedCommitId = sealed.commitId;
         }
 
         // Re-read AFTER the seal: when from === to, the seal changed it.
         const target = await loadBranchView(tx, project.id, body.to, true);
+
+        await appendEvent(tx, project.id, "branch-switched", {
+          from: body.from,
+          to: body.to,
+          editorName,
+        });
 
         return {
           timeline: target.timeline,

@@ -13,6 +13,8 @@ import {
   commits,
   mergeAttempts,
   ops,
+  presence,
+  projectEvents,
   snapshots,
   workingState,
 } from "../../../../db/schema";
@@ -36,6 +38,10 @@ export async function POST(request: Request): Promise<Response> {
       async (tx) => {
         // Explicit deletes in FK order (children first). Every WHERE
         // is project-scoped.
+        await tx.delete(presence).where(eq(presence.projectId, project.id));
+        await tx
+          .delete(projectEvents)
+          .where(eq(projectEvents.projectId, project.id));
         await tx
           .delete(mergeAttempts)
           .where(eq(mergeAttempts.projectId, project.id));

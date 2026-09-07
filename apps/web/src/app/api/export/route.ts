@@ -20,7 +20,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, exportBodySchema);
 
     return runWithTicket(db, project.id, "export", body.ticket, async (tx) => {
@@ -35,6 +35,8 @@ export async function POST(request: Request): Promise<Response> {
           timeline: view.timeline,
           name: SEAL_BEFORE_EXPORT,
           actor: "user",
+          kind: "auto",
+          actorName: editorName,
         });
       }
 

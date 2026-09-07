@@ -10,7 +10,10 @@ import { randomUUID } from "node:crypto";
 import { applyCommand } from "@framebranch/engine";
 import type { Timeline } from "@framebranch/engine";
 
-import { agentScript } from "../../../../server/agent-scripts";
+import {
+  AGENT_ACTOR_NAME,
+  agentScript,
+} from "../../../../server/agent-scripts";
 import { isDirty, loadBranchView } from "../../../../server/branches";
 import { createCommit } from "../../../../server/commits";
 import { ApiError } from "../../../../server/envelope";
@@ -28,7 +31,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  return handleRequest(request, async ({ db, project }) => {
+  return handleRequest(request, async ({ db, project, editorName }) => {
     const body = await readBody(request, agentSimulateBodySchema);
 
     return runWithTicket(
@@ -50,6 +53,8 @@ export async function POST(request: Request): Promise<Response> {
             timeline: view.timeline,
             name: SEAL_BEFORE_AGENT_RUN,
             actor: "user",
+            kind: "auto",
+            actorName: editorName,
           });
         }
 
@@ -89,6 +94,8 @@ export async function POST(request: Request): Promise<Response> {
           timeline,
           name: agentCommitName(script.name),
           actor: "agent",
+          kind: "agent-run",
+          actorName: AGENT_ACTOR_NAME,
         });
 
         return {

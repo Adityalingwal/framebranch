@@ -17,6 +17,7 @@ import { commits, mergeAttempts } from "../db/schema";
 import { loadBranchById, loadWorkingState } from "./branches";
 import { createCommit } from "./commits";
 import { ApiError } from "./envelope";
+import { appendEvent } from "./events";
 import { mergeCommitName } from "./naming";
 import { loadCommitTimeline } from "./timeline";
 import type { Tx } from "./tx";
@@ -149,6 +150,8 @@ export type FinalizeInput = {
   headFrom: string;
   sides: MergeSides;
   choices: MergeChoices;
+  /** F2a — who pressed the button; stored on the bring-in card. */
+  actorName: string;
   /** Present when a draft row exists; it is deleted in this transaction. */
   attemptId?: string;
 };
@@ -171,6 +174,7 @@ export async function finalizeMerge({
   headFrom,
   sides,
   choices,
+  actorName,
   attemptId,
 }: FinalizeInput): Promise<{ done: true; mergeCommitId: string }> {
   const check = finalizeCheck({
@@ -214,12 +218,21 @@ export async function finalizeMerge({
     timeline: check.timeline,
     name: mergeCommitName(from.name, into.name),
     actor: "user",
+    kind: "bring-in",
+    actorName,
     // The second parent exists ONLY on merge commits (in the commits table,
     // parent2Id is non-null only here).
     parent2Id: headFrom,
     // Merge commits are always full snapshots — a merge is not expressible
     // as ops, and a snapshot removes two-parent replay ambiguity.
     forceSnapshot: true,
+  });
+
+  await appendEvent(tx, projectId, "merge-finalized", {
+    into: into.name,
+    from: from.name,
+    commitId: commit.commitId,
+    actorName,
   });
 
   if (attemptId !== undefined) {
