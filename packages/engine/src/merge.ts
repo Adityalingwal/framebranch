@@ -1619,7 +1619,18 @@ function canonicalChoices(choices: MergeChoices): MergeChoices {
   );
 }
 
-function recompute(
+/**
+ * The whole merge, from the three original timelines plus the permanent
+ * choices made so far. `startMerge` / `applyChoice` / `finalizeCheck` are
+ * all thin wrappers over it.
+ *
+ * Exported (B3 §2.2) because the Bring-in preview is STATELESS: it is
+ * handed a `choices` record by the client on every request and needs the
+ * one answer that record produces — a fold of `applyChoice` would replay
+ * the same computation once per choice and reject a choice the user is
+ * re-answering.
+ */
+export function recompute(
   baseInput: Timeline,
   oursInput: Timeline,
   theirsInput: Timeline,
