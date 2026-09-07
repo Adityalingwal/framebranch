@@ -4,31 +4,25 @@
  *
  *  - finding the merge base in the commit DAG,
  *  - materializing base / ours / theirs from storage,
- *  - the finalize: both-parent CAS, always-full-snapshot merge commit with
- *    two parents, and deleting the draft row in the same transaction.
+ *  - the finalize tail: the always-full-snapshot bring-in commit with two
+ *    parents and its event.
+ *
+ * B3 (F3(1)): the draft table is gone. The preview writes nothing at all
+ * and `POST /api/merge` is ONE transaction, so there is no row to load, no
+ * row to delete and no attempt id anywhere in this file.
  */
-
-import { and, eq } from "drizzle-orm";
 
 import { finalizeCheck } from "@framebranch/engine";
 import type { MergeChoices, Timeline } from "@framebranch/engine";
 
-import { mergeAttempts } from "../db/schema";
 import { ancestorsOf, loadParentMap } from "./ancestry";
-import { loadBranchById, loadWorkingState } from "./branches";
+import type { BranchRow, WorkingStateRow } from "./branches";
 import { createCommit } from "./commits";
 import { ApiError } from "./envelope";
 import { appendEvent } from "./events";
 import { mergeCommitName } from "./naming";
 import { loadCommitTimeline } from "./timeline";
 import type { Tx } from "./tx";
-
-/**
- * merge_attempts.status has exactly one value: "open". The row is deleted on
- * finalize and on abort — a stored row can only ever be awaiting resolution.
- * Adding "resolved"/"aborted" values would be a soft delete.
- */
-export const MERGE_ATTEMPT_OPEN = "open";
 
 export type MergeSides = {
   baseCommitId: string;
@@ -107,39 +101,44 @@ export async function loadMergeSides(
 export type FinalizeInput = {
   tx: Tx;
   projectId: string;
-  intoBranchId: string;
-  fromBranchId: string;
-  /** The heads the merge was computed from — what the CAS revalidates. */
-  headInto: string;
+  /** `main`, freshly re-read AFTER the seals (its head is the first parent). */
+  into: BranchRow;
+  /** The cut being brought in; its head becomes the second parent. */
+  from: BranchRow;
+  /** `main`'s working row, re-read after the seals (clean by then). */
+  working: WorkingStateRow;
+  /** The cut's sealed head — the card's `parent2Id`. */
   headFrom: string;
   sides: MergeSides;
   choices: MergeChoices;
   /** F2a — who pressed the button; stored on the bring-in card. */
   actorName: string;
-  /** Present when a draft row exists; it is deleted in this transaction. */
-  attemptId?: string;
 };
 
 /**
- * The finalize, shared by `POST merge` (zero conflicts → immediate) and
- * `POST merge/resolve` (last conflict answered → automatic, no extra
- * confirmation screen).
+ * The tail of the land transaction (§2.3 steps 4-5): the engine's final
+ * check, the bring-in card and the event.
  *
- * Everything below is one transaction. Any throw rolls the WHOLE thing back
- * — that is the mechanism by which "E_STALE_HEAD → no commit, nothing
- * written at all" is true, not a sequence of undo steps.
+ * The staleness check is NOT here any more (F4 + lock (3)): the route
+ * compares the request's four-field token against both branches' heads and
+ * working revs BEFORE any write, so by the time this runs the two heads are
+ * the ones the seals just produced.
+ *
+ * Everything below runs inside the caller's transaction. Any throw rolls
+ * the WHOLE thing back — that is the mechanism by which "E_MERGE_PRECONDITION
+ * → no commit, no seal, nothing written at all" is true, not a sequence of
+ * undo steps.
  */
 export async function finalizeMerge({
   tx,
   projectId,
-  intoBranchId,
-  fromBranchId,
-  headInto,
+  into,
+  from,
+  working,
   headFrom,
   sides,
   choices,
   actorName,
-  attemptId,
 }: FinalizeInput): Promise<{ done: true; mergeCommitId: string }> {
   const check = finalizeCheck({
     base: sides.base,
@@ -149,29 +148,6 @@ export async function finalizeMerge({
   });
   if (!check.ok) {
     throw new ApiError("E_MERGE_PRECONDITION", check.error.message);
-  }
-
-  // Both-parent CAS. The draft recorded the two head ids it started from;
-  // either one moving means the merge was computed against a history that
-  // no longer exists. The user restarts the merge.
-  const into = await loadBranchById(tx, projectId, intoBranchId);
-  const from = await loadBranchById(tx, projectId, fromBranchId);
-  if (into.headCommitId !== headInto || from.headCommitId !== headFrom) {
-    throw new ApiError(
-      "E_STALE_HEAD",
-      `branch "${into.headCommitId !== headInto ? into.name : from.name}" moved while this merge was open — restart the merge`,
-    );
-  }
-
-  const working = await loadWorkingState(tx, projectId, into.id, true);
-  if (working.pendingOps.length > 0 || working.baseCommitId !== headInto) {
-    // Unsaved edits made on `into` AFTER the merge started don't move the
-    // head, so the CAS above cannot see them — but committing the merge
-    // would reset the working record. Same code, same remedy: restart.
-    throw new ApiError(
-      "E_STALE_HEAD",
-      `branch "${into.name}" has unsaved changes made after this merge started — save or discard them, then restart the merge`,
-    );
   }
 
   const commit = await createCommit({
@@ -199,52 +175,9 @@ export async function finalizeMerge({
     actorName,
   });
 
-  if (attemptId !== undefined) {
-    // The draft row is deleted in the same transaction that creates the
-    // merge commit — wrong-moment delete is impossible.
-    await tx
-      .delete(mergeAttempts)
-      .where(
-        and(
-          eq(mergeAttempts.id, attemptId),
-          eq(mergeAttempts.projectId, projectId),
-        ),
-      );
-  }
-
+  // B4: F3(4)(d) clears ready_note/ready_by/ready_at/ready_working_rev on
+  // `from` here — the cut stops being "Ready for main" the moment it lands.
+  //
   // The `from` branch is untouched: no head move, no working-state change.
   return { done: true, mergeCommitId: commit.commitId };
-}
-
-export type MergeAttemptRow = typeof mergeAttempts.$inferSelect;
-
-/**
- * Load a merge draft, project-scoped and row-locked.
- *
- * E_MERGE_PRECONDITION is used for unknown/closed drafts — the engine reports
- * real boundary misuse of the merge API the same way.
- */
-export async function loadMergeAttempt(
-  tx: Tx,
-  projectId: string,
-  attemptId: string,
-): Promise<MergeAttemptRow> {
-  const rows = await tx
-    .select()
-    .from(mergeAttempts)
-    .where(
-      and(
-        eq(mergeAttempts.id, attemptId),
-        eq(mergeAttempts.projectId, projectId),
-      ),
-    )
-    .for("update")
-    .limit(1);
-  if (rows.length === 0) {
-    throw new ApiError(
-      "E_MERGE_PRECONDITION",
-      `no open merge "${attemptId}" in this project`,
-    );
-  }
-  return rows[0];
 }

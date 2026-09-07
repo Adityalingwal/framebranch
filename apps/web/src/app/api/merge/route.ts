@@ -11,15 +11,10 @@
 
 import { startMerge } from "@framebranch/engine";
 
-import { mergeAttempts } from "../../../db/schema";
 import { loadBranchView } from "../../../server/branches";
 import { ApiError } from "../../../server/envelope";
 import { handleRequest, readBody } from "../../../server/handler";
-import {
-  MERGE_ATTEMPT_OPEN,
-  finalizeMerge,
-  loadMergeSides,
-} from "../../../server/merge";
+import { finalizeMerge, loadMergeSides } from "../../../server/merge";
 import { mergeBodySchema } from "../../../server/schemas";
 import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
@@ -70,44 +65,28 @@ export async function POST(request: Request): Promise<Response> {
         throw new ApiError("E_MERGE_PRECONDITION", result.error.message);
       }
 
-      if (result.conflicts.length === 0) {
-        // Finalize now — no draft row is created, so none is left behind.
-        return finalizeMerge({
-          tx,
-          projectId: project.id,
-          intoBranchId: into.branch.id,
-          fromBranchId: from.branch.id,
-          headInto,
-          headFrom,
-          sides,
-          choices: result.choices,
-          actorName: editorName,
-        });
+      if (result.conflicts.length > 0) {
+        // S1 (temporary, replaced by the token + choices land in S3): the
+        // draft table is gone, so a merge that still has conflicts has
+        // nowhere to be stored. The full answer is the preview + choices
+        // flow; until it exists this refuses instead of writing a draft.
+        throw new ApiError(
+          "E_MERGE_PRECONDITION",
+          `${result.conflicts.length} merge conflict(s) remain`,
+        );
       }
 
-      const [attempt] = await tx
-        .insert(mergeAttempts)
-        .values({
-          projectId: project.id,
-          branchInto: into.branch.id,
-          branchFrom: from.branch.id,
-          headInto,
-          headFrom,
-          // B3.3: the safe materialized draft. Unanswered conflicts'
-          // participants are deliberately NOT in it.
-          draftTimeline: result.timeline,
-          conflicts: result.conflicts,
-          // Choices start exactly as the engine returned them.
-          choices: result.choices,
-          status: MERGE_ATTEMPT_OPEN,
-        })
-        .returning({ id: mergeAttempts.id });
-
-      return {
-        attemptId: attempt.id,
-        conflicts: result.conflicts,
-        counts: result.counts,
-      };
+      return finalizeMerge({
+        tx,
+        projectId: project.id,
+        into: into.branch,
+        from: from.branch,
+        working: into.working,
+        headFrom,
+        sides,
+        choices: result.choices,
+        actorName: editorName,
+      });
     });
   });
 }

@@ -5,13 +5,11 @@ import type { CompareQuery } from "../../lib/data/hooks";
 import type { DiffRow } from "../../server/diff-rows";
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
-import { MergePanel } from "./MergePanel";
 
-export type PanelView = "changes" | "merge" | "history";
+export type PanelView = "changes" | "history";
 
 const TABS: { id: PanelView; label: string }[] = [
   { id: "changes", label: "Changes" },
-  { id: "merge", label: "Merge" },
   { id: "history", label: "History" },
 ];
 
@@ -24,7 +22,8 @@ export function RightPanel({
   headCardName,
   changesCount,
   viewingCommitId,
-  editingLocked,
+  // `editingLocked` stays in the props (the Shell passes it and B4's Agent
+  // panel reads it) but no panel below consumes it since the Merge tab went.
   commits,
   comparePair,
   historyEmpty,
@@ -44,7 +43,7 @@ export function RightPanel({
   headCardName: string | null;
   changesCount: number | undefined;
   viewingCommitId: string | null;
-  /** B5-1 — View mode locks the Merge tab's writes too. */
+  /** B5-1 / B2 — View mode and Compare lock every write this panel offers. */
   editingLocked: boolean;
   /** B2 §2.4 — the Compare state lives in the Shell; this panel is a view. */
   commits: HistoryCommit[];
@@ -139,12 +138,6 @@ export function RightPanel({
             highlightedClipIds={highlightedClipIds}
             onHighlightClip={onHighlightClip}
             onRowClick={onRowClick}
-          />
-        )}
-        {view === "merge" && (
-          <MergePanel
-            currentBranch={currentBranch}
-            editingLocked={editingLocked}
           />
         )}
         {view === "history" && (

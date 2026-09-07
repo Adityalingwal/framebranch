@@ -24,7 +24,6 @@ const TABLES = [
   "tickets",
   "presence",
   "project_events",
-  "merge_attempts",
   "working_state",
   "snapshots",
   "ops",

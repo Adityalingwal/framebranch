@@ -20,7 +20,7 @@ import {
   type QueryClient,
 } from "@tanstack/react-query";
 
-import type { Command, MergeChoice } from "@framebranch/engine";
+import type { Command } from "@framebranch/engine";
 
 import * as api from "./api-client";
 import { ApiClientError, type TimelineData } from "./api-client";
@@ -296,34 +296,6 @@ export function useMergeStartMutation() {
   return useMutation({
     mutationFn: (input: { from: string; into: string }) =>
       api.postMergeStart(input, retryHooks),
-    onError: onMutationError,
-  });
-}
-
-export function useMergeResolveMutation() {
-  return useMutation({
-    mutationFn: (input: {
-      attemptId: string;
-      conflictId: string;
-      choice: MergeChoice;
-    }) => api.postMergeResolve(input, retryHooks),
-    onError: (error) => {
-      // §7 locked exception: E_STALE_HEAD on the LAST resolve gets its own
-      // plain sentence + [Restart merge] action in the Merge panel, not the
-      // generic toast (the panel's own onError, passed at the call site,
-      // renders that). Every other merge-resolve error still gets it.
-      if (error instanceof ApiClientError && error.code === "E_STALE_HEAD") {
-        return;
-      }
-      onMutationError(error);
-    },
-  });
-}
-
-export function useMergeAbortMutation() {
-  return useMutation({
-    mutationFn: (input: { attemptId: string }) =>
-      api.postMergeAbort(input, retryHooks),
     onError: onMutationError,
   });
 }

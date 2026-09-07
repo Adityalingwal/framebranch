@@ -34,7 +34,7 @@ import { RightPanel, type PanelView } from "./RightPanel/RightPanel";
 import { TimelineView } from "./Timeline/TimelineView";
 import { TopBar } from "./TopBar";
 
-const VALID_VIEWS: PanelView[] = ["changes", "merge", "history"];
+const VALID_VIEWS: PanelView[] = ["changes", "history"];
 const WORKSPACE_LAYOUT_KEY = "framebranch.workspace-layout.v1";
 const DEFAULT_WORKSPACE_LAYOUT = { inspectorWidth: 320, timelineHeight: 330 };
 const MIN_INSPECTOR_WIDTH = 260;
@@ -722,8 +722,8 @@ export function Shell() {
           changesCount={changesCount}
           editingLocked={editingPaused}
           // Lock (5): the rail's Changes item IS the Changes door, so it
-          // resets the pair to `head → Now` every time. Merge/History are
-          // plain tab switches.
+          // resets the pair to `head → Now` every time. History is a plain
+          // tab switch.
           onViewChange={(next) =>
             next === "changes" ? openChangesDoor() : setView(next)
           }

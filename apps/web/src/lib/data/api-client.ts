@@ -20,7 +20,6 @@
 import type {
   Command,
   ImportWarning,
-  MergeChoice,
   MergeConflict,
   MergeCounts,
   Timeline,
@@ -369,32 +368,6 @@ export function postMergeStart(
 ): Promise<MergeStartResult> {
   const ticket = newTicket();
   return runMutation(() => postJson("/api/merge", { ...input, ticket }), hooks);
-}
-
-export type MergeResolveResult =
-  | { done: true; mergeCommitId: string }
-  | { counts: MergeCounts; conflicts: MergeConflict[] };
-
-export function postMergeResolve(
-  input: { attemptId: string; conflictId: string; choice: MergeChoice },
-  hooks: RetryHooks,
-): Promise<MergeResolveResult> {
-  const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/merge/resolve", { ...input, ticket }),
-    hooks,
-  );
-}
-
-export function postMergeAbort(
-  input: { attemptId: string },
-  hooks: RetryHooks,
-): Promise<{ aborted: true }> {
-  const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/merge/abort", { ...input, ticket }),
-    hooks,
-  );
 }
 
 export function postAgentSimulate(

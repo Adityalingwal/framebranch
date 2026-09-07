@@ -184,34 +184,6 @@ export const workingState = pgTable(
 );
 
 /**
- * (7) merge_attempts — the merge draft lives in the DB, never in memory.
- * The table is created here because the schema and its migration are one
- * artefact.
- */
-export const mergeAttempts = pgTable(
-  "merge_attempts",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id")
-      .notNull()
-      .references(() => projects.id, { onDelete: "cascade" }),
-    branchInto: uuid("branch_into")
-      .notNull()
-      .references(() => branches.id, { onDelete: "cascade" }),
-    branchFrom: uuid("branch_from")
-      .notNull()
-      .references(() => branches.id, { onDelete: "cascade" }),
-    headInto: text("head_into").notNull(),
-    headFrom: text("head_from").notNull(),
-    draftTimeline: jsonb("draft_timeline").notNull(),
-    conflicts: jsonb("conflicts").notNull(),
-    choices: jsonb("choices").notNull(),
-    status: text("status").notNull(),
-  },
-  (table) => [index("merge_attempts_project_id_idx").on(table.projectId)],
-);
-
-/**
  * (8) tickets — the shared idempotency register for all mutating endpoints.
  * No payload fingerprint column — the original payload is not stored.
  * Rows have a 24h TTL.

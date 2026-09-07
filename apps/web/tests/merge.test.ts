@@ -1,16 +1,19 @@
-// Merge endpoint tests (POST merge/resolve/abort), including stale-head finalize.
-// Real Postgres. Heads moved through the normal commit path — a faked race proves nothing.
+// Bring-in endpoint tests (POST /api/merge). Real Postgres. Heads moved
+// through the normal commit path — a faked race proves nothing.
+//
+// S1 shape: the draft table and the resolve/abort routes are retired, so
+// only the door rules and the zero-conflict landing are covered here. S3
+// rewrites this file around `GET /api/merge/preview` + the one-transaction
+// land (token, choices, stale messages).
 import { eq, isNotNull } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { MergeConflict, MergeCounts, Timeline } from "@framebranch/engine";
+import type { Timeline } from "@framebranch/engine";
 
-import { branches, commits, mergeAttempts } from "../src/db/schema";
+import { branches, commits } from "../src/db/schema";
 import { POST as postBranch } from "../src/app/api/branch/route";
 import { POST as postCommit } from "../src/app/api/commit/route";
 import { POST as postMerge } from "../src/app/api/merge/route";
-import { POST as postMergeAbort } from "../src/app/api/merge/abort/route";
-import { POST as postMergeResolve } from "../src/app/api/merge/resolve/route";
 import { POST as postOps } from "../src/app/api/ops/route";
 import { GET as getTimeline } from "../src/app/api/timeline/route";
 import {
@@ -33,13 +36,7 @@ type TimelineData = {
   workingRev: number;
   pendingCount: number;
 };
-type MergeStarted = {
-  attemptId: string;
-  conflicts: MergeConflict[];
-  counts: MergeCounts;
-};
 type MergeDone = { done: true; mergeCommitId: string };
-type Resolved = { counts: MergeCounts; conflicts: MergeConflict[] };
 
 const AGENT = "agent-branch";
 
@@ -84,19 +81,9 @@ const volume = (value: number) => ({
   property: "volume",
   value,
 });
-const moveC = (start: number) => ({
-  op: "move",
-  clipId: "clip-3",
-  newStart: { value: start, rate: 24 },
-});
-
-const commitCount = async (): Promise<number> =>
-  (await getDb().select({ id: commits.id }).from(commits)).length;
 
 const mergeCommits = async () =>
   getDb().select().from(commits).where(isNotNull(commits.parent2Id));
-
-const attemptRows = async () => getDb().select().from(mergeAttempts);
 
 const headOf = async (name: string): Promise<string> => {
   const rows = await getDb()
@@ -127,26 +114,7 @@ async function oneSidedBranches(s: Session): Promise<void> {
   await save(s, AGENT);
 }
 
-/** A branch off `main`, then edits on BOTH sides of the SAME two units. */
-async function conflictingBranches(s: Session): Promise<void> {
-  expectOk(
-    await post(
-      postBranch,
-      "/api/branch",
-      { name: AGENT, from: "main", ticket: ticket() },
-      s,
-    ),
-  );
-  let rev = await edit(s, AGENT, 0, volume(40));
-  await edit(s, AGENT, rev, moveC(460));
-  await save(s, AGENT);
-
-  rev = await edit(s, "main", 0, volume(80));
-  await edit(s, "main", rev, moveC(470));
-  await save(s, "main");
-}
-
-const startMergeCall = async (s: Session, t = ticket()) =>
+const landCall = async (s: Session, t = ticket()) =>
   post(postMerge, "/api/merge", { from: AGENT, into: "main", ticket: t }, s);
 
 describe("C4 (4) — POST merge", () => {
@@ -158,25 +126,29 @@ describe("C4 (4) — POST merge", () => {
     const commitsBefore = (await getDb().select().from(commits)).length;
 
     const err = expectError(
-      await post(postMerge, "/api/merge", { from: "main", into: AGENT, ticket: ticket() }, s),
+      await post(
+        postMerge,
+        "/api/merge",
+        { from: "main", into: AGENT, ticket: ticket() },
+        s,
+      ),
     );
     expect(err.code).toBe("E_BAD_REQUEST");
     expect(err.message).toContain('"main"');
 
-    // no seal, no card, no attempt row, heads untouched
+    // no seal, no card, heads untouched
     expect(await headOf("main")).toBe(headInto);
     expect(await headOf(AGENT)).toBe(headFrom);
     expect((await getDb().select().from(commits)).length).toBe(commitsBefore);
-    expect((await getDb().select().from(mergeAttempts)).length).toBe(0);
   });
 
-  it("F6: a merge with ZERO conflicts finalizes immediately and leaves no draft row", async () => {
+  it("F6: a bring-in with ZERO conflicts lands one two-parent card", async () => {
     const s = await session();
     await oneSidedBranches(s);
     const headInto = await headOf("main");
     const headFrom = await headOf(AGENT);
 
-    const data = expectOk(await startMergeCall(s)) as MergeDone;
+    const data = expectOk(await landCall(s)) as MergeDone;
     expect(data.done).toBe(true);
 
     // parent2_id is set — and ONLY on this commit.
@@ -187,9 +159,6 @@ describe("C4 (4) — POST merge", () => {
     expect(merges[0].parent2Id).toBe(headFrom);
     // A merge commit is always a full snapshot.
     expect(merges[0].snapshotDistance).toBe(0);
-
-    // Nothing is left behind: the two-phase flow's phase 2 was empty.
-    expect(await attemptRows()).toHaveLength(0);
 
     // `into` moved, `from` did NOT.
     expect(await headOf("main")).toBe(data.mergeCommitId);
@@ -203,144 +172,6 @@ describe("C4 (4) — POST merge", () => {
     expect(clip.properties.volume).toBe(40);
   });
 
-  it("B3.2/B3.3: conflicts open ONE draft row, then resolving them one by one finalizes and deletes it", async () => {
-    const s = await session();
-    await conflictingBranches(s);
-
-    const started = expectOk(await startMergeCall(s)) as MergeStarted;
-    expect(started.conflicts.length).toBe(2);
-    expect(started.counts).toEqual({ total: 2, resolved: 0, remaining: 2 });
-    expect(await attemptRows()).toHaveLength(1);
-    // No commit yet — a merge writes only to merge_attempts until finalize.
-    expect(await mergeCommits()).toHaveLength(0);
-
-    const first = expectOk(
-      await post(
-        postMergeResolve,
-        "/api/merge/resolve",
-        {
-          attemptId: started.attemptId,
-          conflictId: started.conflicts[0].conflictId,
-          choice: "ours",
-          ticket: ticket(),
-        },
-        s,
-      ),
-    ) as Resolved;
-    // the count stays honest — one answered, one still open.
-    expect(first.counts.resolved).toBe(1);
-    expect(first.counts.remaining).toBe(1);
-    expect(first.counts.total).toBe(2);
-    expect(await attemptRows()).toHaveLength(1);
-
-    const last = expectOk(
-      await post(
-        postMergeResolve,
-        "/api/merge/resolve",
-        {
-          attemptId: started.attemptId,
-          conflictId: first.conflicts[0].conflictId,
-          choice: "theirs",
-          ticket: ticket(),
-        },
-        s,
-      ),
-    ) as MergeDone;
-    expect(last.done).toBe(true);
-
-    const merges = await mergeCommits();
-    expect(merges).toHaveLength(1);
-    expect(merges[0].id).toBe(last.mergeCommitId);
-    // "finalize/abort par YE ROW delete" — in the same transaction.
-    expect(await attemptRows()).toHaveLength(0);
-  });
-
-  it("C7: re-answering with the SAME choice is a normal success; a DIFFERENT one is E_MERGE_PRECONDITION", async () => {
-    const s = await session();
-    await conflictingBranches(s);
-    const started = expectOk(await startMergeCall(s)) as MergeStarted;
-    const target = started.conflicts[0].conflictId;
-
-    expectOk(
-      await post(
-        postMergeResolve,
-        "/api/merge/resolve",
-        {
-          attemptId: started.attemptId,
-          conflictId: target,
-          choice: "ours",
-          ticket: ticket(),
-        },
-        s,
-      ),
-    );
-
-    const again = await post(
-      postMergeResolve,
-      "/api/merge/resolve",
-      {
-        attemptId: started.attemptId,
-        conflictId: target,
-        choice: "ours",
-        ticket: ticket(),
-      },
-      s,
-    );
-    expect(again.body.ok).toBe(true);
-
-    const replaced = await post(
-      postMergeResolve,
-      "/api/merge/resolve",
-      {
-        attemptId: started.attemptId,
-        conflictId: target,
-        choice: "theirs",
-        ticket: ticket(),
-      },
-      s,
-    );
-    expect(expectError(replaced).code).toBe("E_MERGE_PRECONDITION");
-  });
-
-  it("F6: merge/abort deletes the draft and leaves BOTH branches bit-for-bit untouched", async () => {
-    const s = await session();
-    await conflictingBranches(s);
-
-    const beforeMain = await timelineOf(s, "main");
-    const beforeAgent = await timelineOf(s, AGENT);
-    const headMain = await headOf("main");
-    const headAgent = await headOf(AGENT);
-    const before = await commitCount();
-
-    const started = expectOk(await startMergeCall(s)) as MergeStarted;
-    const aborted = expectOk(
-      await post(
-        postMergeAbort,
-        "/api/merge/abort",
-        { attemptId: started.attemptId, ticket: ticket() },
-        s,
-      ),
-    ) as { aborted: true };
-
-    expect(aborted.aborted).toBe(true);
-    expect(await attemptRows()).toHaveLength(0);
-    // DISCARD: no commit is created at all.
-    expect(await commitCount()).toBe(before);
-    expect(await headOf("main")).toBe(headMain);
-    expect(await headOf(AGENT)).toBe(headAgent);
-    expect(await timelineOf(s, "main")).toEqual(beforeMain);
-    expect(await timelineOf(s, AGENT)).toEqual(beforeAgent);
-
-    // The draft is gone, so the id is no longer resolvable.
-    const stale = await post(
-      postMergeAbort,
-      "/api/merge/abort",
-      { attemptId: started.attemptId, ticket: ticket() },
-      s,
-    );
-    expect(expectError(stale).code).toBe("E_MERGE_PRECONDITION");
-  });
-
   it("E_BAD_REQUEST: a branch cannot be merged into itself", async () => {
     const s = await session();
     const call = await post(
@@ -352,161 +183,15 @@ describe("C4 (4) — POST merge", () => {
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
   });
 
-  it("Item 6a(4): merge auto-seals BOTH branches when they are dirty", async () => {
+  it("a retried bring-in with the SAME ticket replays the same answer", async () => {
     const s = await session();
-    await conflictingBranches(s);
-    await edit(s, "main", 2, volume(55));
-    await edit(s, AGENT, 2, volume(35));
-    const before = await commitCount();
-
-    expectOk(await startMergeCall(s));
-
-    // two seals (+ no merge commit yet: the merge has conflicts)
-    const sealed = await getDb()
-      .select()
-      .from(commits)
-      .where(eq(commits.kind, "auto"));
-    expect(sealed).toHaveLength(2);
-    expect(await commitCount()).toBe(before + 2);
-    const mainView = expectOk(
-      await get(getTimeline, "/api/timeline?branch=main", s),
-    ) as TimelineData;
-    expect(mainView.pendingCount).toBe(0);
-  });
-
-  it("a retried merge with the SAME ticket replays and creates no second draft", async () => {
-    const s = await session();
-    await conflictingBranches(s);
+    await oneSidedBranches(s);
     const t = ticket();
 
-    const first = expectOk(await startMergeCall(s, t)) as MergeStarted;
-    const retry = expectOk(await startMergeCall(s, t)) as MergeStarted;
+    const first = expectOk(await landCall(s, t)) as MergeDone;
+    const retry = expectOk(await landCall(s, t)) as MergeDone;
 
-    expect(retry.attemptId).toBe(first.attemptId);
-    expect(await attemptRows()).toHaveLength(1);
-  });
-
-  it("a retried merge/resolve with the SAME ticket replays and does NOT answer twice", async () => {
-    const s = await session();
-    await conflictingBranches(s);
-    const started = expectOk(await startMergeCall(s)) as MergeStarted;
-    const t = ticket();
-    const body = {
-      attemptId: started.attemptId,
-      conflictId: started.conflicts[0].conflictId,
-      choice: "ours",
-      ticket: t,
-    };
-
-    const first = expectOk(
-      await post(postMergeResolve, "/api/merge/resolve", body, s),
-    ) as Resolved;
-    const retry = expectOk(
-      await post(postMergeResolve, "/api/merge/resolve", body, s),
-    ) as Resolved;
-
-    expect(retry).toEqual(first);
-    const rows = await attemptRows();
-    // The stored choices contain exactly ONE answer, not two.
-    expect(Object.keys(rows[0].choices as object)).toHaveLength(1);
-  });
-});
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// Both-parent CAS at finalize: if either branch head moved, finalize writes nothing.
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-describe("G-group — merge finalize CAS", () => {
-  /**
-   * Open a merge with conflicts, answer all but the last, then move ONE
-   * branch's head with a real commit and answer the last conflict. The
-   * finalize must refuse and write NOTHING.
-   */
-  async function stalenessRun(
-    moving: "main" | typeof AGENT,
-  ): Promise<{ code: string; before: Snapshot; after: Snapshot }> {
-    const s = await session();
-    await conflictingBranches(s);
-    const started = expectOk(await startMergeCall(s)) as MergeStarted;
-    expect(started.conflicts.length).toBe(2);
-
-    const afterFirst = expectOk(
-      await post(
-        postMergeResolve,
-        "/api/merge/resolve",
-        {
-          attemptId: started.attemptId,
-          conflictId: started.conflicts[0].conflictId,
-          choice: "ours",
-          ticket: ticket(),
-        },
-        s,
-      ),
-    ) as Resolved;
-    expect(afterFirst.counts.remaining).toBe(1);
-
-    // …the head moves for real, through the normal edit + save path.
-    // Both branches carry workingRev 2 here (two accepted edits each).
-    await edit(s, moving, 2, {
-      op: "propertyChange",
-      clipId: "clip-2",
-      property: "volume",
-      value: 12,
-    });
-    await save(s, moving);
-
-    const before = await snapshot(s);
-    const call = await post(
-      postMergeResolve,
-      "/api/merge/resolve",
-      {
-        attemptId: started.attemptId,
-        conflictId: afterFirst.conflicts[0].conflictId,
-        choice: "theirs",
-        ticket: ticket(),
-      },
-      s,
-    );
-    const code = expectError(call).code;
-    return { code, before, after: await snapshot(s) };
-  }
-
-  type Snapshot = {
-    commits: number;
-    mergeCommits: number;
-    heads: [string, string];
-    timelines: [Timeline, Timeline];
-  };
-
-  async function snapshot(s: Session): Promise<Snapshot> {
-    return {
-      commits: await commitCount(),
-      mergeCommits: (await mergeCommits()).length,
-      heads: [await headOf("main"), await headOf(AGENT)],
-      timelines: [await timelineOf(s, "main"), await timelineOf(s, AGENT)],
-    };
-  }
-
-  it("G4: the INTO branch moving under an open merge → E_STALE_HEAD and no half-merge commit", async () => {
-    const { code, before, after } = await stalenessRun("main");
-    expect(code).toBe("E_STALE_HEAD");
-    // (b) no new commit at all, (c) no two-parent commit exists,
-    // (d) both heads and both timelines are exactly what they were.
-    expect(after.commits).toBe(before.commits);
-    expect(after.mergeCommits).toBe(0);
-    expect(after.heads).toEqual(before.heads);
-    expect(after.timelines).toEqual(before.timelines);
-    // The draft survived the rollback, so the user can restart from it.
-    expect(await attemptRows()).toHaveLength(1);
-  });
-
-  it("G4: the FROM branch moving under an open merge → E_STALE_HEAD too", async () => {
-    const { code, before, after } = await stalenessRun(AGENT);
-    expect(code).toBe("E_STALE_HEAD");
-    expect(after.commits).toBe(before.commits);
-    expect(after.mergeCommits).toBe(0);
-    expect(after.heads).toEqual(before.heads);
-    expect(after.timelines).toEqual(before.timelines);
-    expect(await attemptRows()).toHaveLength(1);
+    expect(retry.mergeCommitId).toBe(first.mergeCommitId);
+    expect(await mergeCommits()).toHaveLength(1);
   });
 });

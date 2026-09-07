@@ -19,7 +19,6 @@ import type { Db } from "../db/client";
 import {
   branches,
   commits,
-  mergeAttempts,
   ops,
   presence,
   projectEvents,
@@ -199,7 +198,6 @@ export async function resetProjectToPreset(
   presetById(presetId);
   await tx.delete(presence).where(eq(presence.projectId, projectId));
   await tx.delete(projectEvents).where(eq(projectEvents.projectId, projectId));
-  await tx.delete(mergeAttempts).where(eq(mergeAttempts.projectId, projectId));
   await tx.delete(workingState).where(eq(workingState.projectId, projectId));
   await tx.delete(branches).where(eq(branches.projectId, projectId));
   await tx.delete(ops).where(eq(ops.projectId, projectId));
