@@ -7,7 +7,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { formatClock, quoted } from "../src/lib/format";
+import {
+  formatClock,
+  formatRulerLabel,
+  quoted,
+  rulerLabelStep,
+} from "../src/lib/format";
 
 const at = (
   y: number,
@@ -65,6 +70,45 @@ describe("formatClock", () => {
   it("a timestamp in the future falls back to the date form", () => {
     const now = new Date(2026, 8, 7, 10, 0);
     expect(formatClock(at(2026, 9, 9, 10, 0), now)).toBe("9 Sep, 10:00 am");
+  });
+});
+
+describe("formatRulerLabel (C5 C-3 — the ruler is 4-part too)", () => {
+  it("a whole second at 24 fps → HH:MM:SS:FF with the frames part 00", () => {
+    expect(formatRulerLabel(0, 24)).toBe("00:00:00:00");
+    expect(formatRulerLabel(5, 24)).toBe("00:00:05:00");
+    expect(formatRulerLabel(65, 24)).toBe("00:01:05:00");
+    expect(formatRulerLabel(3600, 24)).toBe("01:00:00:00");
+  });
+
+  it("never renders the old 2-part MM:SS shape", () => {
+    for (let s = 0; s <= 120; s += 1) {
+      expect(formatRulerLabel(s, 24)).toMatch(/^\d{2}:\d{2}:\d{2}:\d{2}$/);
+    }
+  });
+});
+
+describe("rulerLabelStep (density — a 4-part label must not overlap)", () => {
+  it("the editor's minimum zoom labels every 2 seconds, the default every 1", () => {
+    expect(rulerLabelStep(44)).toBe(2); // MIN_PX_PER_SECOND
+    expect(rulerLabelStep(76)).toBe(1); // DEFAULT_PX_PER_SECOND
+    expect(rulerLabelStep(148)).toBe(1); // MAX_PX_PER_SECOND
+  });
+
+  it("a label plus its slack always fits inside `step` seconds of pixels", () => {
+    for (const pxPerSecond of [8, 12, 20, 31, 32, 44, 63, 64, 100, 148]) {
+      const step = rulerLabelStep(pxPerSecond);
+      expect(pxPerSecond * step).toBeGreaterThanOrEqual(
+        pxPerSecond >= 32 ? 64 : 0,
+      );
+      expect([1, 2, 5]).toContain(step);
+    }
+  });
+
+  it("very low zoom falls back to every 5 seconds", () => {
+    expect(rulerLabelStep(20)).toBe(5);
+    expect(rulerLabelStep(31)).toBe(5);
+    expect(rulerLabelStep(32)).toBe(2);
   });
 });
 

@@ -1,8 +1,15 @@
+import { formatRulerLabel, rulerLabelStep } from "../../lib/format";
+
 const RULER_HEIGHT = 32;
 const MAJOR_TICK_H = 10; // tick at every second
 const MINOR_TICK_H = 5; // tick at every 0.5s
 const MICRO_TICK_H = 3; // tick at every 0.25s
 
+/**
+ * The shared ruler — the editing timeline AND the Compare lanes (B2 §2.3)
+ * draw the same one. Labels are 4-part `HH:MM:SS:FF` (C5 C-3); how OFTEN a
+ * major carries a label depends on the zoom, so two labels never collide.
+ */
 export function TimeRuler({
   projectRate,
   endFrame,
@@ -14,6 +21,7 @@ export function TimeRuler({
 }) {
   const totalSeconds = Math.ceil(endFrame / projectRate) + 1;
   const widthPx = totalSeconds * pxPerSecond;
+  const labelStep = rulerLabelStep(pxPerSecond);
 
   // Build tick marks: 0s, 0.25s, 0.5s, 0.75s, 1s, …
   const STEP = pxPerSecond >= 90 ? 0.25 : 0.5;
@@ -61,8 +69,9 @@ export function TimeRuler({
               }}
             />
 
-            {/* Label — only on major (per-second) marks */}
-            {isMajor && (
+            {/* Label — on majors only, and only every `labelStep` seconds
+                so a 4-part label never overlaps its neighbour. */}
+            {isMajor && s % labelStep === 0 && (
               <span
                 style={{
                   position: "absolute",
@@ -77,7 +86,7 @@ export function TimeRuler({
                   pointerEvents: "none",
                 }}
               >
-                {formatRulerTime(s)}
+                {formatRulerLabel(s, projectRate)}
               </span>
             )}
           </div>
@@ -85,11 +94,4 @@ export function TimeRuler({
       })}
     </div>
   );
-}
-
-function formatRulerTime(seconds: number) {
-  const whole = Math.floor(seconds);
-  const minutes = Math.floor(whole / 60);
-  const remainder = whole % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
 }

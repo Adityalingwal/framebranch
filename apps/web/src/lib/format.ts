@@ -36,6 +36,40 @@ export function toSeconds(t: RationalTime): number {
   return t.value / t.rate;
 }
 
+/**
+ * C5 C-3 — a ruler major's label, 4-part like every other timecode in the
+ * product. `seconds` is a whole second on the ruler, so the frames part is
+ * always `00`.
+ */
+export function formatRulerLabel(seconds: number, rate: number): string {
+  return formatFrames(seconds * rate, rate);
+}
+
+/**
+ * Roughly how wide `00:00:05:00` renders in the ruler's 9px tabular font
+ * (11 glyphs ≈ 5px each) — measured against the rendered ruler, not a font
+ * metric, so it is a constant here rather than a computation.
+ */
+const RULER_LABEL_PX = 56;
+/** Minimum clear gap between two neighbouring labels. */
+const RULER_LABEL_SLACK_PX = 8;
+
+/**
+ * C5 C-3 consequence: a 4-part label is ~4× wider than the old `MM:SS`, so
+ * at low zoom a label on every second would collide. Only which majors get
+ * a LABEL changes — the tick marks themselves are untouched.
+ *
+ *   ≥ 64 px/s  → every second      (the editor's 76 default, and above)
+ *   ≥ 32 px/s  → every 2 seconds   (the 44 px/s minimum zoom)
+ *   below that → every 5 seconds
+ */
+export function rulerLabelStep(pxPerSecond: number): number {
+  const need = RULER_LABEL_PX + RULER_LABEL_SLACK_PX;
+  if (pxPerSecond >= need) return 1;
+  if (pxPerSecond * 2 >= need) return 2;
+  return 5;
+}
+
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
 const MONTHS = [
   "Jan",
