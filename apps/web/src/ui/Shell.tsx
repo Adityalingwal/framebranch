@@ -154,6 +154,34 @@ export function Shell() {
     setComparePair(null);
   }, [currentBranch]);
 
+  // (i-b) …and clearing on a cut change is not enough on its own. A demo
+  // reset while already on `main` never changes `currentBranch`, so the
+  // effect above fires with the OLD cut's History still cached: the default
+  // below immediately refills the pair with a commit the reset has just
+  // deleted, and nothing ever clears it again ("Couldn't load these
+  // changes." on the Changes tab). So the pair is also checked against the
+  // SETTLED History chain: a side that names a commit no longer on it goes.
+  useEffect(() => {
+    if (comparePair === null) return;
+    if (!history.isSuccess || history.isFetching) return;
+    const known = (ref: string) =>
+      ref === NOW_SIDE ||
+      historyCommits.some((commit) => commit.commitId === ref);
+    // The branch list and History are invalidated together but land in
+    // either order. Only judge the pair once the chain agrees with the head
+    // the default would use — otherwise clearing and re-defaulting could
+    // chase each other while the two are out of step.
+    if (head === null || !known(head)) return;
+    if (known(comparePair.a) && known(comparePair.b)) return;
+    setComparePair(null);
+  }, [
+    comparePair,
+    head,
+    history.isSuccess,
+    history.isFetching,
+    historyCommits,
+  ]);
+
   // (ii) D3a — the default pair, applied as soon as the head is known:
   // `head → Now`, which is exactly what the top-bar chip counts. Only ever
   // fills a null pair, so the user's own picks are never overwritten.
