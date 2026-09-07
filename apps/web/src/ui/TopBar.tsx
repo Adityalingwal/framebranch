@@ -4,6 +4,7 @@ import { useState } from "react";
 import { GitBranch } from "@phosphor-icons/react";
 
 import type { BranchListItem } from "../app/api/branch/route";
+import { quoted } from "../lib/format";
 import { showToast } from "../lib/state/toast-status";
 import {
   useCreateBranchMutation,
@@ -64,7 +65,7 @@ export function TopBar({
   // the diff is still in flight the button is off but says nothing.
   const markTitle =
     changesCount === 0 && !editingLocked && headCardName
-      ? `No changes since "${headCardName}"`
+      ? `No changes since ${quoted(headCardName)}`
       : undefined;
 
   const trimmedName = versionName.trim();
@@ -150,7 +151,10 @@ export function TopBar({
           className={`topbar-changes-chip${changesCount ? " has-changes" : ""}`}
         >
           {changesCount === undefined ? (
-            "Changes"
+            // #17 has no loading string: keep the chip's footprint, show
+            // no text until the count is known (never a momentary
+            // `No changes`).
+            <span aria-hidden style={{ display: "inline-block", width: 58 }} />
           ) : changesCount > 0 ? (
             <>
               <span

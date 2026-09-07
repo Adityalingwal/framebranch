@@ -88,11 +88,16 @@ export function useBranchesQuery(enabled = true) {
   });
 }
 
-/** B2 — the current cut's chain only. */
-export function useHistoryQuery(cut: string) {
+/**
+ * B2 — the current cut's chain only. A1a patch (c): Shell passes
+ * `enabled = false` until the first timeline GET has answered — two
+ * cookie-less parallel calls would mint two projects.
+ */
+export function useHistoryQuery(cut: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.history(cut),
     queryFn: () => api.getHistory(cut),
+    enabled,
   });
 }
 

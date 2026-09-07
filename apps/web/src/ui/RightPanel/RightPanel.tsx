@@ -22,6 +22,7 @@ export function RightPanel({
   headCardName,
   changesCount,
   viewingCommitId,
+  editingLocked,
   comparePreselect,
   onComparePreselectConsumed,
   onHighlightClip,
@@ -36,6 +37,8 @@ export function RightPanel({
   headCardName: string | null;
   changesCount: number | undefined;
   viewingCommitId: string | null;
+  /** B5-1 — View mode locks the Merge tab's writes too. */
+  editingLocked: boolean;
   comparePreselect: { from: string; to: string } | null;
   onComparePreselectConsumed: () => void;
   onHighlightClip: (clipId: string | null) => void;
@@ -122,7 +125,10 @@ export function RightPanel({
           />
         )}
         {view === "merge" && (
-          <MergePanel currentBranch={currentBranch} />
+          <MergePanel
+            currentBranch={currentBranch}
+            editingLocked={editingLocked}
+          />
         )}
         {view === "history" && (
           <HistoryPanel

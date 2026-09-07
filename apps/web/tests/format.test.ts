@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { formatClock } from "../src/lib/format";
+import { formatClock, quoted } from "../src/lib/format";
 
 const at = (
   y: number,
@@ -65,5 +65,17 @@ describe("formatClock", () => {
   it("a timestamp in the future falls back to the date form", () => {
     const now = new Date(2026, 8, 7, 10, 0);
     expect(formatClock(at(2026, 9, 9, 10, 0), now)).toBe("9 Sep, 10:00 am");
+  });
+});
+
+describe("quoted (card names inside sentences)", () => {
+  it("wraps a plain name in double quotes", () => {
+    expect(quoted("Client pick")).toBe('"Client pick"');
+  });
+  it("leaves a name that already carries quotes alone (no nesting)", () => {
+    expect(quoted('Restored "Travel vlog"')).toBe('Restored "Travel vlog"');
+    expect(quoted('Brought "priya-music" into main')).toBe(
+      'Brought "priya-music" into main',
+    );
   });
 });

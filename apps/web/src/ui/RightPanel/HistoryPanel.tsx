@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
-import { formatClock } from "../../lib/format";
+import { formatClock, quoted } from "../../lib/format";
 import { useHistoryQuery } from "../../lib/data/hooks";
 
 /**
@@ -58,7 +58,7 @@ export function HistoryPanel({
           <span className="history-now-dot" aria-hidden />
           {`Now · ${changesCount} ${
             changesCount === 1 ? "change" : "changes"
-          } since "${headCardName}"`}
+          } since ${quoted(headCardName)}`}
         </div>
       )}
 
@@ -166,8 +166,8 @@ function FullCard({
     <button
       type="button"
       className={`history-card${isHead ? " is-current" : ""}${isViewing ? " is-viewing" : ""}`}
-      aria-label={`View "${commit.name}"`}
-      title={`View "${commit.name}"`}
+      aria-label={`View ${quoted(commit.name)}`}
+      title={`View ${quoted(commit.name)}`}
       onClick={onView}
     >
       <span className="history-card-row1">

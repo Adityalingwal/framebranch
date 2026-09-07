@@ -1,7 +1,7 @@
 "use client";
 
 import { ModalShell } from "./ModalShell";
-import { dangerButton, secondaryButton } from "./styles";
+import { dangerButton, primaryButton, secondaryButton } from "./styles";
 
 /**
  * Generic confirm dialog. Used by Reset demo — locked: "DISCARD endpoints
@@ -15,6 +15,7 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   busy,
+  tone = "danger",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -23,6 +24,8 @@ export function ConfirmDialog({
   confirmLabel: string;
   onConfirm: () => void;
   busy?: boolean;
+  /** `danger` (red) for discard-type actions; `primary` for Restore (B5: it deletes nothing). */
+  tone?: "danger" | "primary";
 }) {
   return (
     <ModalShell open={open} onOpenChange={onOpenChange} title={title}>
@@ -48,7 +51,7 @@ export function ConfirmDialog({
         </button>
         <button
           type="button"
-          style={dangerButton}
+          style={tone === "danger" ? dangerButton : primaryButton}
           onClick={onConfirm}
           disabled={busy}
         >

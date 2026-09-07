@@ -8,6 +8,7 @@ import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import { ApiClientError } from "../lib/data/api-client";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
+import { quoted } from "../lib/format";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
@@ -97,7 +98,9 @@ export function Shell() {
   // A1a patch (c): the first branch GET must not race the first timeline
   // GET — two cookie-less parallel calls would mint two projects.
   const branches = useBranchesQuery(timeline.isSuccess);
-  const history = useHistoryQuery(currentBranch);
+  // A1a patch (c): History is Shell-owned now, so it needs the same
+  // first-load gate as the branch list (two cookie-less GETs = two projects).
+  const history = useHistoryQuery(currentBranch, timeline.isSuccess);
 
   const cuts = useMemo(
     () => branches.data?.branches ?? [],
@@ -554,6 +557,7 @@ export function Shell() {
           versioningOpen={rightPanelMode === "versioning"}
           currentBranch={currentBranch}
           changesCount={changesCount}
+          editingLocked={editingPaused}
           onViewChange={setView}
           onDemoReset={resetToFreshDemo}
         />
@@ -636,6 +640,7 @@ export function Shell() {
                   headCardName={headCard?.name ?? null}
                   changesCount={changesCount}
                   viewingCommitId={viewing?.commitId ?? null}
+                  editingLocked={editingPaused}
                   comparePreselect={comparePreselect}
                   onComparePreselectConsumed={clearComparePreselect}
                   onHighlightClip={setHighlightedClipId}
@@ -683,7 +688,7 @@ export function Shell() {
             {viewing && (
               <div className="view-bar" aria-label="Viewing an old version">
                 <span className="view-bar-text">
-                  {`Viewing "${viewing.name}"`}
+                  {`Viewing ${quoted(viewing.name)}`}
                 </span>
                 <span className="view-bar-actions">
                   <button
@@ -819,17 +824,18 @@ export function Shell() {
       <ConfirmDialog
         open={restoreOpen && viewing !== null}
         onOpenChange={setRestoreOpen}
-        title={`Restore "${viewing?.name ?? ""}"?`}
+        title={`Restore ${quoted(viewing?.name ?? "")}?`}
         description={[
           "A new version with this content goes on top of History.",
           changesCount !== undefined && changesCount > 0 && headCard
-            ? `Your edits since "${headCard.name}" are kept in an auto-save.`
+            ? `Your edits since ${quoted(headCard.name)} are kept in an auto-save.`
             : null,
           "Nothing is deleted.",
         ]
           .filter(Boolean)
           .join(" ")}
         confirmLabel="Restore"
+        tone="primary"
         busy={restore.isPending}
         onConfirm={() => {
           if (!viewing) return;
@@ -837,7 +843,7 @@ export function Shell() {
           restore.mutate(viewing.commitId, {
             onSuccess: () => {
               closeView();
-              showToast(`Restored "${restored}" — added as a new version.`);
+              showToast(`Restored ${quoted(restored)} — added as a new version.`);
             },
           });
         }}

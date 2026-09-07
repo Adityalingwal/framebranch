@@ -56,6 +56,7 @@ export function IconRail({
   versioningOpen,
   currentBranch,
   changesCount,
+  editingLocked,
   onViewChange,
   onDemoReset,
 }: {
@@ -68,6 +69,12 @@ export function IconRail({
    * `undefined` while that diff has not answered yet: no badge, never a 0.
    */
   changesCount: number | undefined;
+  /**
+   * B5-1 — Shell's one derived lock (connection lost OR a card is being
+   * viewed). Import / Export / Agent / Reset all write; in View mode they
+   * must be off like every other edit path (triage 2026-09-07, item 1).
+   */
+  editingLocked: boolean;
   onViewChange: (view: PanelView) => void;
   onDemoReset: () => void;
 }) {
@@ -79,7 +86,7 @@ export function IconRail({
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  const editingPaused = useConnectionStatus().lost;
+  const editingPaused = useConnectionStatus().lost || editingLocked;
   const importMutation = useImportMutation();
   const exportMutation = useExportMutation();
   const agentSimulate = useAgentSimulateMutation();

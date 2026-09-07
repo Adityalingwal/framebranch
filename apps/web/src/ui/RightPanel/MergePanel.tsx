@@ -37,7 +37,14 @@ type Attempt = {
   counts: { total: number; resolved: number; remaining: number };
 };
 
-export function MergePanel({ currentBranch }: { currentBranch: string }) {
+export function MergePanel({
+  currentBranch,
+  editingLocked = false,
+}: {
+  currentBranch: string;
+  /** B5-1 — no merge write while a card is being viewed. */
+  editingLocked?: boolean;
+}) {
   const queryClient = useQueryClient();
   // A1a: the cut list comes from the server, not from Shell state. It can
   // still be empty on the first render, so the picked cut is DERIVED below
@@ -71,7 +78,7 @@ export function MergePanel({ currentBranch }: { currentBranch: string }) {
   }
 
   function startMerge() {
-    if (!fromBranch) return;
+    if (!fromBranch || editingLocked) return;
     setStaleHead(null);
     const mergingFrom = fromBranch;
     mergeStart.mutate(
@@ -210,7 +217,7 @@ export function MergePanel({ currentBranch }: { currentBranch: string }) {
                   ? { ...primaryButton, opacity: 0.6 }
                   : primaryButton
               }
-              disabled={mergeStart.isPending || !fromBranch}
+              disabled={mergeStart.isPending || !fromBranch || editingLocked}
               onClick={startMerge}
             >
               {mergeStart.isPending ? "Starting…" : "Start merge"}
@@ -267,7 +274,7 @@ export function MergePanel({ currentBranch }: { currentBranch: string }) {
               conflict={conflict}
               ours={ours.data?.timeline}
               theirs={theirs.data?.timeline}
-              disabled={mergeResolve.isPending}
+              disabled={mergeResolve.isPending || editingLocked}
               onChoose={(choice) => resolve(conflict.conflictId, choice)}
             />
           ))}

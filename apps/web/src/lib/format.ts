@@ -67,6 +67,16 @@ const MONTHS = [
  * year — demo-lens). Day distance is counted in CALENDAR days from the
  * local date parts, so a DST shift cannot move a card to another day.
  */
+/**
+ * A card name inside a sentence: `"‹name›"` — unless the name already
+ * carries its own quotes (`Restored "Travel vlog"`, `Brought "x" into
+ * main`), in which case the outer pair is dropped so the line never reads
+ * `since "Restored "Travel vlog""` (triage 2026-09-07, item 4).
+ */
+export function quoted(name: string): string {
+  return name.includes('"') ? name : `"${name}"`;
+}
+
 export function formatClock(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const hours24 = at.getHours();
