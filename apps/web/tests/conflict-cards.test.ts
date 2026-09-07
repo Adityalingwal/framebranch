@@ -645,6 +645,20 @@ describe("bucket 3 — overlap (#143-#145)", () => {
       { label: "Keep original", choice: "base" },
     ]);
     expect(card!.lines[2].jump).toBeNull();
+
+    // Once it is DECIDED the overlap no longer exists in the answered run —
+    // the two clips have been pulled apart. The card is still described
+    // against the draft that reported it, so the title does not move. (With
+    // one request-level `composed` it reads `25:20–25:20` — probed.)
+    const decided = cardsFor(
+      [{ op: "move", clipId: "intro", newStart: t(600) }],
+      [{ op: "move", clipId: "broll", newStart: t(620) }],
+      { [card!.conflictId]: "shift-b" },
+    ).cards.find((c) => c.bucket === 3);
+    expect(decided).toBeDefined();
+    expect(decided!.chosen).toBe("shift-b");
+    expect(decided!.title).toBe(card!.title);
+    expect(values(decided!)).toEqual(values(card!));
   });
 
   /**
