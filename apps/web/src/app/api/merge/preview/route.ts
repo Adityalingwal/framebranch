@@ -111,8 +111,6 @@ function readChoices(request: Request): Record<string, MergeChoice> {
  * collided. The `open` run wins for a conflict both runs describe — it is
  * the one the rest of the screen is built from.
  */
-const CASCADE_LOOKUPS = 8;
-
 function orderConflicts(input: {
   base: Timeline;
   ours: Timeline;
@@ -137,8 +135,14 @@ function orderConflicts(input: {
     add({ conflict, composed: draftOf(input.open) }, true);
   }
 
+  // No cap: every supplied id neither run describes gets its own lookup, so
+  // a decided card can never be dropped from the list (Codex BUG 3 — with a
+  // cap of 8 an eleven-link cascade lost a card AND a count). The work is
+  // bounded by the number of answers on screen, which at demo scale is a
+  // handful; each lookup is one more `recompute` over the same three
+  // timelines.
   const missing = Object.keys(input.choices).filter((id) => !records.has(id));
-  for (const id of missing.slice(0, CASCADE_LOOKUPS)) {
+  for (const id of missing) {
     const without = { ...input.choices };
     delete without[id];
     const run = recompute(input.base, input.ours, input.theirs, without);
@@ -147,6 +151,15 @@ function orderConflicts(input: {
     if (found) add({ conflict: found, composed: draftOf(run) }, true);
   }
 
+  // An id still unknown after all that has NO effect on the engine's answer
+  // and is therefore neither a card nor a count (Codex BUG 4): `recompute`
+  // consults a saved choice only when it MEETS that conflict, and `status`
+  // is "no conflict is still open", never a count of the keys it was handed
+  // (engine `merge.ts`, `recompute`). It is deliberately not a 400 either —
+  // refusing would strand a user whose stored answer, for a conflict another
+  // answer has since dissolved, is still in sessionStorage. The landing is
+  // the same story: `finalizeCheck` reads `status`, so a stale key cannot
+  // make it pass or fail.
   const openIds = new Set(
     input.open.conflicts.map((conflict) => conflict.conflictId),
   );

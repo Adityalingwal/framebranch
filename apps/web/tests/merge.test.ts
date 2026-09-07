@@ -467,6 +467,75 @@ describe("F3(2) — conflict cards over the wire", () => {
     }));
     expect(await mergeCommits()).toHaveLength(1);
   });
+
+  /**
+   * Codex BUG 4. A choice for a conflict that is not in this run — a stale
+   * answer still sitting in the client's sessionStorage for something another
+   * answer has since dissolved — has no effect on the engine's result
+   * (`recompute` consults a saved choice only when it meets that conflict),
+   * so it is not a card and not counted. It is deliberately NOT a 400: that
+   * would strand the user on a screen they cannot leave.
+   */
+  it("a choice id nothing in this run knows is inert — not a card, not a count, not a 400", async () => {
+    const s = await session();
+    await textConflict(s);
+
+    const plain = await preview(s);
+    const withGhost = await preview(s, CUT, { "m4:nope": "ours" });
+
+    expect(withGhost.counts).toEqual(plain.counts);
+    expect(withGhost.conflicts).toEqual(plain.conflicts);
+    expect(withGhost.rows).toEqual(plain.rows);
+    expect(withGhost.after).toEqual(plain.after);
+    expect(withGhost.undecidedClipIds).toEqual(plain.undecidedClipIds);
+  });
+
+  /**
+   * Codex BUG 3. Every supplied id the two runs do not describe is recovered
+   * with its own lookup — no cap — so a decided card can never fall off the
+   * list. And an answer that DISSOLVES another open conflict takes that card
+   * with it, or `decisions left` could never reach 0.
+   */
+  it("a cascade: the decided card survives, the dissolved one disappears", async () => {
+    const s = await session();
+    await makeCut(s);
+    // The cut moves B-roll to the end…
+    await edit(s, CUT, 0, move(BROLL, 620));
+    await mark(s, CUT, "B-roll at the end");
+    // …while main moves Logo just before it and Interview just after: in the
+    // composed draft B-roll then overlaps BOTH.
+    await edit(s, "main", 0, move(LOGO, 600));
+    await edit(s, "main", 1, move(INTERVIEW, 700));
+    await mark(s, "main", "Logo and Interview at the end");
+
+    const open = await preview(s);
+    expect(open.conflicts.map((c) => c.bucket)).toEqual([3, 3]);
+    expect(open.counts).toEqual({ total: 2, decided: 0 });
+    const pair = open.conflicts.find((c) => c.title.includes("Logo"))!;
+    const other = open.conflicts.find((c) => c.conflictId !== pair.conflictId)!;
+    expect(other.title).toContain("Interview");
+
+    // `Keep original` puts both of that pair back where they started, which
+    // takes B-roll away from Interview too.
+    const answered = await preview(s, CUT, { [pair.conflictId]: "base" });
+    expect(answered.conflicts).toHaveLength(1);
+    expect(answered.conflicts[0].conflictId).toBe(pair.conflictId);
+    expect(answered.conflicts[0].chosen).toBe("base");
+    expect(answered.counts).toEqual({ total: 1, decided: 1 });
+    expect(
+      answered.conflicts.some((c) => c.conflictId === other.conflictId),
+    ).toBe(false);
+    expect(answered.undecidedClipIds).toEqual([]);
+
+    // Nothing is left to decide, so the landing goes through.
+    expectOk(
+      await land(s, {
+        token: answered.token,
+        choices: { [pair.conflictId]: "base" },
+      }),
+    );
+    expect(await mergeCommits()).toHaveLength(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
