@@ -10,6 +10,7 @@ import { findClipById, isTextClip, type AnyClip } from "../../lib/clip-helpers";
 import { formatTimecode } from "../../lib/format";
 import {
   refreshBranches,
+  useBranchesQuery,
   useMergeAbortMutation,
   useMergeResolveMutation,
   useMergeStartMutation,
@@ -36,21 +37,21 @@ type Attempt = {
   counts: { total: number; resolved: number; remaining: number };
 };
 
-export function MergePanel({
-  currentBranch,
-  knownBranches,
-  onBranchTouched,
-}: {
-  currentBranch: string;
-  knownBranches: string[];
-  onBranchTouched: (branch: string) => void;
-}) {
-  void onBranchTouched; // reserved: merge never creates a branch, kept for a symmetric RightPanel prop surface
-
+export function MergePanel({ currentBranch }: { currentBranch: string }) {
   const queryClient = useQueryClient();
-  const [fromBranch, setFromBranch] = useState<string>(
-    knownBranches.find((b) => b !== currentBranch) ?? "",
-  );
+  // A1a: the cut list comes from the server, not from Shell state. It can
+  // still be empty on the first render, so the picked cut is DERIVED below
+  // rather than frozen into state at mount.
+  const branches = useBranchesQuery();
+  const [pickedBranch, setPickedBranch] = useState<string>("");
+  const otherBranches = (branches.data?.branches ?? [])
+    .map((b) => b.name)
+    .filter((b) => b !== currentBranch);
+  const fromBranch =
+    pickedBranch && otherBranches.includes(pickedBranch)
+      ? pickedBranch
+      : (otherBranches[0] ?? "");
+
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [staleHead, setStaleHead] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -159,8 +160,6 @@ export function MergePanel({
     setStaleHead(null);
   }
 
-  const otherBranches = knownBranches.filter((b) => b !== currentBranch);
-
   if (!attempt) {
     return (
       <div>
@@ -200,7 +199,7 @@ export function MergePanel({
                   value: branch,
                   label: branch,
                 }))}
-                onChange={setFromBranch}
+                onChange={setPickedBranch}
               />
               <span>into &ldquo;{currentBranch}&rdquo;</span>
             </label>

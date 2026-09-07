@@ -264,7 +264,7 @@ export function useOpsMutation(branch: string) {
 // attempt/conflicts/counts live in the Merge panel's own component state;
 // these hooks are plain request wrappers, same shared `onError` as everyone
 // else. Invalidation after a `done` answer happens where the branch name is
-// known (the panel), same as BranchControl's inline `onSuccess` callbacks.
+// known (the panel), same as the top bar's inline `onSuccess` callbacks.
 // ---------------------------------------------------------------------------
 
 export function useMergeStartMutation() {

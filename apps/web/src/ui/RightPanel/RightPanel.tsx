@@ -19,20 +19,16 @@ export function RightPanel({
   view,
   onViewChange,
   currentBranch,
-  knownBranches,
   pendingCount,
   onHighlightClip,
-  onBranchTouched,
   hasInspector,
   onCloseToInspector,
 }: {
   view: PanelView;
   onViewChange: (view: PanelView) => void;
   currentBranch: string;
-  knownBranches: string[];
   pendingCount: number;
   onHighlightClip: (clipId: string | null) => void;
-  onBranchTouched: (branch: string) => void;
   hasInspector?: boolean;
   onCloseToInspector?: () => void;
 }) {
@@ -109,11 +105,7 @@ export function RightPanel({
           />
         )}
         {view === "merge" && (
-          <MergePanel
-            currentBranch={currentBranch}
-            knownBranches={knownBranches}
-            onBranchTouched={onBranchTouched}
-          />
+          <MergePanel currentBranch={currentBranch} />
         )}
         {view === "history" && <HistoryPanel currentBranch={currentBranch} />}
       </div>

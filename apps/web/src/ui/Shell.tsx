@@ -9,7 +9,14 @@ import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 import { ApiClientError } from "../lib/data/api-client";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { useConnectionStatus } from "../lib/state/connection-status";
-import { useOpsMutation, useTimelineQuery } from "../lib/data/hooks";
+import { NOW_SIDE } from "../lib/data/api-client";
+import {
+  useBranchesQuery,
+  useDiffQuery,
+  useHistoryQuery,
+  useOpsMutation,
+  useTimelineQuery,
+} from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
 import { IconRail } from "./IconRail";
 import { NameGate } from "./NameGate";
@@ -39,7 +46,6 @@ export function Shell() {
   const view = parseView(searchParams.get("view"));
 
   const [currentBranch, setCurrentBranch] = useState("main");
-  const [knownBranches, setKnownBranches] = useState<string[]>(["main"]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [playheadFrame, setPlayheadFrame] = useState(0);
   const [highlightedClipId, setHighlightedClipId] = useState<string | null>(
@@ -56,7 +62,41 @@ export function Shell() {
 
   const timeline = useTimelineQuery(currentBranch);
   const opsMutation = useOpsMutation(currentBranch);
-  const editingPaused = useConnectionStatus().lost;
+  const connectionLost = useConnectionStatus().lost;
+  const editingPaused = connectionLost;
+
+  // ---- A1a/A1b/D2: cuts, head and the ONE changes number, derived here --
+  // Every consumer (top bar, rail badge, History, Restore box) is handed
+  // these, so the chip, the Now-line and the panel can never disagree.
+
+  // A1a patch (c): the first branch GET must not race the first timeline
+  // GET — two cookie-less parallel calls would mint two projects.
+  const branches = useBranchesQuery(timeline.isSuccess);
+  const history = useHistoryQuery(currentBranch);
+
+  const cuts = useMemo(
+    () => branches.data?.branches ?? [],
+    [branches.data?.branches],
+  );
+  const head = cuts.find((cut) => cut.name === currentBranch)?.head ?? null;
+
+  // D2 patch: the chip counts the real difference Now vs the head card —
+  // not clicks, not pending ops (a move and a move back is `No changes`).
+  const changesQuery = useDiffQuery(currentBranch, head, NOW_SIDE);
+  const changesCount = changesQuery.data?.count;
+
+  const historyCommits = useMemo(
+    () => history.data?.commits ?? [],
+    [history.data?.commits],
+  );
+  // The two queries are invalidated together but can land in either order.
+  // Index 0 of a cut's History IS its head (B2), so when it is not, what we
+  // hold is mid-flight: show no current card at all rather than crown the
+  // OLD head for a frame.
+  const headCard =
+    head !== null && historyCommits[0]?.commitId === head
+      ? historyCommits[0]
+      : null;
 
   const clampWorkspaceLayout = useCallback(
     (next: typeof DEFAULT_WORKSPACE_LAYOUT) => {
@@ -203,14 +243,23 @@ export function Shell() {
     setPlayheadFrame(0);
   }, []);
 
-  const addBranch = useCallback((branch: string) => {
-    setKnownBranches((prev) =>
-      prev.includes(branch) ? prev : [...prev, branch],
-    );
-  }, []);
+  // A1a patch (e): the cut you are standing on stopped existing (a demo
+  // reset elsewhere, a project rebuilt) → go back to `main`. Only once the
+  // list has settled, so a cut created a moment ago is not mistaken for a
+  // missing one while its refetch is still in the air.
+  useEffect(() => {
+    if (!branches.isSuccess || branches.isFetching) return;
+    if (cuts.some((cut) => cut.name === currentBranch)) return;
+    switchToBranch("main");
+  }, [
+    branches.isSuccess,
+    branches.isFetching,
+    cuts,
+    currentBranch,
+    switchToBranch,
+  ]);
 
   const resetToFreshDemo = useCallback(() => {
-    setKnownBranches(["main"]);
     setCurrentBranch("main");
     setSelectedClipId(null);
     setPlayheadFrame(0);
@@ -411,23 +460,23 @@ export function Shell() {
       <NameGate />
       <TopBar
         currentBranch={currentBranch}
-        knownBranches={knownBranches}
-        pendingCount={data.pendingCount}
+        cuts={cuts}
+        headCardName={headCard?.name ?? null}
+        changesCount={changesCount}
+        editingLocked={editingPaused}
         onChangesClick={() => {
           setView("changes");
           setRightPanelMode("versioning");
         }}
         onBranchChanged={switchToBranch}
-        onBranchAdded={addBranch}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
         <IconRail
           view={view}
           versioningOpen={rightPanelMode === "versioning"}
           currentBranch={currentBranch}
-          pendingCount={data.pendingCount}
+          changesCount={changesCount}
           onViewChange={setView}
-          onBranchTouched={addBranch}
           onDemoReset={resetToFreshDemo}
         />
         <div
@@ -505,10 +554,8 @@ export function Shell() {
                   view={view}
                   onViewChange={setView}
                   currentBranch={currentBranch}
-                  knownBranches={knownBranches}
                   pendingCount={data.pendingCount}
                   onHighlightClip={setHighlightedClipId}
-                  onBranchTouched={addBranch}
                   hasInspector={Boolean(selectedClip)}
                   onCloseToInspector={() => setRightPanelMode("inspector")}
                 />

@@ -55,17 +55,20 @@ export function IconRail({
   view,
   versioningOpen,
   currentBranch,
-  pendingCount,
+  changesCount,
   onViewChange,
-  onBranchTouched,
   onDemoReset,
 }: {
   view: PanelView;
   versioningOpen: boolean;
   currentBranch: string;
-  pendingCount: number;
+  /**
+   * D2 patch — the SAME number the top-bar chip shows (real difference Now
+   * vs the head card), handed down by Shell so the two can never disagree.
+   * `undefined` while that diff has not answered yet: no badge, never a 0.
+   */
+  changesCount: number | undefined;
   onViewChange: (view: PanelView) => void;
-  onBranchTouched: (branch: string) => void;
   onDemoReset: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -180,7 +183,11 @@ export function IconRail({
           <RailButton
             label="Changes"
             active={versioningOpen && view === "changes"}
-            badge={pendingCount > 0 ? String(pendingCount) : undefined}
+            badge={
+              changesCount !== undefined && changesCount > 0
+                ? String(changesCount)
+                : undefined
+            }
             icon={<GitDiff size={18} weight="duotone" aria-hidden />}
             onClick={() => onViewChange("changes")}
           />
@@ -242,10 +249,8 @@ export function IconRail({
               agentSimulate.mutate(
                 { branch: AGENT_BRANCH, script: AGENT_SCRIPT },
                 {
-                  onSuccess: (data) => {
-                    onBranchTouched(AGENT_BRANCH);
-                    showToast(`Agent run complete — "${data.name}".`);
-                  },
+                  onSuccess: (data) =>
+                    showToast(`Agent run complete — "${data.name}".`),
                 },
               )
             }
