@@ -54,6 +54,10 @@ export function BringInPanel({
   const data = preview.data;
   const patti = pattiFor(landError, cut);
   const left = data ? data.counts.total - data.counts.decided : 0;
+  // The `No changes` branch: this cut is already in main. Landing would
+  // write a second bring-in card carrying nothing, so the button is off.
+  const nothingToLand =
+    data !== undefined && data.count === 0 && data.conflicts.length === 0;
 
   return (
     <div className="changes-panel bring-in-panel">
@@ -161,10 +165,11 @@ export function BringInPanel({
                 type="button"
                 className="bring-in-land"
                 // Nothing may land while a decision is missing, while the
-                // answer is in flight or stale, or while the last attempt is
-                // still going.
+                // answer is in flight or stale, while the last attempt is
+                // still going — or when there is nothing to bring in at all.
                 disabled={
                   left > 0 ||
+                  nothingToLand ||
                   preview.isFetching ||
                   landPending ||
                   patti !== null
