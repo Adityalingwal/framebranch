@@ -14,15 +14,12 @@ import {
   AGENT_ACTOR_NAME,
   agentScript,
 } from "../../../../server/agent-scripts";
-import { isDirty, loadBranchView } from "../../../../server/branches";
+import { loadBranchView } from "../../../../server/branches";
 import { createCommit } from "../../../../server/commits";
 import { ApiError } from "../../../../server/envelope";
 import { handleRequest, readBody } from "../../../../server/handler";
-import {
-  SEAL_BEFORE_AGENT_RUN,
-  agentCommitName,
-} from "../../../../server/naming";
 import { agentSimulateBodySchema } from "../../../../server/schemas";
+import { sealIfDirty } from "../../../../server/seal";
 import { runWithTicket } from "../../../../server/tickets";
 import { minterFor } from "../../../../server/timeline";
 import type { PendingOp } from "../../../../server/types";
@@ -44,19 +41,7 @@ export async function POST(request: Request): Promise<Response> {
         const script = agentScript(body.script);
 
         const view = await loadBranchView(tx, project.id, body.branch, true);
-        if (isDirty(view)) {
-          await createCommit({
-            tx,
-            projectId: project.id,
-            branch: view.branch,
-            working: view.working,
-            timeline: view.timeline,
-            name: SEAL_BEFORE_AGENT_RUN,
-            actor: "user",
-            kind: "auto",
-            actorName: editorName,
-          });
-        }
+        await sealIfDirty(tx, project.id, view, editorName);
 
         // Re-read after the seal — the run starts from the sealed state.
         const fresh = await loadBranchView(tx, project.id, body.branch, true);
@@ -92,7 +77,8 @@ export async function POST(request: Request): Promise<Response> {
           // of writing the same list twice.
           working: { ...fresh.working, pendingOps: applied },
           timeline,
-          name: agentCommitName(script.name),
+          // C1(3): the card is named after the preset, `Tighten intro`.
+          name: script.displayName,
           actor: "agent",
           kind: "agent-run",
           actorName: AGENT_ACTOR_NAME,

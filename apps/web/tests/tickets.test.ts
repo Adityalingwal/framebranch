@@ -55,7 +55,12 @@ describe("C6 — idempotency register", () => {
 
     const old = ticket();
     expectOk(
-      await post(postCommit, "/api/commit", { branch: "main", ticket: old }, s),
+      await post(
+        postCommit,
+        "/api/commit",
+        { branch: "main", name: "Marked", ticket: old },
+        s,
+      ),
     );
     const beforeSweep = await getDb().select().from(tickets);
     // one row per mutating call so far (the edit and this commit)
@@ -74,7 +79,7 @@ describe("C6 — idempotency register", () => {
       await post(
         postCommit,
         "/api/commit",
-        { branch: "main", ticket: fresh },
+        { branch: "main", name: "Marked again", ticket: fresh },
         s,
       ),
     );
@@ -91,7 +96,7 @@ describe("C6 — idempotency register", () => {
     const call = await post(
       postCommit,
       "/api/commit",
-      { branch: "main", ticket: "not-a-uuid" },
+      { branch: "main", name: "Marked", ticket: "not-a-uuid" },
       s,
     );
     expect(expectError(call).code).toBe("E_BAD_REQUEST");

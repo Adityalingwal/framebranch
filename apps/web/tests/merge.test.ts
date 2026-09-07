@@ -68,7 +68,12 @@ async function edit(
 
 async function save(s: Session, branch: string): Promise<string> {
   const data = expectOk(
-    await post(postCommit, "/api/commit", { branch, ticket: ticket() }, s),
+    await post(
+      postCommit,
+      "/api/commit",
+      { branch, name: `Marked on ${branch}`, ticket: ticket() },
+      s,
+    ),
   ) as { commitId: string };
   return data.commitId;
 }
@@ -340,7 +345,7 @@ describe("C4 (4) — POST merge", () => {
     const sealed = await getDb()
       .select()
       .from(commits)
-      .where(eq(commits.name, "Auto — before merge"));
+      .where(eq(commits.kind, "auto"));
     expect(sealed).toHaveLength(2);
     expect(await commitCount()).toBe(before + 2);
     const mainView = expectOk(

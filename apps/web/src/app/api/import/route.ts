@@ -14,16 +14,14 @@
 
 import { importOtio } from "@framebranch/engine";
 
-import { isDirty, loadBranchView } from "../../../server/branches";
+import { loadBranchView } from "../../../server/branches";
 import { createCommit } from "../../../server/commits";
 import { ApiError } from "../../../server/envelope";
 import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
-import {
-  IMPORTED_TIMELINE_COMMIT_NAME,
-  SEAL_BEFORE_IMPORT,
-} from "../../../server/naming";
+import { IMPORTED_TIMELINE_COMMIT_NAME } from "../../../server/naming";
 import { importBodySchema } from "../../../server/schemas";
+import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
 
 export const runtime = "nodejs";
@@ -43,19 +41,7 @@ export async function POST(request: Request): Promise<Response> {
         throw new ApiError(imported.error.code, imported.error.message);
       }
 
-      if (isDirty(view)) {
-        await createCommit({
-          tx,
-          projectId: project.id,
-          branch: view.branch,
-          working: view.working,
-          timeline: view.timeline,
-          name: SEAL_BEFORE_IMPORT,
-          actor: "user",
-          kind: "auto",
-          actorName: editorName,
-        });
-      }
+      await sealIfDirty(tx, project.id, view, editorName);
 
       // Re-read after the seal.
       const fresh = await loadBranchView(tx, project.id, body.branch, true);

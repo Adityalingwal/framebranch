@@ -13,14 +13,13 @@
 import { eq } from "drizzle-orm";
 
 import { branches, workingState } from "../../../db/schema";
-import { findBranch, isDirty, loadBranchView } from "../../../server/branches";
-import { createCommit } from "../../../server/commits";
+import { findBranch, loadBranchView } from "../../../server/branches";
 import { ApiError } from "../../../server/envelope";
 import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
-import { SEAL_BEFORE_BRANCH_CREATE } from "../../../server/naming";
 import { INITIAL_WORKING_REV } from "../../../server/project";
 import { branchCreateBodySchema } from "../../../server/schemas";
+import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
 
 export const runtime = "nodejs";
@@ -108,20 +107,10 @@ export async function POST(request: Request): Promise<Response> {
 
         let sealedCommitId: string | undefined;
         let headCommitId = source.branch.headCommitId;
-        if (isDirty(source)) {
-          const sealed = await createCommit({
-            tx,
-            projectId: project.id,
-            branch: source.branch,
-            working: source.working,
-            timeline: source.timeline,
-            name: SEAL_BEFORE_BRANCH_CREATE,
-            actor: "user",
-            kind: "auto",
-            actorName: editorName,
-          });
-          sealedCommitId = sealed.commitId;
-          headCommitId = sealed.commitId;
+        const seal = await sealIfDirty(tx, project.id, source, editorName);
+        if (seal.sealed) {
+          sealedCommitId = seal.commitId;
+          headCommitId = seal.commitId;
         }
 
         const [created] = await tx

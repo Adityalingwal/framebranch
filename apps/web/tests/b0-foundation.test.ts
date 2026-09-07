@@ -27,7 +27,10 @@ import { GET as getDiff } from "../src/app/api/diff/route";
 import type { DiffResponse } from "../src/app/api/diff/route";
 import { GET as getHistory } from "../src/app/api/history/route";
 import type { HistoryItem } from "../src/app/api/history/route";
+import { POST as postAgent } from "../src/app/api/agent/simulate/route";
+import { POST as postBranchSwitch } from "../src/app/api/branch/switch/route";
 import { POST as postMerge } from "../src/app/api/merge/route";
+import { POST as postRestore } from "../src/app/api/restore/route";
 import { POST as postOps } from "../src/app/api/ops/route";
 import {
   closeDb,
@@ -431,5 +434,143 @@ describe("C-C — GET /api/diff?cut&a&b", () => {
     );
     expect(call.status).toBe(400);
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
+  });
+});
+
+describe("Identity + generated names (B4 / C1 / F2a)", () => {
+  it("B4: a seal is SKIPPED when pending ops cancel out (0 rows) — no card, pending cleared, working_rev kept", async () => {
+    const s = await session();
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name: "other", from: "main", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    );
+    let rev = await editOn(s, "main", 0, "clip-1", 50);
+    rev = await editOn(s, "main", rev, "clip-1", 100); // back to the default
+    expect(rev).toBe(2);
+
+    const switched = expectOk(
+      await post(
+        postBranchSwitch,
+        "/api/branch/switch",
+        { from: "main", to: "other", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    ) as { sealedCommitId?: string };
+    expect(switched.sealedCommitId).toBeUndefined();
+
+    const rows = await getDb().select().from(commits);
+    expect(rows).toHaveLength(1); // still only the seed — no auto card
+    const [main] = await getDb()
+      .select()
+      .from(workingState)
+      .innerJoin(branches, eq(branches.id, workingState.branchId))
+      .where(eq(branches.name, "main"));
+    expect(main.working_state.pendingOps).toEqual([]);
+    expect(main.working_state.workingRev).toBe(2); // monotonic, never reset
+    expect(main.working_state.baseCommitId).toBe(rows[0].id);
+  });
+
+  it("B4/C1(2): a real seal is an `auto` card named by the presenter summary, attributed to the header name", async () => {
+    const s = await session();
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name: "other", from: "main", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    );
+    const rev = await editOn(s, "main", 0, "clip-1", 50);
+    await editOn(s, "main", rev, "clip-2", 60);
+    const switched = expectOk(
+      await post(
+        postBranchSwitch,
+        "/api/branch/switch",
+        { from: "main", to: "other", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    ) as { sealedCommitId?: string };
+    const [sealed] = await getDb()
+      .select()
+      .from(commits)
+      .where(eq(commits.id, switched.sealedCommitId as string));
+    expect(sealed.kind).toBe("auto");
+    expect(sealed.actorName).toBe("Priya");
+    expect(sealed.name).toBe("2 clips changed");
+  });
+
+  it("C1(4)/C1(5)/C1(3): bring-in, restore and agent-run card names + actor names", async () => {
+    const s = await session();
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name: "priya-music", from: "main", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    );
+    await editOn(s, "priya-music", 0, "clip-4", 30);
+    const priyaCard = await mark(s, "priya-music", "Quieter music");
+
+    const merged = expectOk(
+      await post(
+        postMerge,
+        "/api/merge",
+        { from: "priya-music", into: "main", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    ) as { done: true; mergeCommitId: string };
+    const [bringIn] = await getDb()
+      .select()
+      .from(commits)
+      .where(eq(commits.id, merged.mergeCommitId));
+    expect(bringIn.kind).toBe("bring-in");
+    expect(bringIn.name).toBe('Brought "priya-music" into main');
+    expect(bringIn.actorName).toBe("Priya");
+
+    const restored = expectOk(
+      await post(
+        postRestore,
+        "/api/restore",
+        { branch: "main", commitId: priyaCard, ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    ) as { commitId: string; name: string };
+    expect(restored.name).toBe('Restored "Quieter music"');
+    const [restoredRow] = await getDb()
+      .select()
+      .from(commits)
+      .where(eq(commits.id, restored.commitId));
+    expect(restoredRow.kind).toBe("restore");
+    expect(restoredRow.actorName).toBe("Priya");
+
+    const run = expectOk(
+      await post(
+        postAgent,
+        "/api/agent/simulate",
+        { branch: "priya-music", script: "tighten-intro", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    ) as { commitId: string; name: string };
+    expect(run.name).toBe("Tighten intro");
+    const [agentRow] = await getDb()
+      .select()
+      .from(commits)
+      .where(eq(commits.id, run.commitId));
+    expect(agentRow.kind).toBe("agent-run");
+    expect(agentRow.actorName).toBe("Agent"); // never the header's name
+    expect(agentRow.actor).toBe("agent");
   });
 });

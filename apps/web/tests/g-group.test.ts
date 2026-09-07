@@ -76,15 +76,16 @@ describe("G-group — server/state integration", () => {
     expect(before).toBe(1); // just the import commit
 
     const t = ticket();
+    const body = { branch: "main", name: "Marked", ticket: t };
     const first = expectOk(
-      await post(postCommit, "/api/commit", { branch: "main", ticket: t }, s),
+      await post(postCommit, "/api/commit", body, s),
     ) as { commitId: string; name: string };
     const afterFirst = await commitCount();
     expect(afterFirst).toBe(2);
 
     // The response was "lost": the client retries with the SAME ticket.
     const retry = expectOk(
-      await post(postCommit, "/api/commit", { branch: "main", ticket: t }, s),
+      await post(postCommit, "/api/commit", body, s),
     ) as { commitId: string; name: string };
     const afterRetry = await commitCount();
 
@@ -98,7 +99,12 @@ describe("G-group — server/state integration", () => {
 
     const t = ticket();
     expectOk(
-      await post(postCommit, "/api/commit", { branch: "main", ticket: t }, s),
+      await post(
+        postCommit,
+        "/api/commit",
+        { branch: "main", name: "Marked", ticket: t },
+        s,
+      ),
     );
 
     const reused = await post(
@@ -124,7 +130,7 @@ describe("G-group — server/state integration", () => {
     const replay = await post(
       postCommit,
       "/api/commit",
-      { branch: "main", ticket: t },
+      { branch: "main", name: "Marked", ticket: t },
       s,
     );
     expect(replay.body.ok).toBe(true);
@@ -168,7 +174,9 @@ describe("G-group — server/state integration", () => {
       .select()
       .from(commits)
       .where(eq(commits.id, switched.sealedCommitId as string));
-    expect(sealed[0].name).toBe("Auto — before branch switch");
+    // B4/C1(2): the seal is an `auto` card named by what changed.
+    expect(sealed[0].kind).toBe("auto");
+    expect(sealed[0].name).toBe("Interview volume 100% → 70%");
 
     // (b) pending is cleared on the branch we left
     const mainView = expectOk(

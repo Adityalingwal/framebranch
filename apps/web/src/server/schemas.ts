@@ -174,10 +174,15 @@ export const opsHistoryBodySchema = z
     }
   });
 
+/**
+ * C2 — the name is required, but the SHAPE check stays loose (any string ≤
+ * 200, or absent) so that a missing AND a whitespace-only name both reach
+ * the route's one check and get the same E_NAME_REQUIRED answer.
+ */
 export const commitBodySchema = z
   .object({
     branch: branchName,
-    name: z.string().min(1).max(200).optional(),
+    name: z.string().max(200).optional(),
     ticket,
   })
   .strict();

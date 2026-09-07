@@ -17,6 +17,7 @@ import {
 } from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
 import { IconRail } from "./IconRail";
+import { NameGate } from "./NameGate";
 import { PreviewPane } from "./PreviewPane";
 import { RightPanel, type PanelView } from "./RightPanel/RightPanel";
 import { TimelineView } from "./Timeline/TimelineView";
@@ -459,6 +460,8 @@ export function Shell() {
         overflow: "hidden",
       }}
     >
+      {/* F2a — asks for a display name once per tab, before any edit. */}
+      <NameGate />
       <TopBar
         currentBranch={currentBranch}
         knownBranches={knownBranches}

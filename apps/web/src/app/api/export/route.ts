@@ -9,11 +9,11 @@
 
 import { exportOtio } from "@framebranch/engine";
 
-import { isDirty, loadBranchView } from "../../../server/branches";
-import { createCommit, loadCommitRow } from "../../../server/commits";
+import { loadBranchView } from "../../../server/branches";
+import { loadCommitRow } from "../../../server/commits";
 import { handleRequest, readBody } from "../../../server/handler";
-import { SEAL_BEFORE_EXPORT } from "../../../server/naming";
 import { exportBodySchema } from "../../../server/schemas";
+import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
 
 export const runtime = "nodejs";
@@ -26,19 +26,7 @@ export async function POST(request: Request): Promise<Response> {
     return runWithTicket(db, project.id, "export", body.ticket, async (tx) => {
       const view = await loadBranchView(tx, project.id, body.branch, true);
 
-      if (isDirty(view)) {
-        await createCommit({
-          tx,
-          projectId: project.id,
-          branch: view.branch,
-          working: view.working,
-          timeline: view.timeline,
-          name: SEAL_BEFORE_EXPORT,
-          actor: "user",
-          kind: "auto",
-          actorName: editorName,
-        });
-      }
+      await sealIfDirty(tx, project.id, view, editorName);
 
       // Re-read after the seal. The branch is clean now, so its working
       // timeline IS its head commit's timeline — the version being exported.

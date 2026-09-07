@@ -65,9 +65,19 @@ async function edit(
   return data.workingRev;
 }
 
-async function save(s: Session, branch = "main"): Promise<CommitData> {
+/** A Mark — C2: every Mark carries a name. */
+async function save(
+  s: Session,
+  branch = "main",
+  name = "Marked",
+): Promise<CommitData> {
   return expectOk(
-    await post(postCommit, "/api/commit", { branch, ticket: ticket() }, s),
+    await post(
+      postCommit,
+      "/api/commit",
+      { branch, name, ticket: ticket() },
+      s,
+    ),
   ) as CommitData;
 }
 
@@ -127,7 +137,7 @@ describe("C4 (4) — POST restore", () => {
 
     // A NEW commit — not the one restored from (history moves forward).
     expect(restored.commitId).not.toBe(v2.commitId);
-    expect(restored.name).toBe(`Restored version "${v2.name}"`);
+    expect(restored.name).toBe(`Restored "${v2.name}"`);
     expect(await commitCount()).toBe(before + 1);
 
     const row = (
@@ -175,11 +185,13 @@ describe("C4 (4) — POST restore", () => {
       ),
     );
 
+    // B4/C1(2): the seal is an `auto` card named by what changed.
     const sealed = await getDb()
       .select()
       .from(commits)
-      .where(eq(commits.name, "Auto — before restore"));
+      .where(eq(commits.kind, "auto"));
     expect(sealed).toHaveLength(1);
+    expect(sealed[0].name).toBe("Interview volume 80% → 33%");
     expect((await view(s)).pendingCount).toBe(0);
   });
 
@@ -400,15 +412,16 @@ describe("C4 (4) — POST export", () => {
       ),
     ) as { otioJson: unknown; commitId: string; name: string };
 
-    // The seal uses the deterministic export boundary name.
-    expect(data.name).toBe("Auto — before export");
+    // The seal is an `auto` card named by what changed (C1(2)).
+    expect(data.name).toBe("Interview volume 100% → 80%");
     expect(await commitCount()).toBe(before + 1);
     expect((await view(s)).pendingCount).toBe(0);
     // …and the returned commitId IS the branch's head.
     const head = (
       await getDb().select().from(commits).where(eq(commits.id, data.commitId))
     )[0];
-    expect(head.name).toBe("Auto — before export");
+    expect(head.kind).toBe("auto");
+    expect(head.name).toBe("Interview volume 100% → 80%");
 
     // mediaWarnings is optional; there is no honest signal for it here, so the
     // field is omitted entirely.
@@ -493,7 +506,8 @@ describe("C4 (4) — POST agent/simulate", () => {
     ) as { commitId: string; name: string; actor: string; opsApplied: number };
 
     expect(data.actor).toBe("agent");
-    expect(data.name).toBe('Agent run — "tighten-intro"');
+    // C1(3): the card is named after the preset's display name.
+    expect(data.name).toBe("Tighten intro");
     expect(data.opsApplied).toBe(4); // C8: volume, caption delete, add D, B trim
     expect(await commitCount()).toBe(before + 1);
 

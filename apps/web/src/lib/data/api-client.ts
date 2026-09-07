@@ -31,6 +31,7 @@ import type { BranchListItem } from "../../app/api/branch/route";
 import type { DiffResponse } from "../../app/api/diff/route";
 import type { HistoryItem } from "../../app/api/history/route";
 import type { PendingOp } from "../../server/types";
+import { getEditorName } from "../state/editor-name";
 
 // ---------------------------------------------------------------------------
 // Envelope + error mapping
@@ -69,6 +70,7 @@ export function mutationErrorMessage(error: unknown): string {
  */
 const FRIENDLY_MESSAGES: Partial<Record<string, string>> = {
   E_STALE_HEAD: "This version moved — reload and try again.",
+  E_NAME_REQUIRED: "Give this version a name first.",
   E_BRANCH_EXISTS: "That name is taken.",
   E_BRANCH_NOT_FOUND: "That branch no longer exists.",
   E_PROJECT_NOT_FOUND: "This demo was reset elsewhere — reload the page.",
@@ -120,10 +122,20 @@ function get<T>(path: string): Promise<T> {
   return fetchEnvelope<T>(path, { method: "GET" });
 }
 
+/** F2a — the header every mutating request carries; reads never do. */
+export const EDITOR_NAME_HEADER = "X-Editor-Name";
+
 function postJson<T>(path: string, body: unknown): Promise<T> {
+  const editorName = getEditorName();
   return fetchEnvelope<T>(path, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      // The NameGate makes sure a name exists before the UI can mutate;
+      // when it somehow does not, the server attributes the work to
+      // `Editor` (B0 leniency) rather than refusing it.
+      ...(editorName ? { [EDITOR_NAME_HEADER]: editorName } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -247,8 +259,9 @@ export function getDiff(cut: string, a: string, b: string): Promise<DiffData> {
   return get<DiffData>(`/api/diff?${q.toString()}`);
 }
 
+/** C2 — a Mark always carries a name (the server refuses an empty one). */
 export function postCommit(
-  input: { branch: string; name?: string },
+  input: { branch: string; name: string },
   hooks: RetryHooks,
 ): Promise<{ commitId: string; name: string }> {
   const ticket = newTicket();

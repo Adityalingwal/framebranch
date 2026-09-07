@@ -6,7 +6,8 @@
  *   started from (compare-and-swap), else E_STALE_HEAD.
  * - Snapshot cadence: every 10th commit is a full snapshot; import / restore /
  *   merge commits are always full snapshots.
- * - Names are deterministic templates (see naming.ts).
+ * - Names are deterministic templates or presenter summaries (naming.ts,
+ *   seal.ts); every card carries an explicit `kind` (B4).
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -221,13 +222,4 @@ export async function loadCommitRow(
     );
   }
   return rows[0];
-}
-
-/** How many versions this project has (used by the `Version N` template). */
-export async function countCommits(tx: Tx, projectId: string): Promise<number> {
-  const rows = await tx
-    .select({ id: commits.id })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
-  return rows.length;
 }
