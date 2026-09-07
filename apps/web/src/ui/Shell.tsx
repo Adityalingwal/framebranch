@@ -2,12 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 
-import type { Command, PropertyValue, Track } from "@framebranch/engine";
+import type {
+  Command,
+  MergeChoice,
+  PropertyValue,
+  Track,
+} from "@framebranch/engine";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import type { DiffRow } from "../server/diff-rows";
 import { ApiClientError } from "../lib/data/api-client";
+import type { BringInToken } from "../lib/data/api-client";
+import { queryKeys } from "../lib/data/query-keys";
+import {
+  choicesKeyFor,
+  clearChoices,
+  parseChoices,
+  setChoice,
+  useBringInChoicesRaw,
+} from "../lib/state/bring-in-choices";
+import type { ConflictLine } from "../server/conflict-cards";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { quoted } from "../lib/format";
 import { useConnectionStatus } from "../lib/state/connection-status";
@@ -15,6 +31,8 @@ import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
 import {
   useBranchesQuery,
+  useBringInMutation,
+  useBringInPreviewQuery,
   useCompareQuery,
   useDiffQuery,
   useHistoryQuery,
@@ -75,6 +93,9 @@ export function Shell() {
     name: string;
   } | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
+  // F5 — `Cancel — nothing changes` always asks first, even with no
+  // decisions made: one path, no special case.
+  const [cancelBringInOpen, setCancelBringInOpen] = useState(false);
   // B2 §2.4 — the two points being compared. It lives HERE, not in the
   // panel, because three different doors set it and the lanes (centre) and
   // the rows (right) must read the same pair. Values are commit ids or
@@ -90,7 +111,20 @@ export function Shell() {
     side: "before" | "after";
     clipId: string | null;
   } | null>(null);
+  /**
+   * B3 §2.5 — the Bring-in door. `token` is captured from the FIRST preview
+   * answer and then FROZEN: later choice-refetches return their own token,
+   * which is ignored. F4 says drift is caught ONCE, at `Bring in now`, with
+   * the patti — an edit on main between two button clicks must not silently
+   * orphan the decisions the user has already made. Only `Start again`
+   * drops it (and captures the next answer's).
+   */
+  const [bringIn, setBringIn] = useState<{
+    cut: string;
+    token: BringInToken | null;
+  } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
 
   const timeline = useTimelineQuery(currentBranch);
   const opsMutation = useOpsMutation(currentBranch);
@@ -152,6 +186,9 @@ export function Shell() {
   // `resetToFreshDemo` sets the cut directly and would otherwise miss it.
   useEffect(() => {
     setComparePair(null);
+    // Exit (iii): a preview belongs to `main` and to one cut; standing
+    // somewhere else ends it.
+    setBringIn(null);
   }, [currentBranch]);
 
   // (i-b) …and clearing on a cut change is not enough on its own. A demo
@@ -195,11 +232,46 @@ export function Shell() {
   // Fetched ONLY while Compare is open: `timelines=1` carries both full
   // timelines, and the chip's own light query already covers head → Now on
   // every other screen. Reopening fetches the (possibly invalidated) snapshot.
+  // The Bring-in preview is the THIRD door into this same view, so the
+  // normal Compare query stands down while it is open (its answer would be
+  // a different pair of the same cut, fetched for nothing).
   const compare = useCompareQuery(
     currentBranch,
-    compareOpen ? (comparePair?.a ?? null) : null,
-    compareOpen ? (comparePair?.b ?? null) : null,
+    compareOpen && bringIn === null ? (comparePair?.a ?? null) : null,
+    compareOpen && bringIn === null ? (comparePair?.b ?? null) : null,
   );
+
+  // ---- B3: the Bring-in preview ------------------------------------------
+
+  const previewOpen = compareOpen && bringIn !== null;
+  // The key is the FROZEN token (§2.4): a new token means a new set of
+  // decisions, so `Start again` leaves the old ones behind by itself.
+  const choicesKey = choicesKeyFor(bringIn?.cut ?? "", bringIn?.token ?? null);
+  // The store's snapshot is the raw JSON string — stable between renders,
+  // and exactly what the query key needs.
+  const choicesRaw = useBringInChoicesRaw(choicesKey);
+  const choices = useMemo(() => parseChoices(choicesRaw), [choicesRaw]);
+  const preview = useBringInPreviewQuery(
+    bringIn?.cut ?? null,
+    choices,
+    choicesRaw,
+    previewOpen,
+  );
+  const bringInMutation = useBringInMutation();
+
+  // Freeze the token on the first REAL answer (never on `keepPreviousData`'s
+  // placeholder, which is the previous request's body).
+  useEffect(() => {
+    if (!previewOpen || preview.isPlaceholderData) return;
+    const token = preview.data?.token;
+    if (!token) return;
+    setBringIn((current) =>
+      current && current.token === null ? { ...current, token } : current,
+    );
+  }, [previewOpen, preview.data, preview.isPlaceholderData]);
+
+  /** Lanes, rows and the player read ONE source, whichever door is open. */
+  const laneData = bringIn !== null ? preview.data : compare.data;
 
   /**
    * B2 lock (3) — a row click sends the player exactly where the row's own
@@ -218,12 +290,12 @@ export function Shell() {
    */
   const handleCompareClipClick = useCallback(
     (side: "before" | "after", clipId: string) => {
-      const lane = side === "before" ? compare.data?.before : compare.data?.after;
+      const lane = side === "before" ? laneData?.before : laneData?.after;
       setCompareFocus({ side, clipId });
       const clip = lane ? findClipById(lane, clipId) : undefined;
       if (clip) setPlayheadFrame(clip.timelineRange.start.value);
     },
-    [compare.data?.before, compare.data?.after],
+    [laneData?.before, laneData?.after],
   );
 
   /**
@@ -233,6 +305,13 @@ export function Shell() {
    * playhead and the player focus start clean. Leaving clears the focus
    * again, the same way ✕ leaves View.
    */
+  // Exit (i): any tab switch away from Changes ends the preview. The deps
+  // are `compareOpen` ALONE — the door sets `bringIn` before the URL catches
+  // up, and reacting to that would close the door it has just opened.
+  useEffect(() => {
+    if (!compareOpen) setBringIn(null);
+  }, [compareOpen]);
+
   useEffect(() => {
     setCompareFocus(null);
     setPlayheadFrame(0);
@@ -423,8 +502,94 @@ export function Shell() {
 
   /** The Changes door: always the head card against Now (D2, D4(11)). */
   const openChangesDoor = useCallback(() => {
+    // Exit (ii): the chip and the rail's Changes item are the head→Now door.
+    // Under the preview the chip is the `Comparing` pill, so this is a guard.
+    setBringIn(null);
     openCompare(head !== null ? { a: head, b: NOW_SIDE } : null);
   }, [openCompare, head]);
+
+  /**
+   * §2.5 — the Bring-in door. Deliberately NOT in the URL: a reload on
+   * `?view=changes` opens the normal Compare, not this preview. The
+   * decisions in sessionStorage survive for a later re-open with the same
+   * token.
+   *
+   * The cached answer is dropped first: `staleTime: Infinity` would
+   * otherwise hand back an older body and the token would be frozen from a
+   * screen that has since moved on.
+   */
+  const openBringIn = useCallback(
+    (cut: string) => {
+      queryClient.removeQueries({ queryKey: queryKeys.bringInAll() });
+      setBringIn({ cut, token: null });
+      setView("changes");
+      setRightPanelMode("versioning");
+    },
+    [queryClient, setView],
+  );
+
+  /**
+   * F4 — `Start again`: a fresh preview and a fresh token, so the decisions
+   * are re-asked. Nothing deletes them; the choices key simply moves with
+   * the token.
+   */
+  const restartBringIn = useCallback(() => {
+    queryClient.removeQueries({ queryKey: queryKeys.bringInAll() });
+    bringInMutation.reset();
+    setBringIn((current) =>
+      current ? { cut: current.cut, token: null } : current,
+    );
+  }, [queryClient, bringInMutation]);
+
+  /** A decision: stored, then the (stateless) preview is simply re-asked. */
+  const handleChoice = useCallback(
+    (conflictId: string, choice: MergeChoice) => {
+      if (choicesKey === "") return; // no token yet: nothing to key them by
+      setChoice(choicesKey, conflictId, choice);
+    },
+    [choicesKey],
+  );
+
+  /**
+   * F3(3) — a card's line behaves like a row: it sends the player to that
+   * clip on that side. The Original line has no lane and no jump, so the
+   * panel never calls this for it.
+   */
+  const handleLineClick = useCallback((line: ConflictLine) => {
+    if (!line.jump) return;
+    setCompareFocus({ side: line.jump.side, clipId: line.clipId });
+    setPlayheadFrame(line.jump.frame);
+  }, []);
+
+  /** Exit (iv) — F5 / C-2: the preview wrote nothing, so this is the truth. */
+  const cancelBringIn = useCallback(() => {
+    clearChoices(choicesKey);
+    queryClient.removeQueries({ queryKey: queryKeys.bringInAll() });
+    bringInMutation.reset();
+    setBringIn(null);
+    setCancelBringInOpen(false);
+    setView("history");
+    showToast("Cancelled — main is unchanged.");
+  }, [choicesKey, queryClient, bringInMutation, setView]);
+
+  /** Exit (v) — the landing. The new card is at the top of History. */
+  const landBringIn = useCallback(() => {
+    if (!bringIn?.token) return;
+    const cut = bringIn.cut;
+    const key = choicesKey;
+    bringInMutation.mutate(
+      { from: cut, token: bringIn.token, choices },
+      {
+        onSuccess: () => {
+          clearChoices(key);
+          queryClient.removeQueries({ queryKey: queryKeys.bringInAll() });
+          setBringIn(null);
+          setView("history");
+          showToast(`Brought ${quoted(cut)} into main.`);
+        },
+      },
+    );
+  }, [bringIn, choices, choicesKey, bringInMutation, queryClient, setView]);
 
   const switchToBranch = useCallback((branch: string) => {
     setCurrentBranch(branch);
@@ -502,6 +667,14 @@ export function Shell() {
    * server (`older`), never from the order the user picked them in.
    */
   const laneLabels = useMemo(() => {
+    // #132 — the Bring-in door names the two lanes for what they are: main
+    // as it stands, and main with this cut in it.
+    if (bringIn) {
+      return {
+        before: "main now",
+        after: `main with ${quoted(bringIn.cut)}`,
+      };
+    }
     if (!comparePair) return { before: "", after: "" };
     const [olderRef, newerRef] =
       compare.data?.older === "b"
@@ -513,7 +686,7 @@ export function Shell() {
       return card ? quoted(card.name) : "";
     };
     return { before: nameOf(olderRef), after: nameOf(newerRef) };
-  }, [comparePair, compare.data?.older, historyCommits]);
+  }, [bringIn, comparePair, compare.data?.older, historyCommits]);
 
   const emit = useCallback(
     (command: Command, options?: { onError?: () => void }) => {
@@ -713,6 +886,7 @@ export function Shell() {
         comparing={compareOpen}
         onChangesClick={openChangesDoor}
         onBranchChanged={switchToBranch}
+        onBringIn={openBringIn}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
         <IconRail
@@ -766,10 +940,10 @@ export function Shell() {
                   at all. Until the one query answers there is nothing to
                   show, and no text either (§2.4). */}
               {compareOpen ? (
-                compare.data?.before && compare.data.after ? (
+                laneData?.before && laneData.after ? (
                   <ComparePlayer
-                    before={compare.data.before}
-                    after={compare.data.after}
+                    before={laneData.before}
+                    after={laneData.after}
                     focus={compareFocus}
                     playheadFrame={playheadFrame}
                     onSetPlayhead={setPlayheadFrame}
@@ -840,6 +1014,15 @@ export function Shell() {
                   onHighlightClip={setHighlightedClipIds}
                   onRowClick={handleRowClick}
                   onViewCard={openView}
+                  bringIn={bringIn}
+                  preview={preview}
+                  landPending={bringInMutation.isPending}
+                  landError={bringInMutation.error}
+                  onChoice={handleChoice}
+                  onLand={landBringIn}
+                  onCancelBringIn={() => setCancelBringInOpen(true)}
+                  onStartAgain={restartBringIn}
+                  onLineClick={handleLineClick}
                   hasInspector={Boolean(selectedClip)}
                   onCloseToInspector={() => setRightPanelMode("inspector")}
                 />
@@ -981,13 +1164,16 @@ export function Shell() {
                 );
               })()}
             {compareOpen ? (
-              compare.data?.before && compare.data.after ? (
+              laneData?.before && laneData.after ? (
                 <CompareLanes
-                  before={compare.data.before}
-                  after={compare.data.after}
+                  before={laneData.before}
+                  after={laneData.after}
                   beforeLabel={laneLabels.before}
                   afterLabel={laneLabels.after}
-                  rows={compare.data.rows}
+                  rows={laneData.rows}
+                  undecidedClipIds={
+                    bringIn !== null ? preview.data?.undecidedClipIds : undefined
+                  }
                   playheadFrame={playheadFrame}
                   onSetPlayhead={setPlayheadFrame}
                   highlightedClipIds={highlightedClipIds}
@@ -1034,6 +1220,20 @@ export function Shell() {
           a new version goes ON TOP, the edits since the current card are
           kept, nothing is deleted. The middle sentence appears only when
           there ARE such edits. */}
+      {/* F5 / C-2 (#155-#157) — the words are true because the preview
+          wrote nothing: the decisions are all there is to drop. The box
+          shows even at zero decisions (one path, no special case). */}
+      <ConfirmDialog
+        open={cancelBringInOpen && bringIn !== null}
+        onOpenChange={setCancelBringInOpen}
+        title={`Stop bringing in ${quoted(bringIn?.cut ?? "")}?`}
+        description="Your decisions so far are dropped. main stays exactly as it is."
+        confirmLabel="Yes, cancel"
+        cancelLabel="Keep going"
+        tone="danger"
+        onConfirm={cancelBringIn}
+      />
+
       <ConfirmDialog
         open={restoreOpen && viewing !== null}
         onOpenChange={setRestoreOpen}

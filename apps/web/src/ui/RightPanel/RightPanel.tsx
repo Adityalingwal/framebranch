@@ -1,8 +1,12 @@
 "use client";
 
+import type { MergeChoice } from "@framebranch/engine";
+
 import type { HistoryCommit } from "../../lib/data/api-client";
-import type { CompareQuery } from "../../lib/data/hooks";
+import type { BringInPreviewQuery, CompareQuery } from "../../lib/data/hooks";
+import type { ConflictLine } from "../../server/conflict-cards";
 import type { DiffRow } from "../../server/diff-rows";
+import { BringInPanel } from "./BringInPanel";
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
 
@@ -33,6 +37,15 @@ export function RightPanel({
   onHighlightClip,
   onRowClick,
   onViewCard,
+  bringIn,
+  preview,
+  landPending,
+  landError,
+  onChoice,
+  onLand,
+  onCancelBringIn,
+  onStartAgain,
+  onLineClick,
   hasInspector,
   onCloseToInspector,
 }: {
@@ -56,6 +69,20 @@ export function RightPanel({
   onHighlightClip: (clipIds: string[]) => void;
   onRowClick: (row: DiffRow) => void;
   onViewCard: (commit: HistoryCommit) => void;
+  /**
+   * B3 §2.6 — the Bring-in preview is the Changes view's THIRD door: while a
+   * cut is picked, this column is the Bring-in panel instead of the pickers
+   * and rows. Every piece of its state lives in the Shell.
+   */
+  bringIn: { cut: string } | null;
+  preview: BringInPreviewQuery;
+  landPending: boolean;
+  landError: unknown;
+  onChoice: (conflictId: string, choice: MergeChoice) => void;
+  onLand: () => void;
+  onCancelBringIn: () => void;
+  onStartAgain: () => void;
+  onLineClick: (line: ConflictLine) => void;
   hasInspector?: boolean;
   onCloseToInspector?: () => void;
 }) {
@@ -128,7 +155,23 @@ export function RightPanel({
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
-        {view === "changes" && (
+        {view === "changes" && bringIn !== null && (
+          <BringInPanel
+            cut={bringIn.cut}
+            preview={preview}
+            landPending={landPending}
+            landError={landError}
+            onChoice={onChoice}
+            onLand={onLand}
+            onCancel={onCancelBringIn}
+            onStartAgain={onStartAgain}
+            highlightedClipIds={highlightedClipIds}
+            onHighlightClip={onHighlightClip}
+            onRowClick={onRowClick}
+            onLineClick={onLineClick}
+          />
+        )}
+        {view === "changes" && bringIn === null && (
           <ChangesPanel
             commits={commits}
             pair={comparePair}

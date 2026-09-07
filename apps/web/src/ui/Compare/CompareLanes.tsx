@@ -56,6 +56,7 @@ export function CompareLanes({
   beforeLabel,
   afterLabel,
   rows,
+  undecidedClipIds,
   playheadFrame,
   onSetPlayhead,
   highlightedClipIds,
@@ -68,6 +69,13 @@ export function CompareLanes({
   beforeLabel: string;
   afterLabel: string;
   rows: DiffRow[];
+  /**
+   * B3 lock (4)(ii) — clips of a conflict nobody has answered yet. The
+   * engine leaves them out of the merged timeline, so the After lane draws
+   * MAIN's copy of each, striped: not "changed", not "added" — undecided.
+   * Absent under the Changes / History doors, where nothing is undecided.
+   */
+  undecidedClipIds?: string[];
   playheadFrame: number;
   onSetPlayhead: (frame: number) => void;
   highlightedClipIds: string[];
@@ -196,6 +204,7 @@ export function CompareLanes({
             timeline={after}
             label={afterLabel}
             tones={tones.after}
+            undecidedClipIds={undecidedClipIds}
             canvasWidth={canvasWidth}
             scale={scale}
             highlightedClipIds={highlightedClipIds}
@@ -222,6 +231,7 @@ function Lane({
   timeline,
   label,
   tones,
+  undecidedClipIds,
   canvasWidth,
   scale,
   highlightedClipIds,
@@ -233,6 +243,7 @@ function Lane({
   timeline: Timeline;
   label: string;
   tones: Map<string, ClipTone>;
+  undecidedClipIds?: string[];
   canvasWidth: number;
   scale: number;
   highlightedClipIds: string[];
@@ -276,6 +287,7 @@ function Lane({
                   timeline={timeline}
                   scale={scale}
                   tone={tones.get(clip.id)}
+                  undecided={undecidedClipIds?.includes(clip.id) ?? false}
                   hot={highlightedClipIds.includes(clip.id)}
                   onHover={() => onHighlightClip([clip.id])}
                   onLeave={() => onHighlightClip([])}
@@ -295,6 +307,7 @@ function CompareClip({
   timeline,
   scale,
   tone,
+  undecided,
   hot,
   onHover,
   onLeave,
@@ -304,6 +317,7 @@ function CompareClip({
   timeline: Timeline;
   scale: number;
   tone: ClipTone | undefined;
+  undecided: boolean;
   hot: boolean;
   onHover: () => void;
   onLeave: () => void;
@@ -319,7 +333,10 @@ function CompareClip({
   return (
     <button
       type="button"
-      className={`compare-clip ${tone ?? "is-same"}${hot ? " is-hot" : ""}`}
+      // `is-undecided` WINS over changed/added/removed: this clip is not
+      // "changed", it is not decided. No text and no tooltip — there is no
+      // copy for it (lock (4)).
+      className={`compare-clip ${undecided ? "is-undecided" : (tone ?? "is-same")}${hot ? " is-hot" : ""}`}
       style={{
         left,
         width,

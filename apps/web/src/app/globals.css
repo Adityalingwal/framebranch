@@ -628,6 +628,20 @@ input[type="range"]::-moz-range-thumb {
   background: rgba(255, 255, 255, 0.07);
 }
 
+/* B3 lock (2) — `Bring in ▾` sits in the RIGHT cluster, left of Mark
+   version. Everything else about the menu is the cut menu's own markup and
+   classes; only these two things differ. */
+.bring-in-trigger {
+  flex-shrink: 0;
+}
+
+/* #34 — dim and non-interactive: a fact, not an instruction. */
+.bring-in-empty {
+  padding: 7px 8px;
+  color: var(--fb-text-mute);
+  font-size: 11.5px;
+}
+
 /* B2 #36 — the Compare-mode pill that takes the chip's slot. Deliberately
    NOT a button: nothing happens when you press it (mockup `.pill.on`). */
 .topbar-comparing-pill {
@@ -2710,6 +2724,236 @@ input:disabled {
   min-height: 0;
 }
 
+/* ==========================================================================
+   B3 — the Bring-in panel (the Compare view's third door). It reuses the
+   Changes panel's summary, rows and empty states as they are; only the
+   header, the cards and the sticky footer are its own.
+   ========================================================================== */
+
+.bring-in-panel {
+  position: relative;
+  gap: 8px;
+}
+
+.bring-in-header {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fb-text-body-2);
+}
+
+.bring-in-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: opacity 0.12s var(--fb-ease-hover);
+}
+
+/* While the staleness patti is up, what is underneath is out of date. */
+.bring-in-body.is-dimmed {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.bring-in-patti {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(240, 97, 109, 0.35);
+  border-radius: var(--fb-radius-sm);
+  background: rgba(240, 97, 109, 0.12);
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--fb-text-body);
+}
+
+.bring-in-patti-action {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: var(--fb-radius-pill);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fb-text-body-2);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bring-in-patti-action:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.bring-in-decide-head {
+  padding-top: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fb-text-mute);
+}
+
+.bring-in-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--fb-radius-sm);
+  background: var(--fb-panel);
+}
+
+.bring-in-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--fb-text-body);
+}
+
+.bring-in-line {
+  display: grid;
+  grid-template-columns: 34px auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: var(--fb-radius-sm);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.12s var(--fb-ease-hover);
+}
+
+.bring-in-line:hover,
+.bring-in-line.is-hot {
+  background: var(--fb-panel-2);
+}
+
+/* The Original line names a point in time, not a lane — nothing to ring
+   and nowhere to jump. */
+.bring-in-line.is-inert {
+  cursor: default;
+}
+
+.bring-in-line.is-inert:hover {
+  background: transparent;
+}
+
+.bring-in-line-label {
+  color: var(--fb-text-dim);
+  white-space: nowrap;
+}
+
+.bring-in-line.is-main .bring-in-line-label {
+  color: var(--fb-accent);
+}
+
+.bring-in-line.is-cut .bring-in-line-label {
+  color: var(--fb-good);
+}
+
+.bring-in-line-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fb-text-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.bring-in-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 2px;
+}
+
+.bring-in-choice {
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--fb-radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fb-text-body);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition:
+    background 0.12s var(--fb-ease-hover),
+    border-color 0.12s var(--fb-ease-hover);
+}
+
+.bring-in-choice:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* #149 — the answer stays pressed; no extra words are needed. */
+.bring-in-choice.is-chosen {
+  border-color: var(--fb-accent);
+  background: rgba(79, 162, 255, 0.22);
+  color: var(--fb-text-body-2);
+}
+
+.bring-in-footer {
+  position: sticky;
+  bottom: -12px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 -12px -12px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  background: var(--fb-panel);
+}
+
+.bring-in-left {
+  font-size: 11px;
+  color: var(--fb-text-dim);
+  white-space: nowrap;
+}
+
+.bring-in-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.bring-in-cancel,
+.bring-in-land {
+  padding: 5px 12px;
+  border-radius: var(--fb-radius-pill);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bring-in-cancel {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fb-text-body);
+}
+
+.bring-in-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.bring-in-land {
+  border: 1px solid transparent;
+  background: var(--fb-accent);
+  color: #05070c;
+  font-weight: 600;
+}
+
+.bring-in-land:disabled,
+.bring-in-cancel:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .changes-group-head {
   padding: 10px 2px 4px;
   font-size: 10px;
@@ -2986,6 +3230,26 @@ input:disabled {
 
 .compare-clip.is-added::before {
   background: rgba(63, 207, 142, 0.32);
+}
+
+/* B3 lock (4)(ii) — an undecided conflict's clip in the After lane. It is
+   drawn where MAIN has it, striped: not changed, not added, not removed —
+   waiting for an answer. The class is applied INSTEAD of the tone classes,
+   so nothing here has to out-specify them. No text, no tooltip. */
+.compare-clip.is-undecided {
+  opacity: 0.7;
+  border-color: rgba(255, 255, 255, 0.28);
+  border-style: dashed;
+}
+
+.compare-clip.is-undecided::before {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.16) 0,
+    rgba(255, 255, 255, 0.16) 4px,
+    rgba(255, 255, 255, 0.03) 4px,
+    rgba(255, 255, 255, 0.03) 9px
+  );
 }
 
 .compare-clip.is-removed {

@@ -11,6 +11,7 @@ import {
   useSaveVersionMutation,
   useSwitchBranchMutation,
 } from "../lib/data/hooks";
+import { BringInMenu } from "./BringInMenu";
 import { CutMenu } from "./CutMenu";
 import { ModalShell } from "./ModalShell";
 import { primaryButton, secondaryButton, textInput } from "./styles";
@@ -34,6 +35,7 @@ export function TopBar({
   comparing,
   onBranchChanged,
   onChangesClick,
+  onBringIn,
 }: {
   currentBranch: string;
   cuts: BranchListItem[];
@@ -46,6 +48,8 @@ export function TopBar({
   comparing: boolean;
   onBranchChanged: (branch: string) => void;
   onChangesClick: () => void;
+  /** B3 / F1 — open the Bring-in preview for this cut. `main` only. */
+  onBringIn: (cut: string) => void;
 }) {
   const [markOpen, setMarkOpen] = useState(false);
   const [versionName, setVersionName] = useState("");
@@ -185,6 +189,17 @@ export function TopBar({
       </div>
 
       <div className="topbar-version-cluster">
+        {/* #29 / lock (2) — `Bring in ▾` immediately LEFT of Mark version,
+            and ONLY on main: the direction is fixed, so no other cut carries
+            a bring-in control at all (#30, F1). */}
+        {currentBranch === "main" && (
+          <BringInMenu
+            cuts={cuts}
+            disabled={editingLocked}
+            busy={busy}
+            onPick={onBringIn}
+          />
+        )}
         {/* A disabled <button> does not fire hover events in every browser,
             so E1's explanation (#27) hangs on the wrapper. */}
         <span title={markTitle}>
