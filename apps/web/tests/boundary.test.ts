@@ -445,7 +445,8 @@ describe("C4 (4) — POST export", () => {
       ),
     ) as { commitId: string; name: string };
     expect(await commitCount()).toBe(before);
-    expect(data.name).toBe('Imported "demo.otio"');
+    // C1(6): the seed card is named after its preset.
+    expect(data.name).toBe("Travel vlog");
   });
 });
 

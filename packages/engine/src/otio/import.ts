@@ -413,7 +413,25 @@ function importTrack(ctx: ImportCtx, trackNode: unknown): Track | null {
     if (clip.clip) clips.push(clip.clip);
   }
 
-  return { id: mint(ctx, "track"), kind, clips: clips as Track["clips"] };
+  const name = displayName(node);
+  return {
+    id: mint(ctx, "track"),
+    kind,
+    ...(name ? { name } : {}),
+    clips: clips as Track["clips"],
+  };
+}
+
+/**
+ * The OTIO `name` of a clip/track, when it is a non-empty string. Absent or
+ * empty → undefined (the field is then left off, so plain documents stay
+ * plain and `name` never lies as "").
+ */
+function displayName(node: Record<string, unknown>): string | undefined {
+  const raw = node.name;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 type ImportedClip = { clip: AnyClip | null; duration: number };
@@ -440,9 +458,10 @@ function importClip(
   };
 
   const fb = framebranchMeta(node);
+  const name = displayName(node);
   if (fb && fb.kind === "text") {
     return {
-      clip: importTextClip(ctx, fb, trackKind, timelineRange),
+      clip: withName(importTextClip(ctx, fb, trackKind, timelineRange), name),
       duration,
     };
   }
@@ -473,17 +492,29 @@ function importClip(
   }
 
   return {
-    clip: importMediaClip(
-      ctx,
-      media,
-      rawRange,
-      sourceRange,
-      trackKind,
-      timelineRange,
-      fb ?? null,
+    clip: withName(
+      importMediaClip(
+        ctx,
+        media,
+        rawRange,
+        sourceRange,
+        trackKind,
+        timelineRange,
+        fb ?? null,
+      ),
+      name,
     ),
     duration,
   };
+}
+
+/** Attach the OTIO display name to an imported clip (skipped clips stay null). */
+function withName<T extends AnyClip>(
+  clip: T | null,
+  name: string | undefined,
+): T | null {
+  if (clip === null || name === undefined) return clip;
+  return { ...clip, name };
 }
 
 function importTextClip(

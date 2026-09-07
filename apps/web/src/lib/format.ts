@@ -1,37 +1,45 @@
 /**
  * format.ts — display-only formatting. A1.1 lock: time stays `{value,
- * rate}` integers everywhere except right here, at render time (M8a sends
- * nothing back to the server, but the habit is kept per the brief).
+ * rate}` integers everywhere except right here, at render time. Shared by
+ * UI and server (the diff presenter) — framework-free.
+ *
+ * D4(4) / C5 C-3: timecode is ALWAYS the full 4-part `HH:MM:SS:FF`, hours
+ * included even when 00 — a 3-part `00:12:00` reads as "12 minutes". This
+ * applies to positions, durations and runtime alike.
  */
 
 import type { RationalTime } from "@framebranch/engine";
 
 function pad(n: number, width = 2): string {
-  return String(Math.max(0, Math.trunc(n)))
-    .toString()
-    .padStart(width, "0");
+  return String(Math.max(0, Math.trunc(n))).padStart(width, "0");
 }
 
-/** `{value, rate}` → `mm:ss:ff` (or `hh:mm:ss:ff` past an hour). */
-export function formatTimecode(t: RationalTime): string {
-  const rate = Math.round(t.rate) || 1;
-  const totalFrames = Math.max(0, Math.round(t.value));
-  const frames = totalFrames % rate;
-  const totalSeconds = Math.floor(totalFrames / rate);
+/** `frames` at `rate` → `HH:MM:SS:FF`. Frame 0 → `00:00:00:00`. */
+export function formatFrames(frames: number, rate: number): string {
+  const safeRate = Math.round(rate) || 1;
+  const totalFrames = Math.max(0, Math.round(frames));
+  const ff = totalFrames % safeRate;
+  const totalSeconds = Math.floor(totalFrames / safeRate);
   const seconds = totalSeconds % 60;
   const totalMinutes = Math.floor(totalSeconds / 60);
   const minutes = totalMinutes % 60;
   const hours = Math.floor(totalMinutes / 60);
-  return hours > 0
-    ? `${pad(hours)}:${pad(minutes)}:${pad(seconds)}:${pad(frames)}`
-    : `${pad(minutes)}:${pad(seconds)}:${pad(frames)}`;
+  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}:${pad(ff)}`;
+}
+
+/** `{value, rate}` → `HH:MM:SS:FF`, always 4-part. */
+export function formatTimecode(t: RationalTime): string {
+  return formatFrames(t.value, t.rate);
 }
 
 export function toSeconds(t: RationalTime): number {
   return t.value / t.rate;
 }
 
-/** Coarse relative time for the History panel ("3m ago", "yesterday"). */
+/**
+ * Coarse relative time ("3m ago"). UI-only: C5 replaces every use with
+ * clock time in B1/B5; nothing server-facing may call this.
+ */
 export function relativeTime(iso: string): string {
   const diffMs = Date.now() - new Date(iso).getTime();
   const s = Math.floor(diffMs / 1000);

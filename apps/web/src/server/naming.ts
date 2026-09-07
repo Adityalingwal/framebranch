@@ -8,9 +8,6 @@
  * whole vocabulary can be read at a glance.
  */
 
-/** The seed commit of a new project. */
-export const IMPORT_COMMIT_NAME = 'Imported "demo.otio"';
-
 /**
  * The name of the commit a user-supplied `POST import` writes. The seed
  * import above names its file; a user import is not tied to one fixture.

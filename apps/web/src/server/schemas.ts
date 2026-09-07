@@ -311,3 +311,11 @@ export const demoResetBodySchema = z
     ticket,
   })
   .strict();
+
+/** G1 — POST project/new { preset }: a preset id from the registry. */
+export const projectNewBodySchema = z
+  .object({
+    preset: z.string().min(1).max(100),
+    ticket,
+  })
+  .strict();

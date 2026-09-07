@@ -83,7 +83,8 @@ function exportTrack(track: Track, timeline: Timeline): OtioJson {
 
   return {
     OTIO_SCHEMA: "Track.1",
-    name: "",
+    // The display name round-trips; an unnamed track goes out as "".
+    name: track.name ?? "",
     kind: track.kind === "audio" ? "Audio" : "Video",
     children,
     markers: [],
@@ -97,7 +98,7 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
     // text clip = Clip.1 + MissingReference.1 + framebranch metadata.
     return {
       OTIO_SCHEMA: "Clip.1",
-      name: "",
+      name: clip.name ?? "",
       source_range: timeRangeJson({
         start: rt(0, clip.timelineRange.duration.rate),
         duration: clip.timelineRange.duration,
@@ -136,7 +137,7 @@ function exportClip(clip: AnyClip, timeline: Timeline): OtioJson {
     : clip.sourceRange;
   return {
     OTIO_SCHEMA: "Clip.1",
-    name: "",
+    name: clip.name ?? "",
     source_range: timeRangeJson(outSourceRange),
     media_reference: media
       ? {

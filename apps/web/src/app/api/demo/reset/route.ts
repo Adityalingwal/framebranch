@@ -1,25 +1,15 @@
 /**
- * POST /api/demo/reset — discard category. Resets this project's state to
- * the demo fixture without deleting the project row, owner token, or cookie.
+ * POST /api/demo/reset — thin alias of `POST /api/project/new` for the
+ * default preset (the UI's "Reset demo" goes away in B4; the route stays so
+ * today's client keeps working). Same code path: resetProjectToPreset.
  *
  * Tickets survive so the endpoint stays idempotent — deleting the project
  * row would cascade to the ticket row runWithTicket is about to write.
  */
 
-import { eq } from "drizzle-orm";
-
-import {
-  branches,
-  commits,
-  mergeAttempts,
-  ops,
-  presence,
-  projectEvents,
-  snapshots,
-  workingState,
-} from "../../../../db/schema";
 import { handleRequest, readBody } from "../../../../server/handler";
-import { seedProjectFromDemo } from "../../../../server/project";
+import { DEFAULT_PRESET_ID } from "../../../../server/presets";
+import { resetProjectToPreset } from "../../../../server/project";
 import { demoResetBodySchema } from "../../../../server/schemas";
 import { runWithTicket } from "../../../../server/tickets";
 
@@ -36,25 +26,7 @@ export async function POST(request: Request): Promise<Response> {
       "demo-reset",
       body.ticket,
       async (tx) => {
-        // Explicit deletes in FK order (children first). Every WHERE
-        // is project-scoped.
-        await tx.delete(presence).where(eq(presence.projectId, project.id));
-        await tx
-          .delete(projectEvents)
-          .where(eq(projectEvents.projectId, project.id));
-        await tx
-          .delete(mergeAttempts)
-          .where(eq(mergeAttempts.projectId, project.id));
-        await tx
-          .delete(workingState)
-          .where(eq(workingState.projectId, project.id));
-        await tx.delete(branches).where(eq(branches.projectId, project.id));
-        await tx.delete(ops).where(eq(ops.projectId, project.id));
-        await tx.delete(snapshots).where(eq(snapshots.projectId, project.id));
-        await tx.delete(commits).where(eq(commits.projectId, project.id));
-
-        await seedProjectFromDemo(tx, project.id);
-
+        await resetProjectToPreset(tx, project.id, DEFAULT_PRESET_ID);
         return { done: true as const };
       },
     );

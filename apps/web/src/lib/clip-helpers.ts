@@ -1,18 +1,22 @@
 /**
  * clip-helpers.ts — small, framework-free helpers for rendering the
- * engine's `Clip | TextClip` union.
+ * engine's `Clip | TextClip` union. Imported by UI AND server code (the diff
+ * presenter), so nothing React-specific may live here.
  *
- * NOTE on clip labels (spec gap, resolved here — see findings): the engine's
- * `Clip` type (packages/engine/src/types.ts) carries no `name`/`label`
- * field — only `id`, `mediaRefId`, ranges, `properties`, `lineage`. OTIO
- * clip names exist only at import time and are not part of the committed
- * domain model. The brief (§8.1) asks the timeline to show "its name/label"
- * per clip; the smallest option consistent with the lock is to derive a
- * readable label from the referenced media's filename (e.g.
- * "/media/interview.mp4" → "Interview"), falling back to the clip id.
+ * Display names (D4(1), copy sheet #125): the engine now carries an
+ * optional, non-semantic `name` on Clip / TextClip / Track (read from the
+ * OTIO clip/track name). A raw id is NEVER shown to a user: the fallbacks
+ * below are the media filename, the text content, and finally
+ * `Untitled clip`.
  */
 
-import type { Clip, MediaRef, TextClip, Timeline } from "@framebranch/engine";
+import type {
+  Clip,
+  MediaRef,
+  TextClip,
+  Timeline,
+  Track,
+} from "@framebranch/engine";
 
 export type AnyClip = Clip | TextClip;
 
@@ -51,7 +55,7 @@ export function fileStem(url: string): string {
   return base.replace(/\.[^./]+$/, "");
 }
 
-/** `/media/interview.mp4` → `Interview` (spec gap — see file header). */
+/** `/media/interview.mp4` → `Interview`; `/media/b_roll.mp4` → `B Roll`. */
 export function labelFromMediaUrl(url: string): string {
   const stem = fileStem(url);
   const words = stem.replace(/[-_]+/g, " ").trim();
@@ -59,13 +63,48 @@ export function labelFromMediaUrl(url: string): string {
   return words.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function clipLabel(
+/** Text clips fall back to their content, cut at 24 characters. */
+export const TEXT_NAME_MAX = 24;
+
+/** Copy sheet #125 — the last-resort name. Never a raw id. */
+export const UNTITLED_CLIP = "Untitled clip";
+export const EMPTY_TEXT = "Empty text";
+
+/**
+ * D4(1) — the one place a clip gets its human name.
+ *   1. `clip.name` (the OTIO clip name, trimmed)
+ *   2. media clip → the media filename without extension, title-cased
+ *   3. text clip → its text (first 24 chars, `…` if cut); empty → `Empty text`
+ *   4. `Untitled clip`
+ */
+export function clipDisplayName(
   clip: AnyClip,
   mediaRef: MediaRef | undefined,
 ): string {
-  if (isTextClip(clip)) return clip.textContent || "(empty text)";
+  const own = clip.name?.trim();
+  if (own) return own;
+  if (isTextClip(clip)) {
+    const text = clip.textContent.trim();
+    if (text.length === 0) return EMPTY_TEXT;
+    return text.length > TEXT_NAME_MAX
+      ? `${text.slice(0, TEXT_NAME_MAX).trimEnd()}…`
+      : text;
+  }
   if (mediaRef) return labelFromMediaUrl(mediaRef.url);
-  return `Clip ${clip.id}`;
+  return UNTITLED_CLIP;
+}
+
+/**
+ * Track display: `track.name` → else `V1/V2…` (video), `A1/A2…` (audio),
+ * `T1/T2…` (text), numbered by position among tracks of the same kind.
+ */
+export function trackDisplayName(track: Track, timeline: Timeline): string {
+  const own = track.name?.trim();
+  if (own) return own;
+  const sameKind = timeline.tracks.filter((t) => t.kind === track.kind);
+  const index = sameKind.findIndex((t) => t.id === track.id);
+  const prefix = track.kind === "video" ? "V" : track.kind === "audio" ? "A" : "T";
+  return `${prefix}${(index === -1 ? sameKind.length : index) + 1}`;
 }
 
 /**

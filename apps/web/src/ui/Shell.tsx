@@ -8,7 +8,7 @@ import type { PendingOp } from "../server/types";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import { ApiClientError } from "../lib/data/api-client";
-import { clipLabel, findClipById, findMediaRef } from "../lib/clip-helpers";
+import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import {
   useOpsHistoryMutation,
@@ -570,7 +570,7 @@ export function Shell() {
               ) : (
                 <ClipProperties
                   clip={selectedClip}
-                  displayName={clipLabel(selectedClip, mediaRef)}
+                  displayName={clipDisplayName(selectedClip, mediaRef)}
                   mediaKind={mediaRef?.kind}
                   disabled={editingPaused}
                   resetToken={propertyErrorTick}
