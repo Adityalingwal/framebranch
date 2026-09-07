@@ -2,6 +2,7 @@
 
 import { ArrowLeft } from "@phosphor-icons/react";
 
+import type { HistoryCommit } from "../../lib/data/api-client";
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { MergePanel } from "./MergePanel";
@@ -20,7 +21,12 @@ export function RightPanel({
   onViewChange,
   currentBranch,
   pendingCount,
+  head,
+  headCardName,
+  changesCount,
+  viewingCommitId,
   onHighlightClip,
+  onViewCard,
   hasInspector,
   onCloseToInspector,
 }: {
@@ -28,7 +34,12 @@ export function RightPanel({
   onViewChange: (view: PanelView) => void;
   currentBranch: string;
   pendingCount: number;
+  head: string | null;
+  headCardName: string | null;
+  changesCount: number | undefined;
+  viewingCommitId: string | null;
   onHighlightClip: (clipId: string | null) => void;
+  onViewCard: (commit: HistoryCommit) => void;
   hasInspector?: boolean;
   onCloseToInspector?: () => void;
 }) {
@@ -107,7 +118,16 @@ export function RightPanel({
         {view === "merge" && (
           <MergePanel currentBranch={currentBranch} />
         )}
-        {view === "history" && <HistoryPanel currentBranch={currentBranch} />}
+        {view === "history" && (
+          <HistoryPanel
+            currentBranch={currentBranch}
+            head={head}
+            headCardName={headCardName}
+            changesCount={changesCount}
+            viewingCommitId={viewingCommitId}
+            onViewCard={onViewCard}
+          />
+        )}
       </div>
     </div>
   );

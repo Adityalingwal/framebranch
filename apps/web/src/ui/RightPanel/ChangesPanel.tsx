@@ -9,7 +9,7 @@ import {
   useDiffQuery,
   useHistoryQuery,
 } from "../../lib/data/hooks";
-import { relativeTime } from "../../lib/format";
+import { formatClock } from "../../lib/format";
 import { CustomSelect } from "../CustomSelect";
 
 /**
@@ -179,9 +179,11 @@ function VersionPicker({
         options={commits.map((commit) => ({
           value: commit.commitId,
           label: commit.name,
-          description: relativeTime(commit.createdAt),
+          description: formatClock(commit.createdAt),
+          // `actor` is gone from the History item (B1); the badge is the
+          // card KIND now — only an agent run gets the robot.
           icon:
-            commit.actor === "agent" ? (
+            commit.kind === "agent-run" ? (
               <Robot size={15} weight="duotone" aria-hidden />
             ) : (
               <User size={15} weight="duotone" aria-hidden />

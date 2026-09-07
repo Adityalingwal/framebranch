@@ -36,20 +36,50 @@ export function toSeconds(t: RationalTime): number {
   return t.value / t.rate;
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
 /**
- * Coarse relative time ("3m ago"). UI-only: C5 replaces every use with
- * clock time in B1/B5; nothing server-facing may call this.
+ * C5 #77 — the ONE time format the product shows. Relative time
+ * (`3m ago`) is gone: versions are points in time you compare, so the
+ * clock is what tells you which is which.
+ *
+ *   same calendar day        → `5:11 pm`
+ *   within the previous 6    → `Tue 5:11 pm`
+ *   older (or in the future) → `4 Sep, 5:11 pm`
+ *
+ * Hand-rolled and locale-independent on purpose: `toLocaleString` would
+ * make the string follow the viewer's machine, and the lock names exact
+ * shapes (12-hour, no leading zero on the hour, lowercase am/pm, no
+ * year — demo-lens). Day distance is counted in CALENDAR days from the
+ * local date parts, so a DST shift cannot move a card to another day.
  */
-export function relativeTime(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diffMs / 1000);
-  if (s < 5) return "just now";
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.floor(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+export function formatClock(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  const hours24 = at.getHours();
+  const hour = hours24 % 12 === 0 ? 12 : hours24 % 12;
+  const clock = `${hour}:${pad(at.getMinutes())} ${hours24 < 12 ? "am" : "pm"}`;
+
+  const startOfDay = (date: Date) =>
+    Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+  const daysAgo = Math.round(
+    (startOfDay(now) - startOfDay(at)) / (24 * 60 * 60 * 1000),
+  );
+
+  if (daysAgo === 0) return clock;
+  if (daysAgo >= 1 && daysAgo <= 6) return `${WEEKDAYS[at.getDay()]} ${clock}`;
+  return `${at.getDate()} ${MONTHS[at.getMonth()]}, ${clock}`;
 }

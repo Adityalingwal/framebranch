@@ -1330,6 +1330,181 @@ body.workspace-is-resizing-horizontal * {
   background: rgba(251, 177, 60, 0.05);
 }
 
+
+/* ── B4-2 History panel: cards, in-place folds, Now-line ─────────── */
+.history-now-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 2px;
+  color: var(--fb-text-dim);
+  font-size: 11px;
+}
+
+.history-now-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fb-warn);
+  flex-shrink: 0;
+}
+
+.history-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--fb-radius-md);
+  background: rgba(13, 13, 18, 0.46);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 4px 16px rgba(0, 0, 0, 0.35);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 0.15s var(--fb-ease-hover),
+    background 0.15s var(--fb-ease-hover);
+}
+
+.history-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.history-card.is-current {
+  border-color: rgba(63, 207, 142, 0.35);
+}
+
+.history-card.is-viewing {
+  border-color: rgba(79, 162, 255, 0.55);
+  background: rgba(79, 162, 255, 0.06);
+}
+
+.history-card-row1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.history-card-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.history-card-name {
+  flex: 1;
+  min-width: 0;
+  color: var(--fb-text-body-2);
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-card-pill {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--fb-radius-pill);
+  color: var(--fb-good);
+  background: rgba(63, 207, 142, 0.12);
+  font-size: 10px;
+}
+
+.history-card-meta {
+  color: var(--fb-text-dim);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.history-fold {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: -2px 6px 0;
+}
+
+.history-fold-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fb-text-mute);
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-fold-head:hover,
+.history-fold-head:focus-visible {
+  color: var(--fb-text-dim);
+  outline: none;
+}
+
+.history-fold-chevron {
+  display: inline-block;
+  font-size: 9px;
+  transition: transform 0.15s var(--fb-ease-hover);
+}
+
+.history-fold.is-open .history-fold-chevron {
+  transform: rotate(90deg);
+}
+
+.history-fold-items {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-left: 3px;
+  padding: 2px 0 4px 14px;
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.history-auto-card {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-auto-card:hover,
+.history-auto-card:focus-visible {
+  border-color: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+.history-auto-card.is-viewing {
+  border-color: rgba(79, 162, 255, 0.55);
+  background: rgba(79, 162, 255, 0.06);
+}
+
+.history-auto-name {
+  color: var(--fb-text-dim);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-auto-meta {
+  color: var(--fb-text-mute);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Expandable workspace rail ───────────────────────────────────── */
 
 .rail-shell {

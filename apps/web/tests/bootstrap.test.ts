@@ -106,7 +106,6 @@ describe("first visit bootstrap", () => {
       commits: {
         name: string;
         kind: string;
-        actor: string;
         actorName: string | null;
         parents: string[];
         changes: number;
@@ -118,7 +117,6 @@ describe("first visit bootstrap", () => {
     expect(data.commits[0].kind).toBe("seed");
     expect(data.commits[0].name).toBe("Travel vlog");
     expect(data.commits[0].actorName).toBeNull();
-    expect(data.commits[0].actor).toBe("user");
     expect(data.commits[0].parents).toEqual([]);
     expect(data.commits[0].changes).toBe(0);
     expect(data.commits[0].importWarnings).toEqual([]);

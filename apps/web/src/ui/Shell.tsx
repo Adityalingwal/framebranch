@@ -58,6 +58,12 @@ export function Shell() {
     DEFAULT_WORKSPACE_LAYOUT,
   );
   const [workspaceLayoutLoaded, setWorkspaceLayoutLoaded] = useState(false);
+  // B5-1 — the card being looked at. Nothing is written by entering or
+  // leaving; this state IS View mode.
+  const [viewing, setViewing] = useState<{
+    commitId: string;
+    name: string;
+  } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const timeline = useTimelineQuery(currentBranch);
@@ -555,7 +561,17 @@ export function Shell() {
                   onViewChange={setView}
                   currentBranch={currentBranch}
                   pendingCount={data.pendingCount}
+                  head={head}
+                  headCardName={headCard?.name ?? null}
+                  changesCount={changesCount}
+                  viewingCommitId={viewing?.commitId ?? null}
                   onHighlightClip={setHighlightedClipId}
+                  onViewCard={(commit) =>
+                    setViewing({
+                      commitId: commit.commitId,
+                      name: commit.name,
+                    })
+                  }
                   hasInspector={Boolean(selectedClip)}
                   onCloseToInspector={() => setRightPanelMode("inspector")}
                 />

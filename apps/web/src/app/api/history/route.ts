@@ -44,8 +44,6 @@ export type HistoryItem = {
   name: string;
   /** null only on the seed card (meta shows `Start · ‹time›`). */
   actorName: string | null;
-  /** Kept for today's UI badges (👤/🤖); B1 switches to `kind`. */
-  actor: "user" | "agent";
   createdAt: string;
   parents: string[];
   /** Presenter row count vs the first parent; 0 for seed/import. */
@@ -71,7 +69,6 @@ export async function historyOf(
       kind: row.kind,
       name: row.name,
       actorName: row.actorName,
-      actor: row.actor,
       createdAt: row.createdAt.toISOString(),
       // parent2_id is non-null only on bring-in cards (C3), so a normal
       // card reports one parent and the root reports none.
