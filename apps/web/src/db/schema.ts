@@ -99,6 +99,14 @@ export const commits = pgTable(
      * name box exists, so its meta shows `Start · ‹time›` only (C1(6)).
      */
     actorName: text("actor_name"),
+    /**
+     * B1 §2.2 — the presenter's row count of this card vs its first parent,
+     * written once at commit time (`GET /api/history` used to recompute it
+     * per card per request). NULLABLE on purpose: SQL cannot backfill a
+     * diff, so rows written before this column exists carry NULL and the
+     * History GET fills them in, once each.
+     */
+    changes: integer("changes"),
     snapshotDistance: integer("snapshot_distance").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

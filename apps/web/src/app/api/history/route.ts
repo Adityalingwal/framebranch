@@ -9,12 +9,23 @@
  * never op counts). 0 for seed and import cards (a seed has no parent; an
  * import is a fresh start with new ids, so a diff would be noise).
  *
+ * B1 §2.2 — `changes` is STORED at commit time (`commits.changes`), so this
+ * route reads it instead of diffing every card on every request. One
+ * exception, and it is the reason this read can write: a row created before
+ * that column existed carries NULL. Such a row is counted once and the
+ * value is UPDATEd inside this read's transaction, so the next GET (and
+ * every one after it) is a pure read. A project created on this build never
+ * takes that path — every writer fills the column.
+ *
  * `cut` missing → E_BAD_REQUEST; unknown → E_BRANCH_NOT_FOUND (the same
  * answer `GET /api/timeline` gives).
  */
 
-import type { ImportWarning, Timeline } from "@framebranch/engine";
+import { and, eq } from "drizzle-orm";
 
+import type { ImportWarning } from "@framebranch/engine";
+
+import { commits } from "../../../db/schema";
 import { chainOf } from "../../../server/ancestry";
 import { loadBranch } from "../../../server/branches";
 import type { CommitRow } from "../../../server/commits";
@@ -53,18 +64,6 @@ export async function historyOf(
   const branch = await loadBranch(tx, projectId, cut);
   const chain = await chainOf(tx, projectId, branch.headCommitId);
 
-  // Materialising each card and its parent: at demo scale (tens of cards,
-  // snapshot every 10) this is cheap; the cache keeps each id to one load.
-  const timelines = new Map<string, Promise<Timeline>>();
-  const timelineOf = (id: string): Promise<Timeline> => {
-    let hit = timelines.get(id);
-    if (!hit) {
-      hit = loadCommitTimeline(tx, projectId, id);
-      timelines.set(id, hit);
-    }
-    return hit;
-  };
-
   const items: HistoryItem[] = [];
   for (const row of chain) {
     items.push({
@@ -79,25 +78,37 @@ export async function historyOf(
       parents: [row.parentId, row.parent2Id].filter(
         (id): id is string => id !== null,
       ),
-      changes: await changesOf(row, timelineOf),
+      changes: row.changes ?? (await fillLegacyChanges(tx, projectId, row)),
       importWarnings: row.importWarnings,
     });
   }
   return items;
 }
 
-async function changesOf(
+/**
+ * A pre-B1 row has no stored count. Compute it once and write it back, so
+ * this GET stops writing after the first pass over a legacy project.
+ */
+async function fillLegacyChanges(
+  tx: Tx,
+  projectId: string,
   row: CommitRow,
-  timelineOf: (id: string) => Promise<Timeline>,
 ): Promise<number> {
-  if (row.parentId === null || NO_CHANGES_KINDS.has(row.kind)) return 0;
-  // For a bring-in, parent 1 (`parentId`) is the `into` side by construction
-  // (createCommit sets it from the into-branch's working base).
-  const [before, after] = await Promise.all([
-    timelineOf(row.parentId),
-    timelineOf(row.id),
-  ]);
-  return presentDiff(before, after).count;
+  let count = 0;
+  if (row.parentId !== null && !NO_CHANGES_KINDS.has(row.kind)) {
+    // For a bring-in, parent 1 (`parentId`) is the `into` side by
+    // construction (createCommit sets it from the into-branch's base).
+    const [before, after] = await Promise.all([
+      loadCommitTimeline(tx, projectId, row.parentId),
+      loadCommitTimeline(tx, projectId, row.id),
+    ]);
+    count = presentDiff(before, after).count;
+  }
+  await tx
+    .update(commits)
+    .set({ changes: count })
+    .where(and(eq(commits.id, row.id), eq(commits.projectId, projectId)));
+  return count;
 }
 
 export async function GET(request: Request): Promise<Response> {

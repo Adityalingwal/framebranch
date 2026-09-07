@@ -64,6 +64,8 @@ export async function sealIfDirty(
     actor: "user",
     kind: "auto",
     actorName,
+    // B1 §2.2 — the diff is already computed here; never diff twice.
+    changes: presented.count,
   });
   return { sealed: true, commitId: commit.commitId, name: commit.name };
 }

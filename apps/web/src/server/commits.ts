@@ -16,8 +16,10 @@ import { and, eq } from "drizzle-orm";
 import type { ImportWarning, Timeline } from "@framebranch/engine";
 
 import { branches, commits, ops, snapshots, workingState } from "../db/schema";
+import { presentDiff } from "./diff-rows";
 import { ApiError } from "./envelope";
 import { appendEvent } from "./events";
+import { loadCommitTimeline } from "./timeline";
 import type { BranchRow, WorkingStateRow } from "./branches";
 import type { Actor, CommitKind, PendingOp } from "./types";
 import type { Tx } from "./tx";
@@ -52,6 +54,14 @@ export type CreateCommitInput = {
    * null.
    */
   actorName: string | null;
+  /**
+   * B1 §2.2 — the card's `‹N› changes`, stored instead of recomputed by
+   * every `GET /api/history`. Pass it when the caller has already diffed
+   * this content against the parent (`sealIfDirty` has `presented.count`);
+   * omit it and this function counts once, here. `import` cards are 0 by
+   * definition (fresh ids make the diff noise), like the seed.
+   */
+  changes?: number;
   /** The second parent — non-null ONLY on merge commits. */
   parent2Id?: string | null;
   /**
@@ -89,12 +99,23 @@ export async function createCommit({
   actor,
   kind,
   actorName,
+  changes,
   parent2Id = null,
   forceSnapshot = false,
   importWarnings = null,
 }: CreateCommitInput): Promise<{ commitId: string; name: string }> {
   const parentId = working.baseCommitId;
   const pending: PendingOp[] = working.pendingOps;
+
+  // B1 §2.2 — `changes` is written here, once, and never recomputed on read.
+  // For a bring-in, `parentId` is the `into` side by construction, which is
+  // exactly the side the old per-request rule counted against.
+  const changeCount =
+    kind === "import"
+      ? 0
+      : (changes ??
+        presentDiff(await loadCommitTimeline(tx, projectId, parentId), timeline)
+          .count);
 
   const parentRows = await tx
     .select({ snapshotDistance: commits.snapshotDistance })
@@ -130,6 +151,7 @@ export async function createCommit({
     actor,
     kind,
     actorName,
+    changes: changeCount,
     snapshotDistance,
     importWarnings,
   });

@@ -1,0 +1,1 @@
+ALTER TABLE "commits" ADD COLUMN "changes" integer;
