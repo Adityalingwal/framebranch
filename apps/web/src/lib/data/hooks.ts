@@ -4,14 +4,21 @@
  * hooks.ts — TanStack Query wiring over api-client.ts.
  *
  * Invalidation rules:
- *  - after a commit          → invalidate timeline + history.
- *  - after branch create/switch → invalidate timeline (+ history if a seal
- *    happened).
- *  - after restore           → both.
- *  - after demo reset        → invalidate everything.
+ *  - after a commit          → invalidate timeline + refreshBranches.
+ *  - after branch create/switch → invalidate timelines + refreshBranches.
+ *  - after restore/merge/import/agent/export → same.
+ *  - after demo reset / new project → invalidate everything.
+ *
+ * A1a/A1b: `refreshBranches` = the branch list (heads) AND every cut's
+ * History — the two must move together or the new head has no card.
  */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 
 import type { Command, MergeChoice } from "@framebranch/engine";
 import type { PendingOp } from "../../server/types";
@@ -22,10 +29,19 @@ import {
   reportConnectionLost,
   reportConnectionRestored,
 } from "../state/connection-status";
-import { recordHead, resetHeads } from "../state/head-tracking";
 import { computeOptimisticResult, isOptimisticVerb } from "../optimistic";
 import { queryKeys } from "./query-keys";
 import { showToast } from "../state/toast-status";
+
+/**
+ * A1a patch (a): called after create / switch / commit / merge / restore /
+ * import / agent / reset — anything that can move a head or add a cut.
+ */
+export function refreshBranches(queryClient: QueryClient): void {
+  queryClient.invalidateQueries({ queryKey: queryKeys.branches() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.diffAll() });
+}
 
 function onMutationError(error: unknown): void {
   showToast(api.mutationErrorMessage(error), "error");
@@ -43,29 +59,45 @@ export function useTimelineQuery(branch: string) {
   });
 }
 
-export function useHistoryQuery() {
+/**
+ * A1a — the cut list with heads. A1a patch (b): the app turns
+ * refetchOnWindowFocus off globally; this query alone turns it back on.
+ * A1a patch (c): pass `enabled: false` until the timeline GET has answered
+ * on first load (two cookie-less parallel calls would mint two projects).
+ */
+export function useBranchesQuery(enabled = true) {
   return useQuery({
-    queryKey: queryKeys.history(),
-    queryFn: () => api.getHistory(),
+    queryKey: queryKeys.branches(),
+    queryFn: () => api.getBranches(),
+    refetchOnWindowFocus: true,
+    enabled,
   });
 }
 
-export function useDiffQuery(from: string | null, to: string | null) {
+/** B2 — the current cut's chain only. */
+export function useHistoryQuery(cut: string) {
   return useQuery({
-    queryKey: queryKeys.diff(from ?? "", to ?? ""),
-    queryFn: () => api.getDiff(from as string, to as string),
-    enabled: from !== null && to !== null,
+    queryKey: queryKeys.history(cut),
+    queryFn: () => api.getHistory(cut),
+  });
+}
+
+/** D2/D4 — `a`/`b` are commit ids or `api.NOW_SIDE`; server orders them. */
+export function useDiffQuery(cut: string, a: string | null, b: string | null) {
+  return useQuery({
+    queryKey: queryKeys.diff(cut, a ?? "", b ?? ""),
+    queryFn: () => api.getDiff(cut, a as string, b as string),
+    enabled: a !== null && b !== null,
   });
 }
 
 export function useSaveVersionMutation(branch: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (name?: string) => api.postCommit({ branch, name }, retryHooks),
-    onSuccess: (data) => {
-      recordHead(branch, data.commitId); // head-tracking.ts
+    mutationFn: (name: string) => api.postCommit({ branch, name }, retryHooks),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(branch) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+      refreshBranches(queryClient);
     },
     onError: onMutationError,
   });
@@ -77,17 +109,13 @@ export function useCreateBranchMutation() {
     mutationFn: (input: { name: string; from: string }) =>
       api.postBranch(input, retryHooks),
     onSuccess: (data, variables) => {
-      recordHead(data.name, data.headCommitId);
-      if (data.sealedCommitId) recordHead(variables.from, data.sealedCommitId);
       queryClient.invalidateQueries({
         queryKey: queryKeys.timeline(variables.from),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.timeline(data.name),
       });
-      if (data.sealedCommitId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-      }
+      refreshBranches(queryClient);
     },
     onError: onMutationError,
   });
@@ -98,17 +126,14 @@ export function useSwitchBranchMutation() {
   return useMutation({
     mutationFn: (input: { from: string; to: string }) =>
       api.postBranchSwitch(input, retryHooks),
-    onSuccess: (data, variables) => {
-      if (data.sealedCommitId) recordHead(variables.from, data.sealedCommitId);
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.timeline(variables.from),
       });
       queryClient.invalidateQueries({
         queryKey: queryKeys.timeline(variables.to),
       });
-      if (data.sealedCommitId) {
-        queryClient.invalidateQueries({ queryKey: queryKeys.history() });
-      }
+      refreshBranches(queryClient);
     },
     onError: onMutationError,
   });
@@ -119,10 +144,9 @@ export function useRestoreMutation(branch: string) {
   return useMutation({
     mutationFn: (commitId: string) =>
       api.postRestore({ branch, commitId }, retryHooks),
-    onSuccess: (data) => {
-      recordHead(branch, data.commitId);
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(branch) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+      refreshBranches(queryClient);
     },
     onError: onMutationError,
   });
@@ -133,7 +157,6 @@ export function useDemoResetMutation() {
   return useMutation({
     mutationFn: () => api.postDemoReset(retryHooks),
     onSuccess: () => {
-      resetHeads();
       queryClient.invalidateQueries();
     },
     onError: onMutationError,
@@ -216,6 +239,8 @@ export function useOpsMutation(branch: string) {
         });
       }
       queryClient.invalidateQueries({ queryKey: key });
+      // D2 patch: an edit changes every "‹card› → Now" diff on this cut.
+      queryClient.invalidateQueries({ queryKey: queryKeys.diffAll(branch) });
     },
   });
 }
@@ -251,6 +276,7 @@ export function useOpsHistoryMutation(branch: string) {
         });
       }
       queryClient.invalidateQueries({ queryKey: key });
+      queryClient.invalidateQueries({ queryKey: queryKeys.diffAll(branch) });
     },
     onError: (error) => {
       if (error instanceof ApiClientError && error.code === "E_STALE_REV") {
@@ -316,12 +342,11 @@ export function useAgentSimulateMutation() {
   return useMutation({
     mutationFn: (input: { branch: string; script: string }) =>
       api.postAgentSimulate(input, retryHooks),
-    onSuccess: (data, variables) => {
-      recordHead(variables.branch, data.commitId);
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.timeline(variables.branch),
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+      refreshBranches(queryClient);
     },
     // An agent-run failure is all-or-nothing — one verb failing mid-script
     // writes nothing at all. Show a fixed message rather than the per-code
@@ -337,12 +362,11 @@ export function useImportMutation() {
   return useMutation({
     mutationFn: (input: { branch: string; otioJson: unknown }) =>
       api.postImport(input, retryHooks),
-    onSuccess: (data, variables) => {
-      recordHead(variables.branch, data.commitId);
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.timeline(variables.branch),
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+      refreshBranches(queryClient);
     },
     onError: onMutationError,
   });
@@ -353,14 +377,11 @@ export function useExportMutation() {
   return useMutation({
     mutationFn: (branch: string) => api.postExport({ branch }, retryHooks),
     onSuccess: (_data, branch) => {
-      // Export is a boundary endpoint — auto-seal if dirty.
-      // auto-sealed first. The locked response shape carries no
-      // `sealedCommitId` for export (unlike branch/switch), so there is no
-      // signal telling the UI whether that happened — invalidating both
-      // unconditionally is the safe default (a no-op refetch if nothing
-      // changed).
+      // Export is a boundary endpoint — it auto-seals if dirty. The response
+      // carries no `sealedCommitId`, so refresh unconditionally (a no-op
+      // refetch if nothing changed).
       queryClient.invalidateQueries({ queryKey: queryKeys.timeline(branch) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.history() });
+      refreshBranches(queryClient);
     },
     onError: onMutationError,
   });

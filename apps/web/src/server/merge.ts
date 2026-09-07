@@ -13,7 +13,8 @@ import { and, eq } from "drizzle-orm";
 import { finalizeCheck } from "@framebranch/engine";
 import type { MergeChoices, Timeline } from "@framebranch/engine";
 
-import { commits, mergeAttempts } from "../db/schema";
+import { mergeAttempts } from "../db/schema";
+import { ancestorsOf, loadParentMap } from "./ancestry";
 import { loadBranchById, loadWorkingState } from "./branches";
 import { createCommit } from "./commits";
 import { ApiError } from "./envelope";
@@ -35,43 +36,6 @@ export type MergeSides = {
   ours: Timeline;
   theirs: Timeline;
 };
-
-type ParentMap = Map<string, string[]>;
-
-async function loadParentMap(tx: Tx, projectId: string): Promise<ParentMap> {
-  // Project-scoped, like every query. One read of this project's commit
-  // graph — the demo-scale DAG is tiny and this keeps the walk pure.
-  const rows = await tx
-    .select({
-      id: commits.id,
-      parentId: commits.parentId,
-      parent2Id: commits.parent2Id,
-    })
-    .from(commits)
-    .where(eq(commits.projectId, projectId));
-
-  const map: ParentMap = new Map();
-  for (const row of rows) {
-    map.set(
-      row.id,
-      [row.parentId, row.parent2Id].filter((id): id is string => id !== null),
-    );
-  }
-  return map;
-}
-
-/** Every commit reachable from `start` through parent_id AND parent2_id. */
-function ancestorsOf(map: ParentMap, start: string): Set<string> {
-  const seen = new Set<string>();
-  const stack = [start];
-  while (stack.length > 0) {
-    const id = stack.pop() as string;
-    if (seen.has(id)) continue; // the visited set is what makes this terminate
-    seen.add(id);
-    for (const parent of map.get(id) ?? []) stack.push(parent);
-  }
-  return seen;
-}
 
 /**
  * The merge base = the common ancestor of the two heads.

@@ -19,13 +19,17 @@
 
 import type {
   Command,
-  DiffResult,
   ImportWarning,
   MergeChoice,
   MergeConflict,
   MergeCounts,
   Timeline,
 } from "@framebranch/engine";
+// Type-only imports: erased at build time, so no server code reaches the
+// browser bundle — but the client and the route share ONE shape definition.
+import type { BranchListItem } from "../../app/api/branch/route";
+import type { DiffResponse } from "../../app/api/diff/route";
+import type { HistoryItem } from "../../app/api/history/route";
 import type { PendingOp } from "../../server/types";
 
 // ---------------------------------------------------------------------------
@@ -205,20 +209,24 @@ export type TimelineData = {
   sealedCommitId?: string;
 };
 
-export type HistoryCommit = {
-  commitId: string;
-  name: string;
-  actor: "user" | "agent";
-  createdAt: string;
-  parents: string[];
-  importWarnings: ImportWarning[] | null;
-};
+export type HistoryCommit = HistoryItem;
 
+/** B2 — one cut's chain, head first. */
 export type HistoryData = {
+  cut: string;
   commits: HistoryCommit[];
 };
 
-export type DiffData = DiffResult;
+/** A1a/A1b — every cut with its head + Ready state, `main` first. */
+export type BranchesData = {
+  branches: BranchListItem[];
+};
+
+/** D4 — presenter rows, canonicalised older → newer by the server. */
+export type DiffData = DiffResponse;
+
+/** D2 — the working-timeline side of a diff. */
+export const NOW_SIDE = "now";
 
 export function getTimeline(branch: string): Promise<TimelineData> {
   return get<TimelineData>(
@@ -226,14 +234,17 @@ export function getTimeline(branch: string): Promise<TimelineData> {
   );
 }
 
-export function getHistory(): Promise<HistoryData> {
-  return get<HistoryData>("/api/history");
+export function getBranches(): Promise<BranchesData> {
+  return get<BranchesData>("/api/branch");
 }
 
-export function getDiff(from: string, to: string): Promise<DiffData> {
-  return get<DiffData>(
-    `/api/diff?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
-  );
+export function getHistory(cut: string): Promise<HistoryData> {
+  return get<HistoryData>(`/api/history?cut=${encodeURIComponent(cut)}`);
+}
+
+export function getDiff(cut: string, a: string, b: string): Promise<DiffData> {
+  const q = new URLSearchParams({ cut, a, b });
+  return get<DiffData>(`/api/diff?${q.toString()}`);
 }
 
 export function postCommit(

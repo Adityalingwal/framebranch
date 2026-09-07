@@ -13,7 +13,8 @@ import { secondaryButton } from "../styles";
  * Restore, and a merge marker for two-parent commits.
  */
 export function HistoryPanel({ currentBranch }: { currentBranch: string }) {
-  const history = useHistoryQuery();
+  // B2: the current cut's chain only.
+  const history = useHistoryQuery(currentBranch);
   const restore = useRestoreMutation(currentBranch);
   const editingPaused = useConnectionStatus().lost;
 

@@ -96,21 +96,40 @@ describe("first visit bootstrap", () => {
     expect(countClips(snapshotRows[0].timeline)).toBe(5);
   });
 
-  it("C4: GET history reports the import commit with its actor and parents", async () => {
+  it("C4/B2: GET history?cut=main reports the seed card with kind, names, parents and 0 changes", async () => {
     const session: Session = { token: null };
     await get(getTimeline, "/api/timeline?branch=main", session);
-    const data = expectOk(await get(getHistory, "/api/history", session)) as {
+    const data = expectOk(
+      await get(getHistory, "/api/history?cut=main", session),
+    ) as {
+      cut: string;
       commits: {
         name: string;
+        kind: string;
         actor: string;
+        actorName: string | null;
         parents: string[];
+        changes: number;
         importWarnings: unknown;
       }[];
     };
+    expect(data.cut).toBe("main");
     expect(data.commits).toHaveLength(1);
+    expect(data.commits[0].kind).toBe("seed");
+    expect(data.commits[0].name).toBe("Travel vlog");
+    expect(data.commits[0].actorName).toBeNull();
     expect(data.commits[0].actor).toBe("user");
     expect(data.commits[0].parents).toEqual([]);
+    expect(data.commits[0].changes).toBe(0);
     expect(data.commits[0].importWarnings).toEqual([]);
+
+    // B2: the cut is required, and an unknown cut is the usual 404.
+    expect(expectError(await get(getHistory, "/api/history", session)).code).toBe(
+      "E_BAD_REQUEST",
+    );
+    const unknown = await get(getHistory, "/api/history?cut=nope", session);
+    expect(unknown.status).toBe(404);
+    expect(expectError(unknown).code).toBe("E_BRANCH_NOT_FOUND");
   });
 
   it("E_BRANCH_NOT_FOUND: asking for a branch that does not exist is a 404, not a crash", async () => {
