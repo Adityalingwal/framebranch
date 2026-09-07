@@ -31,6 +31,7 @@ export function TopBar({
   headCardName,
   changesCount,
   editingLocked,
+  comparing,
   onBranchChanged,
   onChangesClick,
 }: {
@@ -41,6 +42,8 @@ export function TopBar({
   /** undefined = the diff has not answered yet: show the chip without a number. */
   changesCount: number | undefined;
   editingLocked: boolean;
+  /** B2 #36 — the Compare view is open: the chip's slot says `Comparing`. */
+  comparing: boolean;
   onBranchChanged: (branch: string) => void;
   onChangesClick: () => void;
 }) {
@@ -144,6 +147,12 @@ export function TopBar({
           )}
         </div>
 
+        {/* #36 — while the Compare view is open the chip's slot carries a
+            plain `Comparing` pill instead: not a button, no count. The
+            chip (and its number) comes back the moment Compare closes. */}
+        {comparing ? (
+          <span className="topbar-comparing-pill">Comparing</span>
+        ) : (
         <button
           type="button"
           aria-label="Open Changes"
@@ -172,6 +181,7 @@ export function TopBar({
             "No changes"
           )}
         </button>
+        )}
       </div>
 
       <div className="topbar-version-cluster">

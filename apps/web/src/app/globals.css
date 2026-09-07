@@ -628,6 +628,19 @@ input[type="range"]::-moz-range-thumb {
   background: rgba(255, 255, 255, 0.07);
 }
 
+/* B2 #36 — the Compare-mode pill that takes the chip's slot. Deliberately
+   NOT a button: nothing happens when you press it (mockup `.pill.on`). */
+.topbar-comparing-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--fb-radius-pill);
+  padding: 3px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  background: rgba(79, 162, 255, 0.15);
+  color: var(--fb-accent);
+}
+
 .topbar-changes-chip {
   display: inline-flex;
   align-items: center;
@@ -2437,11 +2450,6 @@ input:disabled {
     0 0 0 3px rgba(43, 127, 255, 0.14);
 }
 
-.timeline-clip.is-highlighted {
-  border-color: var(--fb-warn);
-  box-shadow: 0 0 0 2px rgba(251, 177, 60, 0.18);
-}
-
 .timeline-clip.is-locked {
   cursor: not-allowed;
 }
@@ -2646,4 +2654,413 @@ input:disabled {
   .timeline-zoom input {
     width: 58px;
   }
+}
+
+/* ==========================================================================
+   B2 — the Compare view: the Changes panel's rows (right) and the two
+   lanes that replace the editing timeline (centre).
+   ========================================================================== */
+
+.changes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.changes-pickers {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--fb-text-mute);
+}
+
+.changes-pickers .custom-select-trigger {
+  min-width: 0;
+  flex: 1 1 96px;
+}
+
+.changes-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  align-items: baseline;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  color: var(--fb-text-body);
+}
+
+.changes-summary-count {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.changes-summary-runtime {
+  color: var(--fb-text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.changes-rows {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.changes-group-head {
+  padding: 10px 2px 4px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--fb-text-mute);
+}
+
+.changes-row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  padding: 9px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--fb-radius-sm);
+  cursor: pointer;
+  transition: background 0.12s var(--fb-ease-hover);
+}
+
+.changes-row:hover,
+.changes-row.is-hot {
+  background: var(--fb-panel-2);
+}
+
+.changes-row-thumb {
+  width: 34px;
+  height: 24px;
+  margin-top: 2px;
+  border-radius: 4px;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--fb-text-dim);
+}
+
+.changes-row-thumb.is-added {
+  background: rgba(63, 207, 142, 0.18);
+  color: var(--fb-good);
+}
+
+.changes-row-thumb.is-removed {
+  background: rgba(240, 97, 109, 0.18);
+  color: var(--fb-bad);
+}
+
+.changes-row-thumb.is-ripple {
+  background: rgba(79, 162, 255, 0.18);
+  color: var(--fb-accent);
+}
+
+.changes-row-copy {
+  min-width: 0;
+}
+
+.changes-row-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fb-text-body-2);
+}
+
+.changes-row-toggle {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  font: inherit;
+  font-weight: 400;
+  color: var(--fb-text-mute);
+  cursor: pointer;
+}
+
+.changes-row-what {
+  margin-top: 1px;
+  font-size: 12px;
+  color: var(--fb-text-body);
+}
+
+.changes-row-where {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--fb-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.changes-row-child {
+  padding: 4px 8px 4px 52px;
+  font-size: 11.5px;
+  color: var(--fb-text-dim);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: default;
+}
+
+.changes-row-child:hover {
+  background: var(--fb-panel-2);
+}
+
+.changes-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fb-text-mute);
+}
+
+/* ---- the two lanes (centre, in place of the editing timeline) ---------- */
+
+.compare-lanes {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.compare-scroll-region {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 0 12px;
+}
+
+.compare-content {
+  position: relative;
+}
+
+.compare-ruler-row {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--fb-panel);
+}
+
+.compare-ruler-corner {
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  background: var(--fb-panel);
+}
+
+.compare-ruler-canvas {
+  flex-shrink: 0;
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.compare-lane {
+  margin-top: 10px;
+}
+
+.compare-lane-head {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 8px 4px;
+  background: var(--fb-panel);
+}
+
+.compare-lane-head b {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fb-text-body-2);
+}
+
+.compare-lane-head small {
+  font-size: 10px;
+  color: var(--fb-text-mute);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.compare-lane-tracks {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.compare-track-row {
+  display: flex;
+  align-items: stretch;
+}
+
+.compare-track-label {
+  flex-shrink: 0;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  font-size: 10px;
+  color: var(--fb-text-mute);
+  background: var(--fb-panel);
+}
+
+.compare-track-canvas {
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 4px;
+  background: var(--fb-panel-2);
+  cursor: ew-resize;
+  touch-action: none;
+}
+
+.compare-clip {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.08);
+  /* The thumbnail tiles like a filmstrip at the lane's height rather than
+     being stretched across the whole clip. */
+  background-size: auto 100%;
+  background-repeat: repeat-x;
+  font: inherit;
+  font-size: 10px;
+  color: var(--fb-text-body);
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    box-shadow 0.12s var(--fb-ease-hover),
+    opacity 0.12s var(--fb-ease-hover);
+}
+
+.compare-clip span {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75);
+}
+
+/* D4(2): the eye should see the difference without reading a word. The
+   tint is an overlay, not a background, so it survives on top of a
+   thumbnail and does not fight the highlight ring's own box-shadow. */
+.compare-clip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 3px;
+  background: transparent;
+}
+
+.compare-clip.is-same {
+  opacity: 0.55;
+}
+
+.compare-clip.is-changed {
+  border-color: var(--fb-accent);
+}
+
+.compare-clip.is-changed::before {
+  background: rgba(79, 162, 255, 0.32);
+}
+
+.compare-clip.is-added {
+  border-color: var(--fb-good);
+}
+
+.compare-clip.is-added::before {
+  background: rgba(63, 207, 142, 0.32);
+}
+
+.compare-clip.is-removed {
+  border-color: var(--fb-bad);
+}
+
+.compare-clip.is-removed::before {
+  background: rgba(240, 97, 109, 0.32);
+}
+
+.compare-clip.is-hot {
+  opacity: 1;
+  box-shadow: 0 0 0 2px #fff;
+  z-index: 2;
+}
+
+.compare-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--fb-warn);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ---- the player (top of the centre column) ---------------------------- */
+
+.compare-player {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+/* #127 — the two-segment switch, on the frame (mockup `.ab`). */
+.compare-ab {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--fb-radius-pill);
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 2;
+}
+
+.compare-ab button {
+  padding: 3px 10px;
+  border: none;
+  border-radius: var(--fb-radius-pill);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: #cfd6df;
+  cursor: pointer;
+}
+
+.compare-ab button.is-on {
+  background: #fff;
+  color: #10131a;
+}
+
+/* #128 — `‹clip› · ‹tc›`, bottom-left of the frame. */
+.compare-caption {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  z-index: 2;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: #dfe6f0;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  pointer-events: none;
 }

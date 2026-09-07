@@ -127,6 +127,9 @@ export function useCompareQuery(
   });
 }
 
+/** What `useCompareQuery` hands the Compare surfaces. */
+export type CompareQuery = ReturnType<typeof useCompareQuery>;
+
 export function useSaveVersionMutation(branch: string) {
   const queryClient = useQueryClient();
   return useMutation({

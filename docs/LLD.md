@@ -162,7 +162,7 @@ Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_
 |---|---|---|---|---|---|---|
 | `/api/timeline` | GET | no | no | `branch` | timeline, working rev, pending count | n/a — read-only |
 | `/api/history` | GET | no | no | (project from context) | commits: id, name, actor, time, parents | n/a — read-only |
-| `/api/diff` | GET | no | no | `from`, `to` | diff entries + plain-English sentences | n/a — read-only |
+| `/api/diff` | GET | no | no | `cut`, `a`, `b`, `timelines?` | presenter rows + count + runtime + which side is older; with `timelines=1` also both timelines | n/a — read-only |
 | `/api/ops` | POST | yes | yes | `branch`, `workingRev`, `command` | new working rev, pending count | working-rev mismatch → `E_STALE_REV` |
 | `/api/commit` | POST | yes | yes | `branch`, `name?` | commit id, name | CAS on branch head → `E_STALE_HEAD`; no-op if branch is already clean |
 | `/api/branch` | POST | yes | yes | `name`, `from` | branch id, head commit id | seals the source branch first → `E_STALE_HEAD` possible; `E_BRANCH_EXISTS` if name taken |

@@ -87,7 +87,7 @@ The demo walks through the full system in nine steps, using a single project:
 2. **Branch** — a new branch is created and switched to, so edits from here on happen on a separate line of work instead of the main one.
 3. **Person edits** — the person makes a few edits directly on the timeline (for example, changing a clip's volume).
 4. **Agent edits** — the simulated agent runs its own separate, scripted set of edits.
-5. **Diff** — the two versions are compared, and every change is shown as a plain-English line (for example, "Volume changed from 50 to 80").
+5. **Compare** — the two versions are shown as two lanes, one above the other, with one plain-English row per change beside them (for example, `Interview · Volume 100% → 60%`).
 6. **Merge** — the two branches are combined into one.
 7. **Resolve conflicts** — every conflict the merge produces is shown on screen, each one of the three types described earlier, with its own one-click buttons.
 8. **History** — the project's history shows every edit, marked with who made it — the person or the agent — including the merge itself, which shows both branches it came from. An earlier version can be restored from here.

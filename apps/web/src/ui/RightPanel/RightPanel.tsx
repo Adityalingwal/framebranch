@@ -1,6 +1,8 @@
 "use client";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
+import type { CompareQuery } from "../../lib/data/hooks";
+import type { DiffRow } from "../../server/diff-rows";
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
 import { MergePanel } from "./MergePanel";
@@ -23,9 +25,13 @@ export function RightPanel({
   changesCount,
   viewingCommitId,
   editingLocked,
-  comparePreselect,
-  onComparePreselectConsumed,
+  commits,
+  comparePair,
+  onComparePairChange,
+  compare,
+  highlightedClipIds,
   onHighlightClip,
+  onRowClick,
   onViewCard,
   hasInspector,
   onCloseToInspector,
@@ -39,9 +45,14 @@ export function RightPanel({
   viewingCommitId: string | null;
   /** B5-1 — View mode locks the Merge tab's writes too. */
   editingLocked: boolean;
-  comparePreselect: { from: string; to: string } | null;
-  onComparePreselectConsumed: () => void;
-  onHighlightClip: (clipId: string | null) => void;
+  /** B2 §2.4 — the Compare state lives in the Shell; this panel is a view. */
+  commits: HistoryCommit[];
+  comparePair: { a: string; b: string } | null;
+  onComparePairChange: (pair: { a: string; b: string }) => void;
+  compare: CompareQuery;
+  highlightedClipIds: string[];
+  onHighlightClip: (clipIds: string[]) => void;
+  onRowClick: (row: DiffRow) => void;
   onViewCard: (commit: HistoryCommit) => void;
   hasInspector?: boolean;
   onCloseToInspector?: () => void;
@@ -117,11 +128,13 @@ export function RightPanel({
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
         {view === "changes" && (
           <ChangesPanel
-            currentBranch={currentBranch}
-            head={head}
-            preselect={comparePreselect}
-            onPreselectConsumed={onComparePreselectConsumed}
+            commits={commits}
+            pair={comparePair}
+            onPairChange={onComparePairChange}
+            compare={compare}
+            highlightedClipIds={highlightedClipIds}
             onHighlightClip={onHighlightClip}
+            onRowClick={onRowClick}
           />
         )}
         {view === "merge" && (

@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import type { Command, PropertyValue, Track } from "@framebranch/engine";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
+import type { DiffRow } from "../server/diff-rows";
 import { ApiClientError } from "../lib/data/api-client";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { quoted } from "../lib/format";
@@ -14,6 +15,7 @@ import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
 import {
   useBranchesQuery,
+  useCompareQuery,
   useDiffQuery,
   useHistoryQuery,
   useOpsMutation,
@@ -22,6 +24,8 @@ import {
   useTimelineQuery,
 } from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
+import { CompareLanes } from "./Compare/CompareLanes";
+import { ComparePlayer } from "./Compare/ComparePlayer";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { IconRail } from "./IconRail";
 import { NameGate } from "./NameGate";
@@ -53,9 +57,10 @@ export function Shell() {
   const [currentBranch, setCurrentBranch] = useState("main");
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [playheadFrame, setPlayheadFrame] = useState(0);
-  const [highlightedClipId, setHighlightedClipId] = useState<string | null>(
-    null,
-  );
+  // B2 §2.4 — one row can touch many clips (a ripple, a split), so the
+  // highlight is a LIST. There is exactly one highlight mechanism in the
+  // app and it belongs to Compare; the editing timeline has none.
+  const [highlightedClipIds, setHighlightedClipIds] = useState<string[]>([]);
   const [rightPanelMode, setRightPanelMode] = useState<
     "inspector" | "versioning"
   >("versioning");
@@ -70,17 +75,22 @@ export function Shell() {
     name: string;
   } | null>(null);
   const [restoreOpen, setRestoreOpen] = useState(false);
-  // B5 IMPL-NOTE (d) — the pair the Compare button hands to the Changes
-  // panel; consumed once, then cleared by the panel.
-  const [comparePreselect, setComparePreselect] = useState<{
-    from: string;
-    to: string;
+  // B2 §2.4 — the two points being compared. It lives HERE, not in the
+  // panel, because three different doors set it and the lanes (centre) and
+  // the rows (right) must read the same pair. Values are commit ids or
+  // `NOW_SIDE`; the ORDER never matters (D4(12) — the server says which is
+  // older and the view always reads older → newer).
+  const [comparePair, setComparePair] = useState<{
+    a: string;
+    b: string;
+  } | null>(null);
+  // B2 §2.7 — which side the player is showing and which clip it is
+  // focused on. Compare-only; cleared on the way in and on the way out.
+  const [compareFocus, setCompareFocus] = useState<{
+    side: "before" | "after";
+    clipId: string | null;
   } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
-
-  // Stable, so consuming the preselect cannot re-run the panel's effect on
-  // an unrelated Shell render.
-  const clearComparePreselect = useCallback(() => setComparePreselect(null), []);
 
   const timeline = useTimelineQuery(currentBranch);
   const opsMutation = useOpsMutation(currentBranch);
@@ -89,7 +99,16 @@ export function Shell() {
   // read-only, exactly as it is while the connection is lost. ONE derived
   // flag drives every consumer that used to read the connection store on
   // its own, so nothing can be locked in one place and live in another.
-  const editingPaused = connectionLost || viewing !== null;
+  //
+  // B2 lock (1): Compare is read-only too, and it is the SAME flag — every
+  // consumer B1 wired (top bar Mark / Cut menu, rail, Merge panel, the
+  // keyboard) is locked by it with no new wiring.
+  //
+  // `compareOpen` is derived from the URL param ALONE. Adding
+  // `rightPanelMode` to the condition would allow a `changes + inspector`
+  // state where the lanes are hidden but editing is unlocked.
+  const compareOpen = view === "changes";
+  const editingPaused = connectionLost || viewing !== null || compareOpen;
 
   // ---- A1a/A1b/D2: cuts, head and the ONE changes number, derived here --
   // Every consumer (top bar, rail badge, History, Restore box) is handed
@@ -125,6 +144,71 @@ export function Shell() {
     head !== null && historyCommits[0]?.commitId === head
       ? historyCommits[0]
       : null;
+
+  // ---- B2: the Compare pair, and the ONE query behind lanes + rows ------
+
+  // (i) A commit id means nothing on another cut's chain. This is an effect
+  // on `currentBranch` rather than a line inside `switchToBranch` because
+  // `resetToFreshDemo` sets the cut directly and would otherwise miss it.
+  useEffect(() => {
+    setComparePair(null);
+  }, [currentBranch]);
+
+  // (ii) D3a — the default pair, applied as soon as the head is known:
+  // `head → Now`, which is exactly what the top-bar chip counts. Only ever
+  // fills a null pair, so the user's own picks are never overwritten.
+  useEffect(() => {
+    if (comparePair !== null || head === null) return;
+    setComparePair({ a: head, b: NOW_SIDE });
+  }, [comparePair, head]);
+
+  // Lanes and rows come from ONE snapshot (lock (4)); its key is a child of
+  // `diffAll(cut)`, so an edit refreshes both together.
+  const compare = useCompareQuery(
+    currentBranch,
+    comparePair?.a ?? null,
+    comparePair?.b ?? null,
+  );
+
+  /**
+   * B2 lock (3) — a row click sends the player exactly where the row's own
+   * last timecode says the clip now is. The presenter already worked all of
+   * this out (`jump`); the Shell only obeys it.
+   */
+  const handleRowClick = useCallback((row: DiffRow) => {
+    setCompareFocus({ side: row.jump.side, clipId: row.jump.clipId });
+    setPlayheadFrame(row.jump.frame);
+  }, []);
+
+  /**
+   * §2.6 — clicking a clip in a lane: the player focuses that clip on that
+   * side and the playhead goes to the clip's start THERE (the same clip can
+   * sit at two different positions on the two sides).
+   */
+  const handleCompareClipClick = useCallback(
+    (side: "before" | "after", clipId: string) => {
+      const lane = side === "before" ? compare.data?.before : compare.data?.after;
+      setCompareFocus({ side, clipId });
+      const clip = lane ? findClipById(lane, clipId) : undefined;
+      if (clip) setPlayheadFrame(clip.timelineRange.start.value);
+    },
+    [compare.data?.before, compare.data?.after],
+  );
+
+  /**
+   * Entering Compare (any door, and on load with `?view=changes`): the clip
+   * selection goes — a stale selection would flip the right column to
+   * ClipProperties and hide the very panel Compare lives in — and the
+   * playhead and the player focus start clean. Leaving clears the focus
+   * again, the same way ✕ leaves View.
+   */
+  useEffect(() => {
+    setCompareFocus(null);
+    setPlayheadFrame(0);
+    if (!compareOpen) return;
+    setSelectedClipId(null);
+    setRightPanelMode("versioning");
+  }, [compareOpen]);
 
   // B5-1 — the frozen content behind View mode. The LIVE query stays
   // mounted throughout, so ✕ is instant and never flashes a refetch.
@@ -290,6 +374,27 @@ export function Shell() {
     [router, searchParams],
   );
 
+  /**
+   * B2 §2.4 (iii) / lock (5) — a DOOR into Compare carries its own pair and
+   * wins over both the default and the user's last picks. The three doors:
+   * the top-bar chip and the rail's Changes item (`head → Now`, D4(11)), and
+   * the View bar's Compare button (`the viewed card → Now`). Clicking the
+   * Changes TAB is NOT a door: it leaves the pair exactly as it was.
+   */
+  const openCompare = useCallback(
+    (pair: { a: string; b: string } | null) => {
+      setComparePair(pair);
+      setView("changes");
+      setRightPanelMode("versioning");
+    },
+    [setView],
+  );
+
+  /** The Changes door: always the head card against Now (D2, D4(11)). */
+  const openChangesDoor = useCallback(() => {
+    openCompare(head !== null ? { a: head, b: NOW_SIDE } : null);
+  }, [openCompare, head]);
+
   const switchToBranch = useCallback((branch: string) => {
     setCurrentBranch(branch);
     setSelectedClipId(null);
@@ -322,6 +427,9 @@ export function Shell() {
     setPlayheadFrame(0);
     setViewing(null);
     setRestoreOpen(false);
+    // Already on `main` → the cut-change effect would not fire, and the
+    // pair would keep pointing at commits the reset just deleted.
+    setComparePair(null);
   }, []);
 
   /**
@@ -356,11 +464,37 @@ export function Shell() {
 
   const rate = displayedTimeline?.projectRate ?? 1;
 
+  /**
+   * B2 §2.6 (#111, #112) — the lane names. They are PARAMETERS, not baked
+   * into the lanes, because B3's Bring-in door passes different text
+   * through the same view (D4(11)). Which pick is older comes from the
+   * server (`older`), never from the order the user picked them in.
+   */
+  const laneLabels = useMemo(() => {
+    if (!comparePair) return { before: "", after: "" };
+    const [olderRef, newerRef] =
+      compare.data?.older === "b"
+        ? [comparePair.b, comparePair.a]
+        : [comparePair.a, comparePair.b];
+    const nameOf = (ref: string) => {
+      if (ref === NOW_SIDE) return "Now";
+      const card = historyCommits.find((c) => c.commitId === ref);
+      return card ? quoted(card.name) : "";
+    };
+    return { before: nameOf(olderRef), after: nameOf(newerRef) };
+  }, [comparePair, compare.data?.older, historyCommits]);
+
   const emit = useCallback(
     (command: Command, options?: { onError?: () => void }) => {
       // ONE funnel: every edit verb (add/move/trim/slip/split/delete/
       // ripple-delete/property/replaceTracks) comes through here, so this
-      // is the only place the two read-only states have to be enforced.
+      // is the only place the read-only states have to be enforced.
+      //
+      // Compare first, and SILENTLY: the lanes are not an editing surface,
+      // there is no copy-sheet string for "you can't edit here", and the
+      // editing timeline is unmounted under Compare — so this is a guard,
+      // not a path anyone can walk.
+      if (compareOpen) return;
       if (viewing !== null) {
         showToast("You're viewing an old version. Close it to edit.");
         return;
@@ -368,7 +502,7 @@ export function Shell() {
       if (connectionLost) return; // C6: editing paused while the connection is lost
       opsMutation.mutate(command, options);
     },
-    [connectionLost, viewing, opsMutation],
+    [compareOpen, connectionLost, viewing, opsMutation],
   );
 
   // Bumped whenever a propertyChange is rejected, so ClipProperties can
@@ -545,10 +679,8 @@ export function Shell() {
         headCardName={headCard?.name ?? null}
         changesCount={changesCount}
         editingLocked={editingPaused}
-        onChangesClick={() => {
-          setView("changes");
-          setRightPanelMode("versioning");
-        }}
+        comparing={compareOpen}
+        onChangesClick={openChangesDoor}
         onBranchChanged={switchToBranch}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
@@ -558,7 +690,12 @@ export function Shell() {
           currentBranch={currentBranch}
           changesCount={changesCount}
           editingLocked={editingPaused}
-          onViewChange={setView}
+          // Lock (5): the rail's Changes item IS the Changes door, so it
+          // resets the pair to `head → Now` every time. Merge/History are
+          // plain tab switches.
+          onViewChange={(next) =>
+            next === "changes" ? openChangesDoor() : setView(next)
+          }
           onDemoReset={resetToFreshDemo}
         />
         <div
@@ -593,13 +730,35 @@ export function Shell() {
                 overflow: "hidden",
               }}
             >
-              <PreviewPane
-                clip={selectedClip}
-                mediaRef={mediaRef}
-                playheadFrame={playheadFrame}
-                projectRate={rate}
-                onSetPlayhead={setPlayheadFrame}
-              />
+              {/* B2 §2.7 — under Compare the preview column belongs to the
+                  Compare player; the editor's own preview is not rendered
+                  at all. Until the one query answers there is nothing to
+                  show, and no text either (§2.4). */}
+              {compareOpen ? (
+                compare.data?.before && compare.data.after ? (
+                  <ComparePlayer
+                    before={compare.data.before}
+                    after={compare.data.after}
+                    focus={compareFocus}
+                    playheadFrame={playheadFrame}
+                    onSetPlayhead={setPlayheadFrame}
+                    onSideChange={(side) =>
+                      setCompareFocus((current) => ({
+                        side,
+                        clipId: current?.clipId ?? null,
+                      }))
+                    }
+                  />
+                ) : null
+              ) : (
+                <PreviewPane
+                  clip={selectedClip}
+                  mediaRef={mediaRef}
+                  playheadFrame={playheadFrame}
+                  projectRate={rate}
+                  onSetPlayhead={setPlayheadFrame}
+                />
+              )}
             </div>
             <WorkspaceResizeHandle
               orientation="vertical"
@@ -641,9 +800,13 @@ export function Shell() {
                   changesCount={changesCount}
                   viewingCommitId={viewing?.commitId ?? null}
                   editingLocked={editingPaused}
-                  comparePreselect={comparePreselect}
-                  onComparePreselectConsumed={clearComparePreselect}
-                  onHighlightClip={setHighlightedClipId}
+                  commits={historyCommits}
+                  comparePair={comparePair}
+                  onComparePairChange={setComparePair}
+                  compare={compare}
+                  highlightedClipIds={highlightedClipIds}
+                  onHighlightClip={setHighlightedClipIds}
+                  onRowClick={handleRowClick}
                   onViewCard={openView}
                   hasInspector={Boolean(selectedClip)}
                   onCloseToInspector={() => setRightPanelMode("inspector")}
@@ -684,8 +847,13 @@ export function Shell() {
             {/* B5-1 (#85-#88) — the View bar. Minimal on purpose: what you
                 are looking at, and the only three things you can do from
                 here. Restore is HIDDEN on the current card (B1: never on
-                the card you are standing on); Compare always shows. */}
-            {viewing && (
+                the card you are standing on); Compare always shows.
+
+                B2 lock (1): while Compare is open the whole editing centre
+                — this bar, the clip toolbar and the timeline — is replaced
+                by the two lanes. Closing Compare brings back exactly what
+                was underneath, View mode included. */}
+            {!compareOpen && viewing && (
               <div className="view-bar" aria-label="Viewing an old version">
                 <span className="view-bar-text">
                   {`Viewing ${quoted(viewing.name)}`}
@@ -694,14 +862,9 @@ export function Shell() {
                   <button
                     type="button"
                     className="view-bar-button"
-                    onClick={() => {
-                      setComparePreselect({
-                        from: viewing.commitId,
-                        to: NOW_SIDE,
-                      });
-                      setView("changes");
-                      setRightPanelMode("versioning");
-                    }}
+                    onClick={() =>
+                      openCompare({ a: viewing.commitId, b: NOW_SIDE })
+                    }
                   >
                     Compare
                   </button>
@@ -727,7 +890,8 @@ export function Shell() {
             )}
 
             {/* Clip action strip — only visible when a clip is selected */}
-            {selectedClip &&
+            {!compareOpen &&
+              selectedClip &&
               (() => {
                 const clipStart = selectedClip.timelineRange.start.value;
                 const clipEnd =
@@ -784,35 +948,52 @@ export function Shell() {
                   </div>
                 );
               })()}
-            <TimelineView
-              timeline={displayedTimeline ?? data.timeline}
-              selectedClipId={selectedClipId}
-              highlightedClipId={highlightedClipId}
-              playheadFrame={playheadFrame}
-              onSelectClip={(clip: {
+            {compareOpen ? (
+              compare.data?.before && compare.data.after ? (
+                <CompareLanes
+                  before={compare.data.before}
+                  after={compare.data.after}
+                  beforeLabel={laneLabels.before}
+                  afterLabel={laneLabels.after}
+                  rows={compare.data.rows}
+                  playheadFrame={playheadFrame}
+                  onSetPlayhead={setPlayheadFrame}
+                  highlightedClipIds={highlightedClipIds}
+                  onHighlightClip={setHighlightedClipIds}
+                  onClipClick={handleCompareClipClick}
+                />
+              ) : null
+            ) : (
+              <TimelineView
+                timeline={displayedTimeline ?? data.timeline}
+                selectedClipId={selectedClipId}
+                playheadFrame={playheadFrame}
+                onSelectClip={(clip: {
                 id: string;
                 timelineRange: {
-                  start: { value: number };
-                  duration: { value: number };
-                };
-              }) => {
-                setSelectedClipId(clip.id);
-                setRightPanelMode("inspector");
-                const clipStart = clip.timelineRange.start.value;
-                const clipEnd = clipStart + clip.timelineRange.duration.value;
-                if (playheadFrame < clipStart || playheadFrame > clipEnd) {
-                  setPlayheadFrame(clipStart);
-                }
-              }}
-              onSetPlayhead={setPlayheadFrame}
-              onMove={handleMove}
-              onTrim={handleTrim}
-              onSlip={handleSlip}
-              onSplit={handleSplit}
-              onAddClip={handleAddClip}
-              onReplaceTracks={handleReplaceTracks}
-              editingLocked={editingPaused}
-            />
+                    start: { value: number };
+                    duration: { value: number };
+                  };
+                }) => {
+                  setSelectedClipId(clip.id);
+                  setRightPanelMode("inspector");
+                  const clipStart = clip.timelineRange.start.value;
+                  const clipEnd =
+                    clipStart + clip.timelineRange.duration.value;
+                  if (playheadFrame < clipStart || playheadFrame > clipEnd) {
+                    setPlayheadFrame(clipStart);
+                  }
+                }}
+                onSetPlayhead={setPlayheadFrame}
+                onMove={handleMove}
+                onTrim={handleTrim}
+                onSlip={handleSlip}
+                onSplit={handleSplit}
+                onAddClip={handleAddClip}
+                onReplaceTracks={handleReplaceTracks}
+                editingLocked={editingPaused}
+              />
+            )}
           </div>
         </div>
       </div>

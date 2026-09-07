@@ -34,14 +34,26 @@ export function PreviewPane({
   playheadFrame,
   projectRate,
   onSetPlayhead,
+  variant = "editor",
 }: {
   clip: AnyClip | null;
   mediaRef: MediaRef | undefined;
   playheadFrame: number;
   projectRate: number;
   onSetPlayhead: (frame: number) => void;
+  /**
+   * B2 §2.7 — `compare` is the same player with two differences: nothing
+   * plays until the viewer presses Play (D4(3): "video sirf user ke click
+   * pe"), and an empty frame stays empty. The editor's "Select a clip to
+   * start editing" + Import dropzone must never appear under Compare —
+   * there is nothing to select and nothing to import there.
+   */
+  variant?: "editor" | "compare";
 }) {
+  const autoPlayOnLoad = variant === "editor";
+
   if (!clip) {
+    if (variant === "compare") return <Frame />;
     return (
       <Frame>
         <div
@@ -181,6 +193,7 @@ export function PreviewPane({
         projectRate={projectRate}
         playheadFrame={playheadFrame}
         onSetPlayhead={onSetPlayhead}
+        autoPlayOnLoad={autoPlayOnLoad}
       />
     </Frame>
   );
@@ -195,6 +208,7 @@ function VideoClipMedia({
   projectRate,
   playheadFrame,
   onSetPlayhead,
+  autoPlayOnLoad,
 }: {
   url: string;
   start: number;
@@ -204,6 +218,8 @@ function VideoClipMedia({
   projectRate: number;
   playheadFrame: number;
   onSetPlayhead: (frame: number) => void;
+  /** false under Compare (D4(3)) — the viewer starts playback, nothing else. */
+  autoPlayOnLoad: boolean;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -260,7 +276,10 @@ function VideoClipMedia({
       el.volume = Math.min(1, Math.max(0, volume));
       setCurrentTime(syncedTime);
       setLevel(el.volume);
-      el.play().catch(() => {});
+      // The ONE place in the app where a video starts by itself. Under
+      // Compare that is forbidden (D4(3)), so the flag gates it; the
+      // audio player below never had this line at all.
+      if (autoPlayOnLoad) el.play().catch(() => {});
     };
     const onTimeUpdate = () => {
       if (el.currentTime >= end) {
@@ -290,7 +309,7 @@ function VideoClipMedia({
       el.removeEventListener("pause", onPause);
       el.removeEventListener("volumechange", onVolumeChange);
     };
-  }, [start, end, volume, url]);
+  }, [start, end, volume, url, autoPlayOnLoad]);
 
   useEffect(() => {
     const el = ref.current;
@@ -716,7 +735,7 @@ function AudioClipMedia({
   );
 }
 
-function Frame({ children }: { children: React.ReactNode }) {
+function Frame({ children }: { children?: React.ReactNode }) {
   return (
     <div
       className="surface preview-frame"
