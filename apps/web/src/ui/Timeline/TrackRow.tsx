@@ -50,6 +50,7 @@ export function TrackRow({
   hidden,
   muted,
   locked,
+  editingLocked = false,
   tool,
   snapping,
   playheadFrame,
@@ -79,6 +80,8 @@ export function TrackRow({
   hidden: boolean;
   muted: boolean;
   locked: boolean;
+  /** B5-1 — read-only editor: adding a clip is off, visibly. */
+  editingLocked?: boolean;
   tool: TimelineTool;
   snapping: boolean;
   playheadFrame: number;
@@ -333,7 +336,7 @@ export function TrackRow({
                     <button
                       type="button"
                       role="menuitem"
-                      disabled={locked}
+                      disabled={locked || editingLocked}
                       onClick={addTextClip}
                     >
                       <Plus size={14} aria-hidden /> Add text clip
@@ -344,7 +347,7 @@ export function TrackRow({
                         key={ref.id}
                         type="button"
                         role="menuitem"
-                        disabled={locked}
+                        disabled={locked || editingLocked}
                         onClick={() => addMediaClip(ref)}
                       >
                         <Plus size={14} aria-hidden /> Add{" "}

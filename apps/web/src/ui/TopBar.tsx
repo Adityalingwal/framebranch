@@ -60,8 +60,10 @@ export function TopBar({
   // was never made.
   const nothingToMark = changesCount === undefined || changesCount === 0;
   const markDisabled = editingLocked || busy || nothingToMark;
+  // The explanation is only true when the count is KNOWN to be 0; while
+  // the diff is still in flight the button is off but says nothing.
   const markTitle =
-    nothingToMark && !editingLocked && headCardName
+    changesCount === 0 && !editingLocked && headCardName
       ? `No changes since "${headCardName}"`
       : undefined;
 

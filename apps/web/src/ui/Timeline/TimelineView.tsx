@@ -32,6 +32,7 @@ export function TimelineView({
   onSplit,
   onAddClip,
   onReplaceTracks,
+  editingLocked = false,
 }: {
   timeline: Timeline;
   selectedClipId: string | null;
@@ -45,6 +46,12 @@ export function TimelineView({
   onSplit: (clipId: string, atFrame: number) => void;
   onAddClip: (command: Command) => void;
   onReplaceTracks: (tracks: Track[]) => void;
+  /**
+   * B5-1 — the editor is read-only (viewing an old version, or the
+   * connection is lost). Only the add-clip menu reads it here; every edit
+   * verb is already refused at Shell's `emit` funnel.
+   */
+  editingLocked?: boolean;
 }) {
   const [pxPerSecond, setPxPerSecond] = useState(DEFAULT_PX_PER_SECOND);
   const [tool, setTool] = useState<TimelineTool>("select");
@@ -400,6 +407,7 @@ export function TimelineView({
                 hidden={hiddenTracks.has(track.id)}
                 muted={mutedTracks.has(track.id)}
                 locked={lockedTracks.has(track.id)}
+                editingLocked={editingLocked}
                 tool={tool}
                 snapping={snapping}
                 playheadFrame={playheadFrame}

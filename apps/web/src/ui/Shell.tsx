@@ -77,6 +77,10 @@ export function Shell() {
   } | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
+  // Stable, so consuming the preselect cannot re-run the panel's effect on
+  // an unrelated Shell render.
+  const clearComparePreselect = useCallback(() => setComparePreselect(null), []);
+
   const timeline = useTimelineQuery(currentBranch);
   const opsMutation = useOpsMutation(currentBranch);
   const connectionLost = useConnectionStatus().lost;
@@ -123,6 +127,18 @@ export function Shell() {
   // mounted throughout, so ✕ is instant and never flashes a refetch.
   const frozen = useTimelineAtQuery(currentBranch, viewing?.commitId ?? null);
   const restore = useRestoreMutation(currentBranch);
+
+  /**
+   * Entering View (B5-1): the clip selection is dropped and the playhead
+   * goes back to 0 — a selection made on the live timeline means nothing
+   * on a different version's content, and the inspector must not keep
+   * showing a clip you are no longer editing.
+   */
+  const openView = useCallback((commit: { commitId: string; name: string }) => {
+    setViewing({ commitId: commit.commitId, name: commit.name });
+    setSelectedClipId(null);
+    setPlayheadFrame(0);
+  }, []);
 
   /** Leaving View: ✕, a successful Restore, a cut switch, a reset. */
   const closeView = useCallback(() => {
@@ -621,14 +637,9 @@ export function Shell() {
                   changesCount={changesCount}
                   viewingCommitId={viewing?.commitId ?? null}
                   comparePreselect={comparePreselect}
-                  onComparePreselectConsumed={() => setComparePreselect(null)}
+                  onComparePreselectConsumed={clearComparePreselect}
                   onHighlightClip={setHighlightedClipId}
-                  onViewCard={(commit) =>
-                    setViewing({
-                      commitId: commit.commitId,
-                      name: commit.name,
-                    })
-                  }
+                  onViewCard={openView}
                   hasInspector={Boolean(selectedClip)}
                   onCloseToInspector={() => setRightPanelMode("inspector")}
                 />
@@ -795,6 +806,7 @@ export function Shell() {
               onSplit={handleSplit}
               onAddClip={handleAddClip}
               onReplaceTracks={handleReplaceTracks}
+              editingLocked={editingPaused}
             />
           </div>
         </div>
