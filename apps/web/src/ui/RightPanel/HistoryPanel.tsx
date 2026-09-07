@@ -42,7 +42,8 @@ export function HistoryPanel({
   const history = useHistoryQuery(currentBranch);
 
   if (history.isLoading) return <Empty>Loading history…</Empty>;
-  if (history.isError) return <Empty>Couldn&rsquo;t load history.</Empty>;
+  if (history.isError)
+    return <Empty>{"Couldn't load history."}</Empty>;
 
   const commits = history.data?.commits ?? [];
   if (commits.length === 0) return <Empty>No versions yet.</Empty>;
