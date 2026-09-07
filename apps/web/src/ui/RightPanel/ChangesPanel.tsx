@@ -80,7 +80,7 @@ export function ChangesPanel({
         // product History always has a card and this is unreachable.
         <Empty>Pick two versions to compare.</Empty>
       ) : compare.isError ? (
-        <Empty>Couldn&apos;t load these changes.</Empty>
+        <Empty>{"Couldn't load these changes."}</Empty>
       ) : !data ? (
         // #107 — includes the moment after a reload on `?view=changes`,
         // when the head (and so the default pair) is not known yet.
