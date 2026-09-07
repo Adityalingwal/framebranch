@@ -30,7 +30,6 @@ import type {
 import type { BranchListItem } from "../../app/api/branch/route";
 import type { DiffResponse } from "../../app/api/diff/route";
 import type { HistoryItem } from "../../app/api/history/route";
-import type { PendingOp } from "../../server/types";
 import { getEditorName } from "../state/editor-name";
 
 // ---------------------------------------------------------------------------
@@ -335,24 +334,6 @@ export function postOps(
 ): Promise<OpsResult> {
   const ticket = newTicket();
   return runMutation(() => postJson("/api/ops", { ...input, ticket }), hooks);
-}
-
-export type OpsHistoryResult = OpsResult & { operation?: PendingOp };
-
-export function postOpsHistory(
-  input: {
-    branch: string;
-    workingRev: number;
-    action: "undo" | "redo";
-    operation?: PendingOp;
-  },
-  hooks: RetryHooks,
-): Promise<OpsHistoryResult> {
-  const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/ops/history", { ...input, ticket }),
-    hooks,
-  );
 }
 
 export type MergeStartResult =

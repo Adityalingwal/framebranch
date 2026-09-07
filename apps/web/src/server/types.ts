@@ -40,7 +40,6 @@ export type PendingOp = {
  */
 export type TicketEndpoint =
   | "ops"
-  | "ops-history"
   | "commit"
   | "merge"
   | "merge-resolve"

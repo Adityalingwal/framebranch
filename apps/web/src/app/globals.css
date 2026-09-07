@@ -341,39 +341,6 @@ input[type="range"]::-moz-range-thumb {
   cursor: not-allowed;
 }
 
-.topbar-history-tools {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.topbar-history-tools button {
-  width: 30px;
-  height: 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: var(--fb-radius-sm);
-  color: var(--fb-text-dim);
-  background: transparent;
-  cursor: pointer;
-}
-
-.topbar-history-tools button:hover:not(:disabled),
-.topbar-history-tools button:focus-visible {
-  color: var(--fb-text-body-2);
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.055);
-  outline: none;
-}
-
-.topbar-history-tools button:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
 .topbar-menu-item {
   width: 100%;
   display: flex;

@@ -21,7 +21,6 @@ import {
 } from "@tanstack/react-query";
 
 import type { Command, MergeChoice } from "@framebranch/engine";
-import type { PendingOp } from "../../server/types";
 
 import * as api from "./api-client";
 import { ApiClientError, type TimelineData } from "./api-client";
@@ -241,50 +240,6 @@ export function useOpsMutation(branch: string) {
       queryClient.invalidateQueries({ queryKey: key });
       // D2 patch: an edit changes every "‹card› → Now" diff on this cut.
       queryClient.invalidateQueries({ queryKey: queryKeys.diffAll(branch) });
-    },
-  });
-}
-
-export function useOpsHistoryMutation(branch: string) {
-  const queryClient = useQueryClient();
-  const key = queryKeys.timeline(branch);
-
-  return useMutation<
-    api.OpsHistoryResult,
-    unknown,
-    { action: "undo" | "redo"; operation?: PendingOp }
-  >({
-    mutationFn: ({ action, operation }) => {
-      const current = queryClient.getQueryData<TimelineData>(key);
-      return api.postOpsHistory(
-        {
-          branch,
-          workingRev: current?.workingRev ?? 0,
-          action,
-          operation,
-        },
-        retryHooks,
-      );
-    },
-    onSuccess: (data) => {
-      const latest = queryClient.getQueryData<TimelineData>(key);
-      if (latest && !data.noChange) {
-        queryClient.setQueryData<TimelineData>(key, {
-          ...latest,
-          workingRev: data.workingRev,
-          pendingCount: data.pendingCount,
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: key });
-      queryClient.invalidateQueries({ queryKey: queryKeys.diffAll(branch) });
-    },
-    onError: (error) => {
-      if (error instanceof ApiClientError && error.code === "E_STALE_REV") {
-        queryClient.invalidateQueries({ queryKey: key });
-        showToast("Timeline updated.");
-        return;
-      }
-      onMutationError(error);
     },
   });
 }

@@ -1,11 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  ArrowClockwise,
-  ArrowCounterClockwise,
-  GitBranch,
-} from "@phosphor-icons/react";
+import { GitBranch } from "@phosphor-icons/react";
 
 import { showToast } from "../lib/state/toast-status";
 import { useConnectionStatus } from "../lib/state/connection-status";
@@ -24,11 +20,6 @@ export function TopBar({
   onBranchChanged,
   onBranchAdded,
   onChangesClick,
-  canUndo,
-  canRedo,
-  historyBusy,
-  onUndo,
-  onRedo,
 }: {
   currentBranch: string;
   knownBranches: string[];
@@ -36,11 +27,6 @@ export function TopBar({
   onBranchChanged: (branch: string) => void;
   onBranchAdded: (branch: string) => void;
   onChangesClick: () => void;
-  canUndo: boolean;
-  canRedo: boolean;
-  historyBusy: boolean;
-  onUndo: () => void;
-  onRedo: () => void;
 }) {
   const [versionName, setVersionName] = useState("");
   const editingPaused = useConnectionStatus().lost;
@@ -81,29 +67,6 @@ export function TopBar({
           >
             FrameBranch
           </span>
-        </div>
-
-        <div className="topbar-divider" />
-
-        <div className="topbar-history-tools" aria-label="Edit history">
-          <button
-            type="button"
-            aria-label="Undo"
-            title="Undo latest change (Ctrl+Z)"
-            disabled={!canUndo || historyBusy || editingPaused}
-            onClick={onUndo}
-          >
-            <ArrowCounterClockwise size={15} weight="bold" aria-hidden />
-          </button>
-          <button
-            type="button"
-            aria-label="Redo"
-            title="Redo latest change (Ctrl+Shift+Z)"
-            disabled={!canRedo || historyBusy || editingPaused}
-            onClick={onRedo}
-          >
-            <ArrowClockwise size={15} weight="bold" aria-hidden />
-          </button>
         </div>
 
         <div className="topbar-divider" />

@@ -148,32 +148,6 @@ export const opsBodySchema = z
   })
   .strict();
 
-export const opsHistoryBodySchema = z
-  .object({
-    branch: branchName,
-    workingRev: z.number().int().nonnegative(),
-    ticket,
-    action: z.enum(["undo", "redo"]),
-    operation: z
-      .object({
-        id: z.uuid(),
-        actor: z.enum(["user", "agent"]),
-        command: commandSchema,
-      })
-      .strict()
-      .optional(),
-  })
-  .strict()
-  .superRefine((body, context) => {
-    if (body.action === "redo" && !body.operation) {
-      context.addIssue({
-        code: "custom",
-        message: "redo requires an operation",
-        path: ["operation"],
-      });
-    }
-  });
-
 /**
  * C2 — the name is required, but the SHAPE check stays loose (any string ≤
  * 200, or absent) so that a missing AND a whitespace-only name both reach

@@ -4,17 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import type { Command, PropertyValue, Track } from "@framebranch/engine";
-import type { PendingOp } from "../server/types";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import { ApiClientError } from "../lib/data/api-client";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { useConnectionStatus } from "../lib/state/connection-status";
-import {
-  useOpsHistoryMutation,
-  useOpsMutation,
-  useTimelineQuery,
-} from "../lib/data/hooks";
+import { useOpsMutation, useTimelineQuery } from "../lib/data/hooks";
 import { ClipProperties } from "./ClipProperties";
 import { IconRail } from "./IconRail";
 import { NameGate } from "./NameGate";
@@ -57,12 +52,10 @@ export function Shell() {
     DEFAULT_WORKSPACE_LAYOUT,
   );
   const [workspaceLayoutLoaded, setWorkspaceLayoutLoaded] = useState(false);
-  const [redoStack, setRedoStack] = useState<PendingOp[]>([]);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   const timeline = useTimelineQuery(currentBranch);
   const opsMutation = useOpsMutation(currentBranch);
-  const historyMutation = useOpsHistoryMutation(currentBranch);
   const editingPaused = useConnectionStatus().lost;
 
   const clampWorkspaceLayout = useCallback(
@@ -208,7 +201,6 @@ export function Shell() {
     setCurrentBranch(branch);
     setSelectedClipId(null);
     setPlayheadFrame(0);
-    setRedoStack([]);
   }, []);
 
   const addBranch = useCallback((branch: string) => {
@@ -222,7 +214,6 @@ export function Shell() {
     setCurrentBranch("main");
     setSelectedClipId(null);
     setPlayheadFrame(0);
-    setRedoStack([]);
   }, []);
 
   const selectedClip = useMemo(() => {
@@ -249,41 +240,10 @@ export function Shell() {
   const emit = useCallback(
     (command: Command, options?: { onError?: () => void }) => {
       if (editingPaused) return; // C6: editing paused while connection is lost
-      setRedoStack([]);
       opsMutation.mutate(command, options);
     },
     [editingPaused, opsMutation],
   );
-
-  const handleUndo = useCallback(() => {
-    if (editingPaused || historyMutation.isPending) return;
-    historyMutation.mutate(
-      { action: "undo" },
-      {
-        onSuccess: (result) => {
-          if (result.operation) {
-            setRedoStack((current) => [...current, result.operation!]);
-          }
-        },
-      },
-    );
-  }, [editingPaused, historyMutation]);
-
-  const handleRedo = useCallback(() => {
-    if (editingPaused || historyMutation.isPending) return;
-    const operation = redoStack.at(-1);
-    if (!operation) return;
-    historyMutation.mutate(
-      { action: "redo", operation },
-      {
-        onSuccess: (result) => {
-          if (!result.noChange) {
-            setRedoStack((current) => current.slice(0, -1));
-          }
-        },
-      },
-    );
-  }, [editingPaused, historyMutation, redoStack]);
 
   // Bumped whenever a propertyChange is rejected, so ClipProperties can
   // remount its local-state controls back to the authoritative clip value —
@@ -378,17 +338,6 @@ export function Shell() {
         return;
       }
       const shortcut = e.ctrlKey || e.metaKey;
-      if (shortcut && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) handleRedo();
-        else handleUndo();
-        return;
-      }
-      if (shortcut && e.key.toLowerCase() === "y") {
-        e.preventDefault();
-        handleRedo();
-        return;
-      }
       if (shortcut && e.key.toLowerCase() === "k" && selectedClip) {
         const start = selectedClip.timelineRange.start.value;
         const end = start + selectedClip.timelineRange.duration.value;
@@ -411,10 +360,8 @@ export function Shell() {
     selectedClipId,
     playheadFrame,
     handleDelete,
-    handleRedo,
     handleRippleDelete,
     handleSplit,
-    handleUndo,
   ]);
 
   if (timeline.isLoading) {
@@ -466,11 +413,6 @@ export function Shell() {
         currentBranch={currentBranch}
         knownBranches={knownBranches}
         pendingCount={data.pendingCount}
-        canUndo={data.pendingCount > 0}
-        canRedo={redoStack.length > 0}
-        historyBusy={historyMutation.isPending}
-        onUndo={handleUndo}
-        onRedo={handleRedo}
         onChangesClick={() => {
           setView("changes");
           setRightPanelMode("versioning");
