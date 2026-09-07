@@ -31,7 +31,7 @@ FrameBranch supports eight operations on a video timeline in version 1:
 - Change a property — limited to six: volume, opacity, scale, position, text content, and text style
 - Ripple delete (delete a clip and shift everything after it on that track left, to close the gap)
 
-Each operation has to work the same way in five places: the edit itself, undoing it, comparing two versions, merging two versions, and detecting a conflict when both versions used it on the same clip. Adding an operation is expensive in that sense, so version 1 keeps this list to the smallest set that can run a real editing demo.
+Each operation has to work the same way in five places: the edit itself, its engine-internal inverse, comparing two versions, merging two versions, and detecting a conflict when both versions used it on the same clip. Adding an operation is expensive in that sense, so version 1 keeps this list to the smallest set that can run a real editing demo.
 
 Five operations were left out of version 1:
 

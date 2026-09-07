@@ -148,6 +148,8 @@ export async function seedProjectFromPreset(
     actor: "user",
     kind: "seed",
     actorName: null,
+    // B1 §2.2 — a seed has no "before"; its meta is `Start · ‹time›` (C1(6)).
+    changes: 0,
     snapshotDistance: 0,
     // F7 — the itemized skipped-list's permanent home; NULL on every
     // commit that is not an import/seed (the fixture is clean, so this is

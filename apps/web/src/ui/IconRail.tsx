@@ -55,17 +55,27 @@ export function IconRail({
   view,
   versioningOpen,
   currentBranch,
-  pendingCount,
+  changesCount,
+  editingLocked,
   onViewChange,
-  onBranchTouched,
   onDemoReset,
 }: {
   view: PanelView;
   versioningOpen: boolean;
   currentBranch: string;
-  pendingCount: number;
+  /**
+   * D2 patch — the SAME number the top-bar chip shows (real difference Now
+   * vs the head card), handed down by Shell so the two can never disagree.
+   * `undefined` while that diff has not answered yet: no badge, never a 0.
+   */
+  changesCount: number | undefined;
+  /**
+   * B5-1 — Shell's one derived lock (connection lost OR a card is being
+   * viewed). Import / Export / Agent / Reset all write; in View mode they
+   * must be off like every other edit path (triage 2026-09-07, item 1).
+   */
+  editingLocked: boolean;
   onViewChange: (view: PanelView) => void;
-  onBranchTouched: (branch: string) => void;
   onDemoReset: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
@@ -76,7 +86,7 @@ export function IconRail({
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  const editingPaused = useConnectionStatus().lost;
+  const editingPaused = useConnectionStatus().lost || editingLocked;
   const importMutation = useImportMutation();
   const exportMutation = useExportMutation();
   const agentSimulate = useAgentSimulateMutation();
@@ -180,7 +190,11 @@ export function IconRail({
           <RailButton
             label="Changes"
             active={versioningOpen && view === "changes"}
-            badge={pendingCount > 0 ? String(pendingCount) : undefined}
+            badge={
+              changesCount !== undefined && changesCount > 0
+                ? String(changesCount)
+                : undefined
+            }
             icon={<GitDiff size={18} weight="duotone" aria-hidden />}
             onClick={() => onViewChange("changes")}
           />
@@ -242,10 +256,8 @@ export function IconRail({
               agentSimulate.mutate(
                 { branch: AGENT_BRANCH, script: AGENT_SCRIPT },
                 {
-                  onSuccess: (data) => {
-                    onBranchTouched(AGENT_BRANCH);
-                    showToast(`Agent run complete — "${data.name}".`);
-                  },
+                  onSuccess: (data) =>
+                    showToast(`Agent run complete — "${data.name}".`),
                 },
               )
             }

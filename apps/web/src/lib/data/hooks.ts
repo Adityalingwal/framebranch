@@ -21,7 +21,6 @@ import {
 } from "@tanstack/react-query";
 
 import type { Command, MergeChoice } from "@framebranch/engine";
-import type { PendingOp } from "../../server/types";
 
 import * as api from "./api-client";
 import { ApiClientError, type TimelineData } from "./api-client";
@@ -60,6 +59,21 @@ export function useTimelineQuery(branch: string) {
 }
 
 /**
+ * B1 §2.3 — the frozen timeline behind View mode. `commitId === null`
+ * (nobody is viewing) keeps the query idle, so leaving View cannot leave a
+ * stale card refetching after a reset has invalidated everything.
+ */
+export function useTimelineAtQuery(cut: string, commitId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.timelineAt(cut, commitId ?? ""),
+    queryFn: () => api.getTimelineAt(cut, commitId as string),
+    enabled: commitId !== null,
+    // A commit's content is immutable — never refetch what cannot change.
+    staleTime: Infinity,
+  });
+}
+
+/**
  * A1a — the cut list with heads. A1a patch (b): the app turns
  * refetchOnWindowFocus off globally; this query alone turns it back on.
  * A1a patch (c): pass `enabled: false` until the timeline GET has answered
@@ -74,11 +88,16 @@ export function useBranchesQuery(enabled = true) {
   });
 }
 
-/** B2 — the current cut's chain only. */
-export function useHistoryQuery(cut: string) {
+/**
+ * B2 — the current cut's chain only. A1a patch (c): Shell passes
+ * `enabled = false` until the first timeline GET has answered — two
+ * cookie-less parallel calls would mint two projects.
+ */
+export function useHistoryQuery(cut: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.history(cut),
     queryFn: () => api.getHistory(cut),
+    enabled,
   });
 }
 
@@ -245,56 +264,12 @@ export function useOpsMutation(branch: string) {
   });
 }
 
-export function useOpsHistoryMutation(branch: string) {
-  const queryClient = useQueryClient();
-  const key = queryKeys.timeline(branch);
-
-  return useMutation<
-    api.OpsHistoryResult,
-    unknown,
-    { action: "undo" | "redo"; operation?: PendingOp }
-  >({
-    mutationFn: ({ action, operation }) => {
-      const current = queryClient.getQueryData<TimelineData>(key);
-      return api.postOpsHistory(
-        {
-          branch,
-          workingRev: current?.workingRev ?? 0,
-          action,
-          operation,
-        },
-        retryHooks,
-      );
-    },
-    onSuccess: (data) => {
-      const latest = queryClient.getQueryData<TimelineData>(key);
-      if (latest && !data.noChange) {
-        queryClient.setQueryData<TimelineData>(key, {
-          ...latest,
-          workingRev: data.workingRev,
-          pendingCount: data.pendingCount,
-        });
-      }
-      queryClient.invalidateQueries({ queryKey: key });
-      queryClient.invalidateQueries({ queryKey: queryKeys.diffAll(branch) });
-    },
-    onError: (error) => {
-      if (error instanceof ApiClientError && error.code === "E_STALE_REV") {
-        queryClient.invalidateQueries({ queryKey: key });
-        showToast("Timeline updated.");
-        return;
-      }
-      onMutationError(error);
-    },
-  });
-}
-
 // ---------------------------------------------------------------------------
 // M8b — merge. No GET exists for a merge draft (C4 has none), so the
 // attempt/conflicts/counts live in the Merge panel's own component state;
 // these hooks are plain request wrappers, same shared `onError` as everyone
 // else. Invalidation after a `done` answer happens where the branch name is
-// known (the panel), same as BranchControl's inline `onSuccess` callbacks.
+// known (the panel), same as the top bar's inline `onSuccess` callbacks.
 // ---------------------------------------------------------------------------
 
 export function useMergeStartMutation() {

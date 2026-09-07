@@ -10,6 +10,7 @@ import { findClipById, isTextClip, type AnyClip } from "../../lib/clip-helpers";
 import { formatTimecode } from "../../lib/format";
 import {
   refreshBranches,
+  useBranchesQuery,
   useMergeAbortMutation,
   useMergeResolveMutation,
   useMergeStartMutation,
@@ -38,19 +39,26 @@ type Attempt = {
 
 export function MergePanel({
   currentBranch,
-  knownBranches,
-  onBranchTouched,
+  editingLocked = false,
 }: {
   currentBranch: string;
-  knownBranches: string[];
-  onBranchTouched: (branch: string) => void;
+  /** B5-1 — no merge write while a card is being viewed. */
+  editingLocked?: boolean;
 }) {
-  void onBranchTouched; // reserved: merge never creates a branch, kept for a symmetric RightPanel prop surface
-
   const queryClient = useQueryClient();
-  const [fromBranch, setFromBranch] = useState<string>(
-    knownBranches.find((b) => b !== currentBranch) ?? "",
-  );
+  // A1a: the cut list comes from the server, not from Shell state. It can
+  // still be empty on the first render, so the picked cut is DERIVED below
+  // rather than frozen into state at mount.
+  const branches = useBranchesQuery();
+  const [pickedBranch, setPickedBranch] = useState<string>("");
+  const otherBranches = (branches.data?.branches ?? [])
+    .map((b) => b.name)
+    .filter((b) => b !== currentBranch);
+  const fromBranch =
+    pickedBranch && otherBranches.includes(pickedBranch)
+      ? pickedBranch
+      : (otherBranches[0] ?? "");
+
   const [attempt, setAttempt] = useState<Attempt | null>(null);
   const [staleHead, setStaleHead] = useState<string | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -70,7 +78,7 @@ export function MergePanel({
   }
 
   function startMerge() {
-    if (!fromBranch) return;
+    if (!fromBranch || editingLocked) return;
     setStaleHead(null);
     const mergingFrom = fromBranch;
     mergeStart.mutate(
@@ -159,8 +167,6 @@ export function MergePanel({
     setStaleHead(null);
   }
 
-  const otherBranches = knownBranches.filter((b) => b !== currentBranch);
-
   if (!attempt) {
     return (
       <div>
@@ -200,7 +206,7 @@ export function MergePanel({
                   value: branch,
                   label: branch,
                 }))}
-                onChange={setFromBranch}
+                onChange={setPickedBranch}
               />
               <span>into &ldquo;{currentBranch}&rdquo;</span>
             </label>
@@ -211,7 +217,7 @@ export function MergePanel({
                   ? { ...primaryButton, opacity: 0.6 }
                   : primaryButton
               }
-              disabled={mergeStart.isPending || !fromBranch}
+              disabled={mergeStart.isPending || !fromBranch || editingLocked}
               onClick={startMerge}
             >
               {mergeStart.isPending ? "Starting…" : "Start merge"}
@@ -268,7 +274,7 @@ export function MergePanel({
               conflict={conflict}
               ours={ours.data?.timeline}
               theirs={theirs.data?.timeline}
-              disabled={mergeResolve.isPending}
+              disabled={mergeResolve.isPending || editingLocked}
               onChoose={(choice) => resolve(conflict.conflictId, choice)}
             />
           ))}

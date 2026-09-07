@@ -36,7 +36,9 @@ These are the true global invariants — they hold for every timeline, always. S
 
 Every operation is checked before it runs — if a check fails, nothing changes and a specific error comes back. (Split has its own entry in Algorithms — its identity rules are covered there, not repeated here.)
 
-| Operation | You send | Checked first | What happens | Undo |
+The last column is the engine's own inverse of each operation — the shape a reversal would take internally. There is no undo/redo feature in the product: moving between points in time is done through History (view a version, restore it).
+
+| Operation | You send | Checked first | What happens | Inverse (engine-internal) |
 |---|---|---|---|---|
 | Add clip | track, media, which part of the file, where on the timeline | Track and media exist; the piece fits inside the file; no overlap; times are valid; media type matches the track; rate matches the project | A new clip appears on the track | Delete it |
 | Delete clip | clip ID | Clip exists | Clip disappears; the gap stays — neighbors don't shift | Add it back exactly as it was |

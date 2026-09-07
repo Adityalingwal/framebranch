@@ -30,7 +30,7 @@ import type {
 import type { BranchListItem } from "../../app/api/branch/route";
 import type { DiffResponse } from "../../app/api/diff/route";
 import type { HistoryItem } from "../../app/api/history/route";
-import type { PendingOp } from "../../server/types";
+import type { TimelineAtResponse } from "../../app/api/timeline/route";
 import { getEditorName } from "../state/editor-name";
 
 // ---------------------------------------------------------------------------
@@ -246,6 +246,17 @@ export function getTimeline(branch: string): Promise<TimelineData> {
   );
 }
 
+/** B1 §2.3 — one card's frozen content, for View mode. */
+export type TimelineAtData = TimelineAtResponse;
+
+export function getTimelineAt(
+  cut: string,
+  commitId: string,
+): Promise<TimelineAtData> {
+  const q = new URLSearchParams({ branch: cut, at: commitId });
+  return get<TimelineAtData>(`/api/timeline?${q.toString()}`);
+}
+
 export function getBranches(): Promise<BranchesData> {
   return get<BranchesData>("/api/branch");
 }
@@ -335,24 +346,6 @@ export function postOps(
 ): Promise<OpsResult> {
   const ticket = newTicket();
   return runMutation(() => postJson("/api/ops", { ...input, ticket }), hooks);
-}
-
-export type OpsHistoryResult = OpsResult & { operation?: PendingOp };
-
-export function postOpsHistory(
-  input: {
-    branch: string;
-    workingRev: number;
-    action: "undo" | "redo";
-    operation?: PendingOp;
-  },
-  hooks: RetryHooks,
-): Promise<OpsHistoryResult> {
-  const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/ops/history", { ...input, ticket }),
-    hooks,
-  );
 }
 
 export type MergeStartResult =
