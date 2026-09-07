@@ -192,10 +192,13 @@ export function Shell() {
 
   // Lanes and rows come from ONE snapshot (lock (4)); its key is a child of
   // `diffAll(cut)`, so an edit refreshes both together.
+  // Fetched ONLY while Compare is open: `timelines=1` carries both full
+  // timelines, and the chip's own light query already covers head → Now on
+  // every other screen. Reopening fetches the (possibly invalidated) snapshot.
   const compare = useCompareQuery(
     currentBranch,
-    comparePair?.a ?? null,
-    comparePair?.b ?? null,
+    compareOpen ? (comparePair?.a ?? null) : null,
+    compareOpen ? (comparePair?.b ?? null) : null,
   );
 
   /**
@@ -830,6 +833,7 @@ export function Shell() {
                   editingLocked={editingPaused}
                   commits={historyCommits}
                   comparePair={comparePair}
+                  historyEmpty={history.isSuccess && historyCommits.length === 0}
                   onComparePairChange={setComparePair}
                   compare={compare}
                   highlightedClipIds={highlightedClipIds}

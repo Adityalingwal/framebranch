@@ -588,6 +588,21 @@ describe("presentDiff — jump + laneIds per kind (B2 lock (3), §2.6)", () => {
     expect(p.rows[0].clipIds).toEqual(["interview"]);
   });
 
+  it("nested split (two cuts) → jump lands on the LAST printed timecode, not the first", () => {
+    const moved = apply(base(), { op: "move", clipId: "interview", newStart: t(480) });
+    const once = apply(moved, { op: "split", clipId: "interview", at: t(600) });
+    // the first piece keeps the original id — split it again, earlier
+    const twice = apply(once, { op: "split", clipId: "interview", at: t(540) });
+    const p = presentDiff(moved, twice);
+    expect(p.rows).toHaveLength(1);
+    expect(p.rows[0].text).toBe("Split into 3 clips");
+    expect(p.rows[0].where).toBe("at 00:00:22:12, 00:00:25:00");
+    expect(p.rows[0].jump).toEqual({ side: "after", frame: 600, clipId: "interview" });
+    expect(p.rows[0].laneIds.before).toEqual(["interview"]);
+    expect(p.rows[0].laneIds.after).toHaveLength(3);
+    expect(p.rows[0].laneIds.after[0]).toBe("interview");
+  });
+
   it("ripple → the FIRST shifted clip's new start, every shifted clip on both lanes", () => {
     const before = contiguous();
     const after = apply(

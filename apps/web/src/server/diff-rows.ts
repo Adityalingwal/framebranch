@@ -494,11 +494,12 @@ export function presentDiff(
             `Split into ${e.cuts.length + 1} clips`,
             `at ${positionFrames.map(tc).join(", ")}`,
             {
-              // The first cut is the frame the row prints first; the clip to
-              // focus is the ORIGINAL id, which survives as the first piece.
+              // The frame behind the LAST timecode the row prints (a nested
+              // split prints several cuts); the clip to focus is the ORIGINAL
+              // id, which survives as the first piece.
               jump: {
                 side: "after",
-                frame: positionFrames[0] ?? 0,
+                frame: positionFrames[positionFrames.length - 1] ?? 0,
                 clipId: e.clipId,
               },
               laneIds: { before: [e.clipId], after: [...e.pieceIds] },

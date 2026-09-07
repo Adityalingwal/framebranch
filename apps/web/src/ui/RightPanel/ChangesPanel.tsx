@@ -31,6 +31,7 @@ export function ChangesPanel({
   commits,
   pair,
   onPairChange,
+  historyEmpty,
   compare,
   highlightedClipIds,
   onHighlightClip,
@@ -39,6 +40,8 @@ export function ChangesPanel({
   commits: HistoryCommit[];
   pair: { a: string; b: string } | null;
   onPairChange: (pair: { a: string; b: string }) => void;
+  /** History has answered and holds no card (cannot happen in this product). */
+  historyEmpty: boolean;
   compare: CompareQuery;
   highlightedClipIds: string[];
   onHighlightClip: (clipIds: string[]) => void;
@@ -74,13 +77,14 @@ export function ChangesPanel({
         />
       </div>
 
-      {pair === null && commits.length === 0 ? (
-        // #106 — the honest fallback when there is nothing to pick at all.
-        // D3a defaults the pair the moment the head is known, so in this
-        // product History always has a card and this is unreachable.
-        <Empty>Pick two versions to compare.</Empty>
-      ) : compare.isError ? (
+      {compare.isError ? (
         <Empty>{"Couldn't load these changes."}</Empty>
+      ) : pair === null && historyEmpty ? (
+        // #106 — the honest fallback when there is nothing to pick at all:
+        // History has SETTLED and is empty. D3a defaults the pair the moment
+        // the head is known and History always has a card, so in this
+        // product this is unreachable — it must never show while loading.
+        <Empty>Pick two versions to compare.</Empty>
       ) : !data ? (
         // #107 — includes the moment after a reload on `?view=changes`,
         // when the head (and so the default pair) is not known yet.

@@ -27,6 +27,7 @@ export function RightPanel({
   editingLocked,
   commits,
   comparePair,
+  historyEmpty,
   onComparePairChange,
   compare,
   highlightedClipIds,
@@ -48,6 +49,8 @@ export function RightPanel({
   /** B2 §2.4 — the Compare state lives in the Shell; this panel is a view. */
   commits: HistoryCommit[];
   comparePair: { a: string; b: string } | null;
+  /** History has answered and holds no card (B2 #106 fallback gate). */
+  historyEmpty: boolean;
   onComparePairChange: (pair: { a: string; b: string }) => void;
   compare: CompareQuery;
   highlightedClipIds: string[];
@@ -130,6 +133,7 @@ export function RightPanel({
           <ChangesPanel
             commits={commits}
             pair={comparePair}
+            historyEmpty={historyEmpty}
             onPairChange={onComparePairChange}
             compare={compare}
             highlightedClipIds={highlightedClipIds}
