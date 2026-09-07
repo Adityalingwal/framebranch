@@ -171,10 +171,20 @@ export function presentDiff(
     if (inA) return { loc: inA, tl: before };
     return null;
   };
+  // Copy sheet #125: an unnamed TEXT clip is shown as its content in quotes
+  // (`"Summer Sale"`), so a row never reads like the text is the clip's name.
+  // Named clips and media-file fallbacks stay bare. Editor chrome (timeline
+  // blocks, inspector) keeps `clipDisplayName` unquoted — this is row copy.
   const nameOf = (clipId: string): string => {
     const found = locate(clipId);
     if (!found) return "Untitled clip";
-    return clipDisplayName(found.loc.clip, mediaOf(found.tl, found.loc.clip));
+    const clip = found.loc.clip;
+    const display = clipDisplayName(clip, mediaOf(found.tl, clip));
+    const own = clip.name?.trim();
+    if (!own && isTextClip(clip) && clip.textContent.trim().length > 0) {
+      return `"${display}"`;
+    }
+    return display;
   };
   const thumbOf = (clipId: string): string | null => {
     const found = locate(clipId);
@@ -532,11 +542,14 @@ function ordinal(n: number): string {
 
 /**
  * C1(2) / G4-N — the auto-card name from the rows:
- *   `‹N› clips moved, ‹N› trimmed, ‹N› slipped, ‹N› added, ‹N› removed,
- *    ‹N› split, ‹N› changed` — non-zero parts only, this order, the FIRST
- *    part carries the word `clip(s)`; each ripple row adds `‹N› clips moved
- *    along` at the end. Exactly one row → that row's own text
- *    (`Interview end trimmed by 18 frames`). Capped at 60 chars with `…`.
+ *   `‹N› clips moved, ‹N› trimmed, ‹N› added, ‹N› removed, ‹N› split,
+ *    ‹N› slipped, ‹N› changed` — non-zero parts only, in THIS order (G4-N),
+ *    the FIRST part carries the word `clip(s)`; each ripple row adds
+ *    `‹N› clips moved along` at the end. Exactly one row → that row's own
+ *    text (`Interview end trimmed by 18 frames`). Capped at 60 chars with `…`.
+ *   Counting (C1 patch 2026-09-07): the name counts DISTINCT CLIPS per verb,
+ *   not rows — one text clip with font+colour rows is `1 clip changed`;
+ *   `count` (N changes) stays the row count.
  */
 export function summaryName(rows: readonly DiffRow[]): string {
   if (rows.length === 0) return "";
@@ -547,15 +560,19 @@ export function summaryName(rows: readonly DiffRow[]): string {
   const order: [DiffRowKind[], string][] = [
     [["moved"], "moved"],
     [["trimmed"], "trimmed"],
-    [["slipped"], "slipped"],
     [["added"], "added"],
     [["removed"], "removed"],
     [["split"], "split"],
+    [["slipped"], "slipped"],
     [["property", "raw"], "changed"],
   ];
   const parts: string[] = [];
   for (const [kinds, verb] of order) {
-    const n = rows.filter((r) => kinds.includes(r.kind)).length;
+    const clips = new Set<string>();
+    for (const r of rows) {
+      if (kinds.includes(r.kind)) for (const id of r.clipIds) clips.add(id);
+    }
+    const n = clips.size;
     if (n === 0) continue;
     parts.push(parts.length === 0 ? `${plural(n, "clip")} ${verb}` : `${n} ${verb}`);
   }

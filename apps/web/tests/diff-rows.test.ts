@@ -188,7 +188,8 @@ describe("presentDiff — one row per change, copy-sheet wording", () => {
       "Interview · End trimmed by 18 frames · now ends 00:00:19:06",
     ]);
     expect(p.count).toBe(2);
-    expect(p.summaryName).toBe("2 clips trimmed");
+    // two rows on ONE clip → the name counts the clip, the meta counts the rows
+    expect(p.summaryName).toBe("1 clip trimmed");
   });
 
   it("slipped later, position unchanged", () => {
@@ -218,7 +219,8 @@ describe("presentDiff — one row per change, copy-sheet wording", () => {
       "Welcome · Text colour changed",
     ]);
     expect(p.count).toBe(4); // N = rows, not engine entries (3)
-    expect(p.summaryName).toBe("4 clips changed");
+    // the NAME counts distinct clips (Interview, Welcome), not rows
+    expect(p.summaryName).toBe("2 clips changed");
     expect(p.rows.map((r) => r.key)).toEqual([
       "interview:property:volume",
       "welcome:property:position",
@@ -247,7 +249,7 @@ describe("presentDiff — one row per change, copy-sheet wording", () => {
     const p = presentDiff(base(), after);
     expect(p.rows.map(line)).toEqual([
       'Broll · Added after "B-roll" · at 00:00:41:16 · 00:00:05:00',
-      "Hi · Added first · at 00:00:00:00 · 00:00:01:00",
+      '"Hi" · Added first · at 00:00:00:00 · 00:00:01:00',
     ]);
     // unnamed clips fall back to media filename / text content — never an id
     expect(p.rows.every((r) => !r.clipName.includes("new-"))).toBe(true);
@@ -461,8 +463,15 @@ describe("presentDiff — names, timecode boundaries, empty diff", () => {
       "1 clip trimmed, 7 clips moved along",
     );
     expect(summaryName(rows(["property", "raw", "split", "removed", "slipped"]))).toBe(
-      "1 clip slipped, 1 removed, 1 split, 2 changed",
+      "1 clip removed, 1 split, 1 slipped, 2 changed",
     );
+    // distinct clips per verb: two rows on ONE clip name it `1 clip changed`
+    const twoRowsOneClip = rows(["property", "property"]).map((r) => ({
+      ...r,
+      clipIds: ["same"],
+      clipName: "Welcome",
+    }));
+    expect(summaryName(twoRowsOneClip)).toBe("1 clip changed");
     const long = summaryName(
       rows(["moved", "trimmed", "slipped", "added", "removed", "split", "property", "ripple"]),
     );

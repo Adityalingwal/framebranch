@@ -22,8 +22,9 @@ export const IMPORTED_TIMELINE_COMMIT_NAME = "Imported timeline";
  * `Brought "priya-music" into main`; `into` is spelled out rather than
  * hard-coded so the name stays honest until B3 makes main the only target.
  */
-export const mergeCommitName = (from: string, into: string): string =>
-  `Brought "${from}" into ${into}`;
+/** F1/C4: Bring in only ever lands on `main`; the card says so literally. */
+export const mergeCommitName = (from: string): string =>
+  `Brought "${from}" into main`;
 
 /**
  * B5-2b / C1(5) — restore: a NEW card whose content is an old version.

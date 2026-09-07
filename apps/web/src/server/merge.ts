@@ -180,7 +180,7 @@ export async function finalizeMerge({
     branch: into,
     working,
     timeline: check.timeline,
-    name: mergeCommitName(from.name, into.name),
+    name: mergeCommitName(from.name),
     actor: "user",
     kind: "bring-in",
     actorName,
