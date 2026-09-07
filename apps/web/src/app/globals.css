@@ -758,25 +758,29 @@ body.workspace-is-resizing-horizontal * {
   white-space: nowrap;
 }
 
-.version-panel-back {
-  min-height: 28px;
+.version-panel-close {
+  width: 26px;
+  height: 26px;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 8px;
-  color: var(--fb-text-body);
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--fb-text-dim);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--fb-radius-sm);
   font: inherit;
-  font-size: 10.5px;
+  font-size: 12px;
   cursor: pointer;
 }
 
-.version-panel-back:hover {
+.version-panel-close:hover,
+.version-panel-close:focus-visible {
   color: var(--fb-text-body-2);
-  border-color: rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.065);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  outline: none;
 }
 
 .right-panel-tab:hover:not([aria-selected="true"]):not(:disabled) {

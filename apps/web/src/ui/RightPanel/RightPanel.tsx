@@ -1,7 +1,5 @@
 "use client";
 
-import { ArrowLeft } from "@phosphor-icons/react";
-
 import type { HistoryCommit } from "../../lib/data/api-client";
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
@@ -56,19 +54,23 @@ export function RightPanel({
         overflow: "hidden",
       }}
     >
+      {/* C6 (#60-#62): the title is whichever view is open, the sub-line
+          is the cut (B2 — the only cut label in History), and the control
+          is a bare ✕. It still returns to the Inspector; the Agent panel
+          that C6 wants behind it is B4's. */}
       <div className="version-panel-header">
         <div>
-          <h2>Version control</h2>
-          <span>{currentBranch}</span>
+          <h2>{TABS.find((tab) => tab.id === view)?.label ?? "History"}</h2>
+          <span>Cut: {currentBranch}</span>
         </div>
         {hasInspector && onCloseToInspector && (
           <button
             type="button"
-            className="version-panel-back"
+            className="version-panel-close"
+            aria-label="Close"
             onClick={onCloseToInspector}
           >
-            <ArrowLeft size={14} weight="bold" aria-hidden />
-            Inspector
+            ✕
           </button>
         )}
       </div>
