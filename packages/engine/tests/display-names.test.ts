@@ -92,48 +92,42 @@ describe("OTIO round-trip of names", () => {
     otioTimeline({
       globalStart: { value: 0, rate: 24 },
       tracks: [
-        {
-          ...otioTrack({
-            kind: "Video",
-            children: [
-              otioClip({
-                name: "Interview",
-                sourceStart: 0,
-                duration: 24,
-                rate: 24,
-                targetUrl: "file://interview.mp4",
-                available: { start: 0, duration: 240, rate: 24 },
-              }),
-              otioGap(12, 24),
-              otioClip({
-                // no name at all → stays absent
-                sourceStart: 0,
-                duration: 24,
-                rate: 24,
-                targetUrl: "file://broll.mp4",
-                available: { start: 0, duration: 240, rate: 24 },
-              }),
-            ],
-          }),
+        otioTrack({
           name: "V1",
-        },
-        {
-          ...otioTrack({
-            kind: "Video",
-            framebranchText: true,
-            children: [
-              {
-                ...otioTextClip({
-                  duration: 24,
-                  rate: 24,
-                  textContent: "Welcome",
-                }),
-                name: "Welcome card",
-              },
-            ],
-          }),
+          kind: "Video",
+          children: [
+            otioClip({
+              name: "Interview",
+              sourceStart: 0,
+              duration: 24,
+              rate: 24,
+              targetUrl: "file://interview.mp4",
+              available: { start: 0, duration: 240, rate: 24 },
+            }),
+            otioGap(12, 24),
+            otioClip({
+              // no name at all → stays absent
+              sourceStart: 0,
+              duration: 24,
+              rate: 24,
+              targetUrl: "file://broll.mp4",
+              available: { start: 0, duration: 240, rate: 24 },
+            }),
+          ],
+        }),
+        otioTrack({
           name: "   ", // whitespace-only → treated as absent
-        },
+          kind: "Video",
+          framebranchText: true,
+          children: [
+            otioTextClip({
+              name: "Welcome card",
+              duration: 24,
+              rate: 24,
+              textContent: "Welcome",
+            }),
+          ],
+        }),
       ],
     });
 

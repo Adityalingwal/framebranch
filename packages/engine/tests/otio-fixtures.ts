@@ -67,13 +67,15 @@ export const otioClip = (options: {
 
 /** A FrameBranch text clip travels in `metadata.framebranch`. */
 export const otioTextClip = (options: {
+  /** Display name (B0) — absent → "" like a plain document. */
+  name?: string;
   duration: number;
   rate: number;
   textContent: unknown;
   textStyle?: unknown;
 }): Json => ({
   OTIO_SCHEMA: "Clip.1",
-  name: "",
+  name: options.name ?? "",
   source_range: otioRange(0, options.duration, options.rate),
   media_reference: missingReference(),
   effects: [],
@@ -109,6 +111,8 @@ export const otioTransition = (): Json => ({
 });
 
 export const otioTrack = (options: {
+  /** Display name (B0) — absent → "" like a plain document. */
+  name?: string;
   kind: "Video" | "Audio";
   children: Json[];
   /** Set for a FrameBranch text track. */
@@ -116,7 +120,7 @@ export const otioTrack = (options: {
   schema?: string;
 }): Json => ({
   OTIO_SCHEMA: options.schema ?? "Track.1",
-  name: "",
+  name: options.name ?? "",
   kind: options.kind,
   children: options.children,
   effects: [],
