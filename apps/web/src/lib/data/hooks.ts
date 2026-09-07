@@ -59,6 +59,21 @@ export function useTimelineQuery(branch: string) {
 }
 
 /**
+ * B1 §2.3 — the frozen timeline behind View mode. `commitId === null`
+ * (nobody is viewing) keeps the query idle, so leaving View cannot leave a
+ * stale card refetching after a reset has invalidated everything.
+ */
+export function useTimelineAtQuery(cut: string, commitId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.timelineAt(cut, commitId ?? ""),
+    queryFn: () => api.getTimelineAt(cut, commitId as string),
+    enabled: commitId !== null,
+    // A commit's content is immutable — never refetch what cannot change.
+    staleTime: Infinity,
+  });
+}
+
+/**
  * A1a — the cut list with heads. A1a patch (b): the app turns
  * refetchOnWindowFocus off globally; this query alone turns it back on.
  * A1a patch (c): pass `enabled: false` until the timeline GET has answered

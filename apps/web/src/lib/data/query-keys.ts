@@ -9,6 +9,13 @@
 
 export const queryKeys = {
   timeline: (branch: string) => ["timeline", branch] as const,
+  /**
+   * B1 §2.3 — one card's frozen timeline (View mode). Deliberately NOT a
+   * child of `timeline(branch)`: an edit invalidates the live view, and a
+   * frozen commit can never change, so the two must not share a prefix.
+   */
+  timelineAt: (cut: string, commitId: string) =>
+    ["timeline-at", cut, commitId] as const,
   branches: () => ["branches"] as const,
   historyAll: () => ["history"] as const,
   history: (cut: string) => ["history", cut] as const,

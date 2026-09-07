@@ -6,7 +6,8 @@
  * level is where B1's server-visible behaviour is pinned.
  */
 
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import type { Timeline } from "@framebranch/engine";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { commits } from "../src/db/schema";
@@ -19,6 +20,7 @@ import { POST as postOps } from "../src/app/api/ops/route";
 import { POST as postRestore } from "../src/app/api/restore/route";
 import {
   closeDb,
+  expectError,
   expectOk,
   get,
   getDb,
@@ -94,6 +96,17 @@ async function historyOf(s: Session, cut: string): Promise<HistoryItem[]> {
     commits: HistoryItem[];
   };
   return data.commits;
+}
+
+function volumeOf(timeline: Timeline, clipId: string): number | undefined {
+  for (const track of timeline.tracks) {
+    for (const clip of track.clips) {
+      if (clip.id === clipId && !("textContent" in clip)) {
+        return clip.properties.volume;
+      }
+    }
+  }
+  return undefined;
 }
 
 async function storedChanges(commitId: string): Promise<number | null> {
@@ -232,5 +245,121 @@ describe("B1 §2.2 — commits.changes is written at commit time", () => {
       .where(eq(commits.id, markId));
     const second = await historyOf(s, "main");
     expect(second[0].changes).toBe(99);
+  });
+});
+
+describe("B1 §2.3 — GET /api/timeline?at=‹commitId› (frozen commit)", () => {
+  it("without `at` the route answers exactly as before", async () => {
+    const s = await session();
+    const live = expectOk(
+      await get(getTimeline, "/api/timeline?branch=main", s),
+    ) as Record<string, unknown>;
+    expect(Object.keys(live).sort()).toEqual([
+      "pendingCount",
+      "timeline",
+      "workingRev",
+    ]);
+  });
+
+  it("with `at` it returns that commit's frozen timeline plus its card facts", async () => {
+    const s = await session();
+    const seed = (await historyOf(s, "main")).slice(-1)[0];
+
+    await editVolume(s, "main", "clip-2", 50);
+    await mark(s, "main", "Quieter");
+
+    const frozen = expectOk(
+      await get(getTimeline, `/api/timeline?branch=main&at=${seed.commitId}`, s),
+    ) as {
+      timeline: Timeline;
+      commitId: string;
+      name: string;
+      kind: string;
+      createdAt: string;
+    };
+
+    expect(frozen.commitId).toBe(seed.commitId);
+    expect(frozen.name).toBe(seed.name);
+    expect(frozen.kind).toBe("seed");
+    expect(frozen.createdAt).toBe(seed.createdAt);
+
+    // The frozen side still carries the pre-edit value; the live one moved.
+    const live = expectOk(
+      await get(getTimeline, "/api/timeline?branch=main", s),
+    ) as { timeline: Timeline };
+    expect(volumeOf(live.timeline, "clip-2")).toBe(50);
+    expect(volumeOf(frozen.timeline, "clip-2")).not.toBe(50);
+  });
+
+  it("writes nothing", async () => {
+    const s = await session();
+    const seed = (await historyOf(s, "main")).slice(-1)[0];
+    const before = await getDb().execute(
+      sql`select count(*)::int as n from commits`,
+    );
+    await get(getTimeline, `/api/timeline?branch=main&at=${seed.commitId}`, s);
+    const after = await getDb().execute(
+      sql`select count(*)::int as n from commits`,
+    );
+    expect(after).toEqual(before);
+  });
+
+  it("an unknown commit → 404 E_COMMIT_NOT_FOUND", async () => {
+    const s = await session();
+    const call = await get(getTimeline, "/api/timeline?branch=main&at=nope", s);
+    expect(call.status).toBe(404);
+    expect(expectError(call).code).toBe("E_COMMIT_NOT_FOUND");
+  });
+
+  it("a commit that is not on this cut's chain → 400 E_BAD_REQUEST", async () => {
+    const s = await session();
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name: "priya-music", from: "main", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    );
+    await editVolume(s, "priya-music", "clip-2", 50);
+    const onPriya = await mark(s, "priya-music", "Music pass");
+
+    const call = await get(
+      getTimeline,
+      `/api/timeline?branch=main&at=${onPriya}`,
+      s,
+    );
+    expect(call.status).toBe(400);
+    expect(expectError(call).code).toBe("E_BAD_REQUEST");
+  });
+
+  it("an unknown cut → 404 E_BRANCH_NOT_FOUND, `at` or not", async () => {
+    const s = await session();
+    const seed = (await historyOf(s, "main")).slice(-1)[0];
+    const call = await get(
+      getTimeline,
+      `/api/timeline?branch=nope&at=${seed.commitId}`,
+      s,
+    );
+    expect(call.status).toBe(404);
+    expect(expectError(call).code).toBe("E_BRANCH_NOT_FOUND");
+  });
+
+  it("a commit from another project is unknown, not forbidden", async () => {
+    const a = await session();
+    const seedA = (await historyOf(a, "main")).slice(-1)[0].commitId;
+    const b = await session();
+
+    const call = await get(getTimeline, `/api/timeline?branch=main&at=${seedA}`, b);
+    expect(call.status).toBe(404);
+    expect(expectError(call).code).toBe("E_COMMIT_NOT_FOUND");
+
+    // Sanity: the id really does exist, just not in project B.
+    const rows = await getDb()
+      .select({ id: commits.id })
+      .from(commits)
+      .where(and(eq(commits.id, seedA)));
+    expect(rows).toHaveLength(1);
   });
 });
