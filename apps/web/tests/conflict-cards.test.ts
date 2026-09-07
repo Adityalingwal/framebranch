@@ -22,7 +22,10 @@ import {
   buildAfterDisplay,
   presentConflictCards,
 } from "../src/server/conflict-cards";
-import type { ConflictCard } from "../src/server/conflict-cards";
+import type {
+  ConflictCard,
+  ConflictRecord,
+} from "../src/server/conflict-cards";
 
 const R = 24;
 const CUT = "priya-music";
@@ -127,7 +130,13 @@ function apply(tl: Timeline, ...commands: Command[]): Timeline {
   return current;
 }
 
-/** base → ours/theirs → the engine → the cards, exactly as the route does. */
+/**
+ * base → ours/theirs → the engine → the cards, exactly as the route does:
+ * two runs (no choices, then the answers), records ordered by the first run
+ * and overridden by the second, each carrying the COMPOSED draft of the run
+ * that reported it, and a card only for a conflict that is still open or has
+ * been answered.
+ */
 function cardsFor(
   ourCommands: Command[],
   theirCommands: Command[],
@@ -140,6 +149,22 @@ function cardsFor(
   if (!run.ok) throw new Error(`engine refused: ${run.error.message}`);
   const known = recompute(start, ours, theirs, {});
   if (!known.ok) throw new Error(`engine refused: ${known.error.message}`);
+
+  const records = new Map<string, ConflictRecord>();
+  const order: string[] = [];
+  const add = (conflict: MergeConflict, composed: Timeline, over: boolean) => {
+    if (!records.has(conflict.conflictId)) order.push(conflict.conflictId);
+    else if (!over) return;
+    records.set(conflict.conflictId, { conflict, composed });
+  };
+  for (const conflict of known.conflicts) {
+    add(conflict, known.composed ?? known.timeline, false);
+  }
+  for (const conflict of run.conflicts) {
+    add(conflict, run.composed ?? run.timeline, true);
+  }
+  const openIds = new Set(run.conflicts.map((c) => c.conflictId));
+
   const { after, undecidedClipIds } = buildAfterDisplay(
     run.timeline,
     ours,
@@ -151,7 +176,9 @@ function cardsFor(
     theirs,
     after,
     cutName: CUT,
-    conflicts: known.conflicts,
+    conflicts: order
+      .filter((id) => openIds.has(id) || choices[id] !== undefined)
+      .map((id) => records.get(id)!),
     choices,
   });
   return { cards, undecidedClipIds, after };
@@ -398,7 +425,7 @@ describe("bucket 1 — titles (#137, #137a-#137i)", () => {
       theirs,
       after: ours,
       cutName: CUT,
-      conflicts: [conflict],
+      conflicts: [{ conflict, composed: ours }],
       choices: {},
     });
     expect(cards[0].title).toBe(`"Interview" — both cuts changed it`);
@@ -582,6 +609,75 @@ describe("bucket 3 — overlap (#143-#145)", () => {
       { label: "Keep original", choice: "base" },
     ]);
     expect(card!.lines[2].jump).toBeNull();
+  });
+
+  /**
+   * Codex BUG 1. BOTH sides move BOTH clips, and the answers upstream pick
+   * one side's A and the other side's B — so neither source timeline holds
+   * the pair as it actually lands. The old presenter guessed "main" for a
+   * clip both sides had moved and measured the range off main's copies: the
+   * title read `50–20` (start after end) and both lines said `from main`.
+   * The composed draft is the only honest witness.
+   */
+  it("both sides moved both clips: the range is the engine's own, and each line names the side that won", () => {
+    const start: Timeline = {
+      projectRate: R,
+      tracks: [
+        {
+          id: "v1",
+          kind: "video",
+          name: "V1",
+          clips: [
+            media("a", "Opener", "m-interview", 0, 30, 0),
+            media("b", "Closer", "m-broll", 200, 30, 0),
+          ],
+        },
+      ],
+      mediaRefs: MEDIA,
+    };
+    // main: A → 10, B → 50. The cut: A → 55, B → 20. (The order inside each
+    // side only keeps that side's own timeline legal at every step.)
+    const ourCommands: Command[] = [
+      { op: "move", clipId: "a", newStart: t(10) },
+      { op: "move", clipId: "b", newStart: t(50) },
+    ];
+    const theirCommands: Command[] = [
+      { op: "move", clipId: "a", newStart: t(55) },
+      { op: "move", clipId: "b", newStart: t(20) },
+    ];
+
+    // Two bucket-1 `both cuts moved it` conflicts to start with.
+    const first = cardsFor(ourCommands, theirCommands, {}, start);
+    expect(first.cards.map((c) => c.bucket)).toEqual([1, 1]);
+    const idOf = (clipName: string) =>
+      first.cards.find((c) => c.title.startsWith(`"${clipName}"`))!.conflictId;
+    // Keep the CUT's A (55) and MAIN's B (50) — they now collide.
+    const choices: Record<string, MergeChoice> = {
+      [idOf("Opener")]: "theirs",
+      [idOf("Closer")]: "ours",
+    };
+
+    const { cards } = cardsFor(ourCommands, theirCommands, choices, start);
+    const overlap = cards.filter((c) => c.bucket === 3);
+    expect(overlap).toHaveLength(1);
+    const card = overlap[0];
+
+    // The engine's own overlap: A [55,85) against B [50,80) → [55,80).
+    expect(card.title).toBe(
+      `"Opener" and "Closer" overlap on V1 (00:00:02:07–00:00:03:08)`,
+    );
+    // Monotonic, always — never `50–20`.
+    const [, from, to] = /\((.+)–(.+)\)$/.exec(card.title)!;
+    expect(from < to).toBe(true);
+
+    const lineFor = (name: string) =>
+      card.lines.find((l) => l.label === name)!;
+    expect(lineFor("Opener").value).toBe(`from ${CUT}`);
+    expect(lineFor("Opener").side).toBe("cut");
+    expect(lineFor("Closer").value).toBe("from main");
+    expect(lineFor("Closer").side).toBe("main");
+    expect(card.lines[2].side).toBe("original");
+    expect(card.lines[2].value).toBe("(this spot was empty)");
   });
 });
 

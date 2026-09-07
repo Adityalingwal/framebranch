@@ -72,6 +72,21 @@ export type ConflictCard = {
   chosen: MergeChoice | null;
 };
 
+/**
+ * One conflict plus the composed draft it was OPEN in
+ * (`MergeSuccess.composed ?? MergeSuccess.timeline` of that engine run).
+ *
+ * Per conflict, not per preview: an answered overlap no longer exists in the
+ * current run (its clips have been shifted or reverted), so the only draft
+ * that still shows where its two clips collided is the run that reported it.
+ * Bucket 3 reads positions and provenance from there; buckets 1 and 2 ignore
+ * it.
+ */
+export type ConflictRecord = {
+  conflict: MergeConflict;
+  composed: Timeline;
+};
+
 export type ConflictCardsInput = {
   /** Original — the merge base's timeline (F2b). */
   base: Timeline;
@@ -84,7 +99,7 @@ export type ConflictCardsInput = {
   /** The cut being brought in — every button and side label says its name. */
   cutName: string;
   /** Every conflict this preview knows about, in the order the cards appear. */
-  conflicts: readonly MergeConflict[];
+  conflicts: readonly ConflictRecord[];
   /** The answers so far; a card's `chosen` is looked up here. */
   choices: Readonly<Record<string, MergeChoice>>;
 };
@@ -451,7 +466,8 @@ export function presentConflictCards(
 
   const cards: ConflictCard[] = [];
 
-  for (const conflict of conflicts) {
+  for (const record of conflicts) {
+    const conflict = record.conflict;
     const chosen = choices[conflict.conflictId] ?? null;
     const participants = conflict.participants;
 
@@ -603,30 +619,35 @@ export function presentConflictCards(
 
     // Bucket 3 — two clips landed on the same spot of one track.
     const [idA, idB] = participants.clipIds;
+    // The engine's OWN draft of this collision (`MergeSuccess.composed`):
+    // both clips are in it, at the positions that made them collide. Neither
+    // source side shows that — main's copy sits where main put it, the cut's
+    // where the cut put it, and when BOTH sides moved the same clip there is
+    // no way to tell from the sides alone which move survived the answers
+    // upstream (Codex BUG 1: the range could read start-after-end).
+    const composed = index(record.composed);
+    const placed = (clip: AnyClip) =>
+      `${startOf(clip)}:${clip.timelineRange.duration.value}`;
     /**
-     * Which side put this clip where it collides. A clip only the cut has
-     * is the cut's; a clip both sides hold belongs to whichever side moved
-     * it away from the Original (if neither did, it is where it always was,
-     * so it is main's).
-     *
-     * This is also where #143's range is measured from: the merged timeline
-     * is no help while the overlap is unanswered (the engine withholds both
-     * clips, and the After lane then draws main's copies at main's own
-     * positions), so the collision only exists between the two source sides.
+     * #144's `from ‹side›`. A clip only one side has belongs to that side.
+     * When both sides hold it, the composed position decides: main first
+     * (a clip that never moved is main's), then the cut. If neither matches
+     * — the merge composed something out of both — the card says `main`
+     * rather than inventing a third answer.
      */
     const owner = (id: string): "main" | "cut" => {
       const inOurs = sides.ours.get(id);
       const inTheirs = sides.theirs.get(id);
       if (!inOurs) return "cut";
       if (!inTheirs) return "main";
-      const inBase = sides.base.get(id);
-      const placed = (clip: AnyClip) =>
-        `${startOf(clip)}:${clip.timelineRange.duration.value}`;
-      const original = inBase ? placed(inBase.clip) : null;
-      const cutMoved = original === null || placed(inTheirs.clip) !== original;
-      const mainMoved = original === null || placed(inOurs.clip) !== original;
-      return cutMoved && !mainMoved ? "cut" : "main";
+      const here = composed.get(id);
+      if (!here) return "main";
+      if (placed(inOurs.clip) === placed(here.clip)) return "main";
+      if (placed(inTheirs.clip) === placed(here.clip)) return "cut";
+      return "main";
     };
+    /** The clip the card NAMES — from the side it came from (names are the
+     * sides' own; the composed draft rebuilds clips and loses them). */
     const locate = (
       id: string,
     ): { clip: AnyClip; timeline: Timeline } | undefined => {
@@ -640,6 +661,9 @@ export function presentConflictCards(
       const inBase = sides.base.get(id);
       return inBase ? { clip: inBase.clip, timeline: base } : undefined;
     };
+    /** The clip the card MEASURES — the composed one, where the two collide. */
+    const positioned = (id: string): AnyClip | undefined =>
+      composed.get(id)?.clip ?? locate(id)?.clip;
     const a = locate(idA);
     const b = locate(idB);
     const nameA = a ? nameOf(a.timeline, a.clip) : "This clip";
@@ -652,15 +676,22 @@ export function presentConflictCards(
       return undefined;
     };
     const trackName = trackOf(participants.trackId) ?? participants.trackId;
-    // The overlap itself: the intersection of the two clips' ranges.
+    // The overlap itself: the intersection of the two composed ranges. The
+    // engine found this pair BY that intersection, so it is always positive
+    // here; the clamp is a floor, not a case (a range can never print
+    // backwards).
+    const pa = positioned(idA);
+    const pb = positioned(idB);
     const overlapStart =
-      a && b ? Math.max(startOf(a.clip), startOf(b.clip)) : (a ?? b)
-        ? startOf((a ?? b)!.clip)
+      pa && pb ? Math.max(startOf(pa), startOf(pb)) : (pa ?? pb)
+        ? startOf((pa ?? pb)!)
         : 0;
-    const overlapEnd =
-      a && b ? Math.min(endOf(a.clip), endOf(b.clip)) : (a ?? b)
-        ? endOf((a ?? b)!.clip)
-        : 0;
+    const overlapEnd = Math.max(
+      overlapStart,
+      pa && pb ? Math.min(endOf(pa), endOf(pb)) : (pa ?? pb)
+        ? endOf((pa ?? pb)!)
+        : 0,
+    );
     const title = `${quoted(nameA)} and ${quoted(nameB)} overlap on ${trackName} (${formatFrames(
       overlapStart,
       rate,

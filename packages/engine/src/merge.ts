@@ -83,6 +83,16 @@ export type MergeSuccess = {
   ok: true;
   status: "ready" | "needs-resolution";
   timeline: Timeline;
+  /**
+   * The composed draft BEFORE the participants of an unanswered overlap are
+   * withheld from `timeline` — the only place the REAL position of each of
+   * those clips exists (`timeline` no longer holds them at all). Absent when
+   * nothing was withheld, and then it equals `timeline`; read it as
+   * `result.composed ?? result.timeline`.
+   *
+   * Additive and read-only: no merge behaviour depends on it.
+   */
+  composed?: Timeline;
   conflicts: readonly MergeConflict[];
   choices: MergeChoices;
   counts: MergeCounts;
@@ -176,6 +186,8 @@ type MergeContext = {
   choices: MergeChoices;
   conflicts: Map<string, InternalConflict>;
   invalidChoice: string | null;
+  /** See `MergeSuccess.composed` — set only when a clip is actually withheld. */
+  composed: Timeline | null;
 };
 
 const VALUE_CHOICES = ["ours", "theirs", "base"] as const;
@@ -1586,6 +1598,10 @@ function processOverlaps(ctx: MergeContext, input: Timeline): Timeline {
           }
         }
       }
+      // The composed draft still HOLDS those clips, at the positions that
+      // made them collide. Keep it before they are withheld: it is the only
+      // record of where each one really landed (B3 fix 1 / Codex BUG 1).
+      if (pendingIds.size > 0) ctx.composed = timeline;
       for (const id of pendingIds) timeline = replaceClip(timeline, id, null);
       return timeline;
     }
@@ -1647,6 +1663,7 @@ export function recompute(
     choices: canonicalChoices(choices),
     conflicts: new Map(),
     invalidChoice: null,
+    composed: null,
   };
   let timeline = composeTimeline(ctx);
   timeline = processOverlaps(ctx, timeline);
@@ -1670,6 +1687,9 @@ export function recompute(
     ok: true,
     status: conflicts.length === 0 ? "ready" : "needs-resolution",
     timeline,
+    // Omitted when nothing was withheld — the field is then `timeline`
+    // itself, and an omitted key keeps the packet exactly as it was.
+    ...(ctx.composed === null ? {} : { composed: ctx.composed }),
     conflicts,
     choices: canonicalChoices(choices),
     counts,

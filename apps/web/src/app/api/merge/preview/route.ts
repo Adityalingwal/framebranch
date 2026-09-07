@@ -18,7 +18,7 @@
  */
 
 import { recompute } from "@framebranch/engine";
-import type { MergeChoice, MergeConflict, Timeline } from "@framebranch/engine";
+import type { MergeChoice, MergeSuccess, Timeline } from "@framebranch/engine";
 import { z } from "zod";
 
 import { loadBranchView } from "../../../../server/branches";
@@ -26,7 +26,10 @@ import {
   buildAfterDisplay,
   presentConflictCards,
 } from "../../../../server/conflict-cards";
-import type { ConflictCard } from "../../../../server/conflict-cards";
+import type {
+  ConflictCard,
+  ConflictRecord,
+} from "../../../../server/conflict-cards";
 import { presentDiff } from "../../../../server/diff-rows";
 import type { DiffRow } from "../../../../server/diff-rows";
 import { ApiError } from "../../../../server/envelope";
@@ -101,6 +104,12 @@ function readChoices(request: Request): Record<string, MergeChoice> {
  * An answered conflict that neither run describes (created and answered in
  * the same cascade) is recovered by asking the engine what the choices
  * WITHOUT that one answer produce.
+ *
+ * Each record carries the COMPOSED draft of the run that reported it (§ the
+ * `ConflictRecord` comment): an answered overlap does not exist in the
+ * current run any more, so only that run still shows where its two clips
+ * collided. The `open` run wins for a conflict both runs describe — it is
+ * the one the rest of the screen is built from.
  */
 const CASCADE_LOOKUPS = 8;
 
@@ -109,18 +118,24 @@ function orderConflicts(input: {
   ours: Timeline;
   theirs: Timeline;
   choices: Record<string, MergeChoice>;
-  known: readonly MergeConflict[];
-  open: readonly MergeConflict[];
-}): MergeConflict[] {
-  const records = new Map<string, MergeConflict>();
+  known: MergeSuccess;
+  open: MergeSuccess;
+}): ConflictRecord[] {
+  const records = new Map<string, ConflictRecord>();
   const order: string[] = [];
-  const add = (conflict: MergeConflict) => {
-    if (records.has(conflict.conflictId)) return;
-    records.set(conflict.conflictId, conflict);
-    order.push(conflict.conflictId);
+  const add = (record: ConflictRecord, override: boolean) => {
+    const id = record.conflict.conflictId;
+    if (!records.has(id)) order.push(id);
+    else if (!override) return;
+    records.set(id, record);
   };
-  for (const conflict of input.known) add(conflict);
-  for (const conflict of input.open) add(conflict);
+  const draftOf = (run: MergeSuccess): Timeline => run.composed ?? run.timeline;
+  for (const conflict of input.known.conflicts) {
+    add({ conflict, composed: draftOf(input.known) }, false);
+  }
+  for (const conflict of input.open.conflicts) {
+    add({ conflict, composed: draftOf(input.open) }, true);
+  }
 
   const missing = Object.keys(input.choices).filter((id) => !records.has(id));
   for (const id of missing.slice(0, CASCADE_LOOKUPS)) {
@@ -129,10 +144,12 @@ function orderConflicts(input: {
     const run = recompute(input.base, input.ours, input.theirs, without);
     if (!run.ok) continue;
     const found = run.conflicts.find((conflict) => conflict.conflictId === id);
-    if (found) add(found);
+    if (found) add({ conflict: found, composed: draftOf(run) }, true);
   }
 
-  const openIds = new Set(input.open.map((conflict) => conflict.conflictId));
+  const openIds = new Set(
+    input.open.conflicts.map((conflict) => conflict.conflictId),
+  );
   return order
     .filter((id) => openIds.has(id) || input.choices[id] !== undefined)
     .map((id) => records.get(id)!);
@@ -186,8 +203,8 @@ export async function GET(request: Request): Promise<Response> {
         ours,
         theirs,
         choices,
-        known: known.conflicts,
-        open: answered.conflicts,
+        known,
+        open: answered,
       });
 
       const { after, undecidedClipIds } = buildAfterDisplay(
