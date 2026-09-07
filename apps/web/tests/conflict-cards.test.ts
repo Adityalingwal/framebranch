@@ -581,6 +581,42 @@ describe("bucket 2 — removed on one side (#140-#142)", () => {
       `"Welcome" — ${CUT} removed it, main changed the text style`,
     );
   });
+
+  /**
+   * Codex BUG 2. main splits `Interview` and touches the second piece; the
+   * cut trims `Interview`'s end away, so the span of that piece is gone on
+   * the cut's side. The conflict is about the PIECE (`interview@120`) — and
+   * both sides still hold the family's first piece, so the old family-wide
+   * "any clip present" scan concluded that MAIN removed it and swapped the
+   * whole card: title, remover line and both buttons.
+   *
+   * (The volume change on the piece is what makes the engine see a
+   * change-vs-delete at all: main splitting alone leaves the second span
+   * untouched, so the cut's trim is a plain one-sided delete and there is no
+   * conflict to show. The title's verb still comes from the FIRST row of the
+   * family — the split.)
+   */
+  it("a split family: the participant piece decides the remover, not the family", () => {
+    const card = one(
+      [
+        { op: "split", clipId: "interview", at: t(360) },
+        volume("interview@120", 40),
+      ],
+      [{ op: "trim", clipId: "interview", edge: "end", delta: t(-120) }],
+    );
+    expect(card.bucket).toBe(2);
+    // #140a + #140d — the CUT is the remover here.
+    expect(card.title).toBe(`Interview — ${CUT} removed it, main split it`);
+    expect(values(card)).toEqual([
+      "main · Split into 2 clips",
+      `${CUT} · Removed`,
+    ]);
+    // #142 — and the buttons follow the remover.
+    expect(card.buttons).toEqual([
+      { label: "Keep main's", choice: "clip" },
+      { label: `Keep ${CUT}'s`, choice: "delete" },
+    ]);
+  });
 });
 
 // ---------------------------------------------------------------------------

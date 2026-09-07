@@ -555,11 +555,24 @@ export function presentConflictCards(
       const oursClip = present(sides.ours);
       const theirsClip = present(sides.theirs);
       const baseClip = present(sides.base);
-      // The engine does not say which side removed; the side whose timeline
-      // holds NO clip of the family is the remover. (Both sides holding one
-      // is not a bucket-2 shape — `main` is assumed then, so a card still
-      // renders rather than the preview failing.)
-      const cutRemoved = oursClip !== undefined && theirsClip === undefined;
+      // The engine does not say which side removed. The question is about
+      // the PARTICIPANT — the piece or span the conflict is actually about —
+      // not the family: with a split family both sides can hold some piece
+      // while the participant exists on one side only, and a family-wide
+      // scan then names the wrong remover, inverts the title and swaps the
+      // buttons (Codex BUG 2).
+      const holds = (map: Map<string, Located>): boolean =>
+        participants.clipIds.some((id) => map.has(id));
+      const holdsOurs = holds(sides.ours);
+      const holdsTheirs = holds(sides.theirs);
+      const cutRemoved =
+        holdsOurs !== holdsTheirs
+          ? // Exactly one side has the participant: the other removed it.
+            holdsOurs
+          : // Ambiguous (both hold a participant id, or neither does) — fall
+            // back to the family scan, and if that is ambiguous too assume
+            // main, so a card still renders rather than the preview failing.
+            oursClip !== undefined && theirsClip === undefined;
       const mainRemoved = !cutRemoved;
       const keeperClip = mainRemoved ? theirsClip : oursClip;
       const keeperRows = rowsAgainstBase(mainRemoved ? "theirs" : "ours");
