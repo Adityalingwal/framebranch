@@ -1,215 +1,299 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Robot, User } from "@phosphor-icons/react";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
 import { NOW_SIDE } from "../../lib/data/api-client";
-import { useDiffQuery, useHistoryQuery } from "../../lib/data/hooks";
+import type { CompareQuery } from "../../lib/data/hooks";
 import { formatClock } from "../../lib/format";
+import type { DiffRow } from "../../server/diff-rows";
 import { CustomSelect } from "../CustomSelect";
 
 /**
- * §6 — Changes panel: pick two points, `GET /api/diff`, render the shared
- * presenter's rows one per line (D4(1); the server orders older → newer, so
- * whichever way the pickers are set the reading is the same).
+ * B2 §2.5 — the Compare view's right column: two pickers, the summary line,
+ * one row per change (D4(1)).
  *
- * D2/D3: `Now` — the working timeline — is a side like any card, and the
- * DEFAULT pair is `head → Now`, which is exactly what the top-bar chip
- * counts, so the chip and this panel can never tell different stories.
- * B2 rewrites the inside of this panel (lanes, row redesign, summary
- * line); B1 only gives it `Now`, the default, and the Compare preselect.
+ * This panel owns NOTHING. The pair, the query, the highlight and the
+ * player focus all live in the Shell, because the lanes in the centre read
+ * the same state (§2.4). The presenter has already produced every string a
+ * row shows (`clipName` / `text` / `where`, copy #113-#125) — the job here
+ * is layout, hover and click.
+ *
+ * Rows above 20 are grouped under their track name (D4 impl-note): a flat
+ * list of 30 rows loses the "what happened where" shape the lanes give.
  */
+
+/** D4 impl-note — above this many rows the flat list stops being readable. */
+const GROUP_ROWS_ABOVE = 20;
+
 export function ChangesPanel({
-  currentBranch,
-  head,
-  preselect,
-  onPreselectConsumed,
+  commits,
+  pair,
+  onPairChange,
+  historyEmpty,
+  compare,
+  highlightedClipIds,
   onHighlightClip,
+  onRowClick,
 }: {
-  currentBranch: string;
-  /** This cut's head commit id (A1b), or null while it is unknown. */
-  head: string | null;
-  /** B5 IMPL-NOTE (d) — the pair the View bar's Compare button asks for. */
-  preselect: { from: string; to: string } | null;
-  onPreselectConsumed: () => void;
-  onHighlightClip: (clipId: string | null) => void;
+  commits: HistoryCommit[];
+  pair: { a: string; b: string } | null;
+  onPairChange: (pair: { a: string; b: string }) => void;
+  /** History has answered and holds no card (cannot happen in this product). */
+  historyEmpty: boolean;
+  compare: CompareQuery;
+  highlightedClipIds: string[];
+  onHighlightClip: (clipIds: string[]) => void;
+  onRowClick: (row: DiffRow) => void;
 }) {
-  const history = useHistoryQuery(currentBranch);
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
-  const [from, setFrom] = useState<string | null>(null);
-  const [to, setTo] = useState<string | null>(null);
-  const [defaulted, setDefaulted] = useState(false);
-
-  const commits = history.data?.commits ?? [];
-
-  // Switching cuts throws the pair away — a commit id means nothing on
-  // another cut's chain.
-  useEffect(() => {
-    setDefaulted(false);
-    setFrom(null);
-    setTo(null);
-  }, [currentBranch]);
-
-  // Compare wins over the default: it is an explicit request, and it may
-  // arrive before or after the default would have applied.
-  useEffect(() => {
-    if (!preselect) return;
-    setFrom(preselect.from);
-    setTo(preselect.to);
-    setDefaulted(true);
-    onPreselectConsumed();
-  }, [preselect, onPreselectConsumed]);
-
-  // D3a — the default pair, applied once per cut: `head → Now`. After
-  // that the user's own picks are never overwritten.
-  //
-  // `preselect` is checked here as well as above because on the render
-  // that mounts this panel BOTH effects run before either `setState` is
-  // visible: `defaulted` is still false in this closure, so without the
-  // guard the default would land on top of the pair Compare just asked
-  // for.
-  useEffect(() => {
-    if (preselect || defaulted || !head) return;
-    setFrom(head);
-    setTo(NOW_SIDE);
-    setDefaulted(true);
-  }, [preselect, defaulted, head]);
-
-  const diff = useDiffQuery(currentBranch, from, to);
+  const options = versionOptions(commits);
+  const data = compare.data;
 
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          marginBottom: 12,
-        }}
-      >
-        <VersionPicker
-          label="From"
-          commits={commits}
-          value={from}
-          onChange={setFrom}
+    <div className="changes-panel">
+      {/* #100 — ONE line. `From`/`To` would lie: the view always reads
+          older → newer whichever way the two are picked (D4(12)). */}
+      <div className="changes-pickers">
+        <span>Compare</span>
+        <CustomSelect
+          value={pair?.a ?? ""}
+          placeholder="Choose a version…"
+          ariaLabel="First version to compare"
+          className="panel-select"
+          options={options}
+          onChange={(a) => onPairChange({ a, b: pair?.b ?? NOW_SIDE })}
         />
-        <VersionPicker
-          label="To"
-          commits={commits}
-          value={to}
-          onChange={setTo}
+        <span>with</span>
+        <CustomSelect
+          value={pair?.b ?? ""}
+          placeholder="Choose a version…"
+          ariaLabel="Second version to compare"
+          className="panel-select"
+          options={options}
+          onChange={(b) => onPairChange({ a: pair?.a ?? NOW_SIDE, b })}
         />
       </div>
 
-      {!from || !to ? (
+      {compare.isError ? (
+        <Empty>{"Couldn't load these changes."}</Empty>
+      ) : pair === null && historyEmpty ? (
+        // #106 — the honest fallback when there is nothing to pick at all:
+        // History has SETTLED and is empty. D3a defaults the pair the moment
+        // the head is known and History always has a card, so in this
+        // product this is unreachable — it must never show while loading.
         <Empty>Pick two versions to compare.</Empty>
-      ) : diff.isLoading ? (
-        <Empty>Loading…</Empty>
-      ) : diff.isError ? (
-        <Empty>Couldn&rsquo;t load this diff.</Empty>
-      ) : diff.data && diff.data.count === 0 ? (
-        <Empty>No changes.</Empty>
+      ) : !data ? (
+        // #107 — includes the moment after a reload on `?view=changes`,
+        // when the head (and so the default pair) is not known yet.
+        <Empty>Comparing…</Empty>
+      ) : data.count === 0 ? (
+        // #108 — the same words as the chip, and nothing else on screen.
+        <Empty>No changes</Empty>
       ) : (
-        <ul
-          style={{
-            margin: 0,
-            padding: 0,
-            listStyle: "none",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}
-        >
-          {diff.data?.rows.map((row) => {
-            const clipId = row.clipIds[0] ?? null;
-            return (
-              <li
-                key={row.key}
-                onMouseEnter={() => clipId && onHighlightClip(clipId)}
-                onMouseLeave={() => onHighlightClip(null)}
-                onClick={() => clipId && onHighlightClip(clipId)}
-                style={{
-                  fontSize: 12,
-                  color: "var(--fb-text-body)",
-                  padding: "6px 8px",
-                  borderRadius: "var(--fb-radius-sm)",
-                  cursor: clipId ? "pointer" : "default",
-                }}
-                className={clipId ? "motion-hover" : undefined}
-              >
-                {row.clipName} · {row.text}
-                {row.where ? ` · ${row.where}` : ""}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {/* #109 / D4(10) — N is the ROW count (a ripple is one row). */}
+          <div className="changes-summary">
+            <span className="changes-summary-count">
+              {data.count} {data.count === 1 ? "change" : "changes"}
+            </span>
+            <span className="changes-summary-runtime">
+              · runtime {data.runtime.before} → {data.runtime.after}
+            </span>
+          </div>
+          <div className="changes-rows">
+            {groupRows(data.rows).map((group) => (
+              <div key={group.trackName ?? "all"}>
+                {group.trackName !== null && (
+                  <div className="changes-group-head">{group.trackName}</div>
+                )}
+                {group.rows.map((row) => (
+                  <Row
+                    key={row.key}
+                    row={row}
+                    hot={isHot(row, highlightedClipIds)}
+                    expanded={expanded.has(row.key)}
+                    onToggleExpanded={() =>
+                      setExpanded((current) => {
+                        const next = new Set(current);
+                        if (next.has(row.key)) next.delete(row.key);
+                        else next.add(row.key);
+                        return next;
+                      })
+                    }
+                    onHighlightClip={onHighlightClip}
+                    onRowClick={onRowClick}
+                  />
+                ))}
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function VersionPicker({
-  label,
-  commits,
-  value,
-  onChange,
-}: {
-  label: string;
-  commits: HistoryCommit[];
-  value: string | null;
-  onChange: (commitId: string) => void;
-}) {
+/**
+ * A row is lit when any clip it touches — on EITHER lane — is highlighted.
+ * `laneIds`, never `clipIds`: hovering the second piece of a split in the
+ * After lane must still light the row that made it (§2.6).
+ */
+function isHot(row: DiffRow, highlighted: string[]): boolean {
+  if (highlighted.length === 0) return false;
   return (
-    <label
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 8,
-        fontSize: 11,
-        color: "var(--fb-text-mute)",
-      }}
-    >
-      <span style={{ width: 32, flexShrink: 0 }}>{label}</span>
-      <CustomSelect
-        value={value ?? ""}
-        placeholder="Choose a version…"
-        ariaLabel={`${label} version`}
-        className="panel-select"
-        options={[
-          // D3b — the picker list is History's list with `Now` on top.
-          { value: NOW_SIDE, label: "Now" },
-          ...commits.map((commit) => ({
-            value: commit.commitId,
-            label: commit.name,
-            description: formatClock(commit.createdAt),
-            // `actor` is gone from the History item (B1); the badge is the
-            // card KIND now — only an agent run gets the robot.
-            icon:
-              commit.kind === "agent-run" ? (
-                <Robot size={15} weight="duotone" aria-hidden />
-              ) : (
-                <User size={15} weight="duotone" aria-hidden />
-              ),
-          })),
-        ]}
-        onChange={onChange}
-      />
-    </label>
+    row.laneIds.before.some((id) => highlighted.includes(id)) ||
+    row.laneIds.after.some((id) => highlighted.includes(id))
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
+function rowClipIds(row: DiffRow): string[] {
+  return [...new Set([...row.laneIds.before, ...row.laneIds.after])];
+}
+
+type RowGroup = { trackName: string | null; rows: DiffRow[] };
+
+/** ≤ 20 rows → one flat list, exactly the mockup. Above that, per track. */
+function groupRows(rows: DiffRow[]): RowGroup[] {
+  if (rows.length <= GROUP_ROWS_ABOVE) return [{ trackName: null, rows }];
+  const groups: RowGroup[] = [];
+  for (const row of rows) {
+    const name = row.trackName || "Timeline";
+    const last = groups.find((g) => g.trackName === name);
+    if (last) last.rows.push(row);
+    else groups.push({ trackName: name, rows: [row] });
+  }
+  return groups;
+}
+
+function Row({
+  row,
+  hot,
+  expanded,
+  onToggleExpanded,
+  onHighlightClip,
+  onRowClick,
+}: {
+  row: DiffRow;
+  hot: boolean;
+  expanded: boolean;
+  onToggleExpanded: () => void;
+  onHighlightClip: (clipIds: string[]) => void;
+  onRowClick: (row: DiffRow) => void;
+}) {
+  const ids = rowClipIds(row);
   return (
-    <div
-      style={{
-        fontSize: 12,
-        color: "var(--fb-text-mute)",
-        textAlign: "center",
-        padding: 20,
-      }}
-    >
-      {children}
-    </div>
+    <>
+      <div
+        className={`changes-row${hot ? " is-hot" : ""}`}
+        role="button"
+        tabIndex={0}
+        onMouseEnter={() => onHighlightClip(ids)}
+        onMouseLeave={() => onHighlightClip([])}
+        onClick={() => onRowClick(row)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          event.preventDefault();
+          onRowClick(row);
+        }}
+      >
+        <Thumb row={row} />
+        <div className="changes-row-copy">
+          <div className="changes-row-name">
+            {row.clipName}
+            {row.kind === "ripple" && (
+              <button
+                type="button"
+                className="changes-row-toggle"
+                aria-expanded={expanded}
+                aria-label={expanded ? "Hide these clips" : "Show these clips"}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleExpanded();
+                }}
+              >
+                {expanded ? "▾" : "▸"}
+              </button>
+            )}
+          </div>
+          <div className="changes-row-what">{row.text}</div>
+          {/* Property rows print no position — the line is left out, not
+              rendered empty (#119-#121c have no `where`). */}
+          {row.where !== "" && (
+            <div className="changes-row-where">{row.where}</div>
+          )}
+        </div>
+      </div>
+      {/* #124b — the shifted clips, names only. */}
+      {expanded &&
+        row.children?.map((child) => (
+          <div
+            key={child.clipId}
+            className="changes-row-child"
+            onMouseEnter={() => onHighlightClip([child.clipId])}
+            onMouseLeave={() => onHighlightClip([])}
+          >
+            {child.clipName}
+          </div>
+        ))}
+    </>
   );
+}
+
+/** The mockup's 34×24 thumbnail, or a glyph when there is no media frame. */
+function Thumb({ row }: { row: DiffRow }) {
+  if (row.thumbnail) {
+    return (
+      <img className="changes-row-thumb" src={row.thumbnail} alt="" />
+    );
+  }
+  const glyph =
+    row.kind === "added"
+      ? "+"
+      : row.kind === "removed"
+        ? "−"
+        : row.kind === "ripple"
+          ? "≡"
+          : row.clipIds.length === 1
+            ? "T" // a text clip: real content, just no frame to show
+            : "▣";
+  return (
+    <span className={`changes-row-thumb is-glyph is-${row.kind}`} aria-hidden>
+      {glyph}
+    </span>
+  );
+}
+
+/**
+ * D3b (#101, #102) — `Now` on top, then this cut's History chain in its own
+ * order, auto cards included and NOT folded. The description is the card's
+ * meta: `‹who› · ‹time›`, or just the time where there is no who (the seed
+ * card's "Start" is not a person; a brought-in card names no one either).
+ */
+function versionOptions(commits: HistoryCommit[]) {
+  return [
+    { value: NOW_SIDE, label: "Now" },
+    ...commits.map((commit) => {
+      const who =
+        commit.kind === "agent-run" ? "Agent" : (commit.actorName ?? null);
+      const time = formatClock(commit.createdAt);
+      return {
+        value: commit.commitId,
+        label: commit.name,
+        description: who ? `${who} · ${time}` : time,
+        icon:
+          commit.kind === "agent-run" ? (
+            <Robot size={15} weight="duotone" aria-hidden />
+          ) : (
+            <User size={15} weight="duotone" aria-hidden />
+          ),
+      };
+    }),
+  ];
+}
+
+function Empty({ children }: { children: React.ReactNode }) {
+  return <div className="changes-empty">{children}</div>;
 }

@@ -22,7 +22,6 @@ import type { TimelineTool } from "./scale";
 export function TimelineView({
   timeline,
   selectedClipId,
-  highlightedClipId,
   playheadFrame,
   onSelectClip,
   onSetPlayhead,
@@ -36,7 +35,6 @@ export function TimelineView({
 }: {
   timeline: Timeline;
   selectedClipId: string | null;
-  highlightedClipId?: string | null;
   playheadFrame: number;
   onSelectClip: (clip: AnyClip, track: Track) => void;
   onSetPlayhead: (frame: number) => void;
@@ -403,7 +401,6 @@ export function TimelineView({
                 canvasWidth={canvasWidth}
                 pxPerSecond={pxPerSecond}
                 selectedClipId={selectedClipId}
-                highlightedClipId={highlightedClipId}
                 hidden={hiddenTracks.has(track.id)}
                 muted={mutedTracks.has(track.id)}
                 locked={lockedTracks.has(track.id)}

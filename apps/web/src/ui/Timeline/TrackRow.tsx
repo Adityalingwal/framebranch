@@ -46,7 +46,6 @@ export function TrackRow({
   canvasWidth,
   pxPerSecond,
   selectedClipId,
-  highlightedClipId,
   hidden,
   muted,
   locked,
@@ -76,7 +75,6 @@ export function TrackRow({
   canvasWidth: number;
   pxPerSecond: number;
   selectedClipId: string | null;
-  highlightedClipId?: string | null;
   hidden: boolean;
   muted: boolean;
   locked: boolean;
@@ -480,7 +478,6 @@ export function TrackRow({
                 projectRate={timeline.projectRate}
                 pxPerSecond={pxPerSecond}
                 selected={clip.id === selectedClipId}
-                highlighted={clip.id === highlightedClipId}
                 slipEnabled={!isTextClip(clip) && mediaRef?.kind !== "image"}
                 locked={locked}
                 tool={tool}

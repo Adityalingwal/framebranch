@@ -39,7 +39,6 @@ export function ClipBlock({
   projectRate,
   pxPerSecond,
   selected,
-  highlighted,
   slipEnabled,
   locked,
   tool,
@@ -59,7 +58,6 @@ export function ClipBlock({
   projectRate: number;
   pxPerSecond: number;
   selected: boolean;
-  highlighted?: boolean;
   slipEnabled: boolean;
   locked: boolean;
   tool: TimelineTool;
@@ -186,7 +184,7 @@ export function ClipBlock({
   return (
     <button
       type="button"
-      className={`timeline-clip timeline-clip-${trackKind}${selected ? " is-selected" : ""}${highlighted ? " is-highlighted" : ""}${locked ? " is-locked" : ""}${tool === "blade" ? " is-blade" : ""}`}
+      className={`timeline-clip timeline-clip-${trackKind}${selected ? " is-selected" : ""}${locked ? " is-locked" : ""}${tool === "blade" ? " is-blade" : ""}`}
       style={
         {
           left,

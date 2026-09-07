@@ -455,6 +455,8 @@ describe("presentDiff — names, timecode boundaries, empty diff", () => {
         where: "",
         trackId: "v1",
         trackName: "V1",
+        jump: { side: "after" as const, frame: 0, clipId: `c${i}` },
+        laneIds: { before: [`c${i}`], after: [`c${i}`] },
       }));
     expect(summaryName(rows(["trimmed", "moved", "moved", "moved", "added"]))).toBe(
       "3 clips moved, 1 trimmed, 1 added",
@@ -477,5 +479,189 @@ describe("presentDiff — names, timecode boundaries, empty diff", () => {
     );
     expect(long.length).toBeLessThanOrEqual(60);
     expect(long.endsWith("…")).toBe(true);
+  });
+});
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// B2 §2.1 — `jump` (row click → player) and `laneIds` (lane colour +
+// two-way highlight). `jump.frame` is ALWAYS the frame behind the last
+// timecode the row prints; `Removed` is the only row that answers on the
+// Before side (lock (3)).
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+describe("presentDiff — jump + laneIds per kind (B2 lock (3), §2.6)", () => {
+  it("moved → After at the NEW start, the clip on both lanes", () => {
+    const after = apply(base(), { op: "move", clipId: "broll", newStart: t(96) });
+    const p = presentDiff(base(), after);
+    expect(p.rows[0].jump).toEqual({ side: "after", frame: 96, clipId: "broll" });
+    expect(p.rows[0].laneIds).toEqual({ before: ["broll"], after: ["broll"] });
+  });
+
+  it("moved while alone on its track (the `Moved to ‹tc›` fallback) still jumps to the new start", () => {
+    const after = apply(base(), { op: "move", clipId: "welcome", newStart: t(240) });
+    expect(presentDiff(base(), after).rows[0].jump).toEqual({
+      side: "after",
+      frame: 240,
+      clipId: "welcome",
+    });
+  });
+
+  it("trimmed → the frame behind the printed `now starts` / `now ends`", () => {
+    const after = apply(
+      base(),
+      { op: "trim", clipId: "interview", edge: "end", delta: t(-18) },
+      { op: "trim", clipId: "interview", edge: "start", delta: t(1) },
+    );
+    const p = presentDiff(base(), after);
+    // `now starts 00:00:09:23` = frame 239; `now ends 00:00:19:06` = 462.
+    expect(p.rows[0].jump).toEqual({ side: "after", frame: 239, clipId: "interview" });
+    expect(p.rows[1].jump).toEqual({ side: "after", frame: 462, clipId: "interview" });
+  });
+
+  it("slipped → After at the `stays at` frame (the clip did not move)", () => {
+    const after = apply(base(), { op: "slip", clipId: "interview", delta: t(12) });
+    expect(presentDiff(base(), after).rows[0].jump).toEqual({
+      side: "after",
+      frame: 240,
+      clipId: "interview",
+    });
+  });
+
+  it("property → After at the clip's own start; `where` is empty but the jump is not", () => {
+    const after = apply(base(), {
+      op: "propertyChange",
+      clipId: "interview",
+      property: "volume",
+      value: 60,
+    });
+    const p = presentDiff(base(), after);
+    expect(p.rows[0].where).toBe("");
+    expect(p.rows[0].jump).toEqual({ side: "after", frame: 240, clipId: "interview" });
+    expect(p.rows[0].laneIds).toEqual({
+      before: ["interview"],
+      after: ["interview"],
+    });
+  });
+
+  it("added → After at `at ‹tc›`, and the clip exists on the After lane only", () => {
+    const after = apply(base(), {
+      op: "addClip",
+      trackId: "v1",
+      mediaRefId: "m-broll",
+      sourceRange: range(0, 120),
+      timelineRange: range(1000, 120),
+    });
+    const p = presentDiff(base(), after);
+    const added = p.rows[0];
+    expect(added.jump.side).toBe("after");
+    expect(added.jump.frame).toBe(1000);
+    expect(added.jump.clipId).toBe(added.clipIds[0]);
+    expect(added.laneIds).toEqual({ before: [], after: [added.clipIds[0]] });
+  });
+
+  it("removed → BEFORE at `was at ‹tc›`, and the clip exists on the Before lane only", () => {
+    const after = apply(base(), { op: "deleteClip", clipId: "interview" });
+    const p = presentDiff(base(), after);
+    expect(p.rows[0].jump).toEqual({
+      side: "before",
+      frame: 240,
+      clipId: "interview",
+    });
+    expect(p.rows[0].laneIds).toEqual({ before: ["interview"], after: [] });
+  });
+
+  it("split → After at the cut, focus the ORIGINAL id; original in Before, both pieces in After", () => {
+    const moved = apply(base(), { op: "move", clipId: "interview", newStart: t(480) });
+    const after = apply(moved, { op: "split", clipId: "interview", at: t(600) });
+    const p = presentDiff(moved, after);
+    expect(p.rows[0].jump).toEqual({
+      side: "after",
+      frame: 600,
+      clipId: "interview",
+    });
+    expect(p.rows[0].laneIds.before).toEqual(["interview"]);
+    expect(p.rows[0].laneIds.after).toHaveLength(2);
+    // the leftmost piece keeps the original id, so the focus always resolves
+    expect(p.rows[0].laneIds.after[0]).toBe("interview");
+    // `clipIds` stays ONE id — widening it would make `summaryName` read
+    // "2 clips split" for a single split.
+    expect(p.rows[0].clipIds).toEqual(["interview"]);
+  });
+
+  it("nested split (two cuts) → jump lands on the LAST printed timecode, not the first", () => {
+    const moved = apply(base(), { op: "move", clipId: "interview", newStart: t(480) });
+    const once = apply(moved, { op: "split", clipId: "interview", at: t(600) });
+    // the first piece keeps the original id — split it again, earlier
+    const twice = apply(once, { op: "split", clipId: "interview", at: t(540) });
+    const p = presentDiff(moved, twice);
+    expect(p.rows).toHaveLength(1);
+    expect(p.rows[0].text).toBe("Split into 3 clips");
+    expect(p.rows[0].where).toBe("at 00:00:22:12, 00:00:25:00");
+    expect(p.rows[0].jump).toEqual({ side: "after", frame: 600, clipId: "interview" });
+    expect(p.rows[0].laneIds.before).toEqual(["interview"]);
+    expect(p.rows[0].laneIds.after).toHaveLength(3);
+    expect(p.rows[0].laneIds.after[0]).toBe("interview");
+  });
+
+  it("ripple → the FIRST shifted clip's new start, every shifted clip on both lanes", () => {
+    const before = contiguous();
+    const after = apply(
+      before,
+      { op: "trim", clipId: "a", edge: "end", delta: t(-18) },
+      { op: "move", clipId: "b", newStart: t(30) },
+      { op: "move", clipId: "c", newStart: t(270) },
+      { op: "move", clipId: "d", newStart: t(390) },
+    );
+    const p = presentDiff(before, after);
+    expect(p.rows[1].kind).toBe("ripple");
+    expect(p.rows[1].jump).toEqual({ side: "after", frame: 30, clipId: "b" });
+    expect(p.rows[1].laneIds).toEqual({
+      before: ["b", "c", "d"],
+      after: ["b", "c", "d"],
+    });
+  });
+
+  it("raw `Moved to track` keeps the clip on both lanes; a timeline-scope raw row has no clip at all", () => {
+    const a = base();
+    const v2: Track = { id: "v2", kind: "video", clips: [] };
+    const withV2: Timeline = { ...a, tracks: [...a.tracks, v2] };
+    const crossTrack: Timeline = {
+      ...withV2,
+      tracks: withV2.tracks.map((tr) => {
+        if (tr.id === "v1") {
+          return { ...tr, clips: (tr.clips as Clip[]).filter((c) => c.id !== "broll") };
+        }
+        if (tr.id === "v2") {
+          return { ...tr, clips: [(a.tracks[0].clips as Clip[])[2]] };
+        }
+        return tr;
+      }),
+    };
+    const moved = presentDiff(withV2, crossTrack).rows[0];
+    expect(moved.jump).toEqual({ side: "after", frame: 720, clipId: "broll" });
+    expect(moved.laneIds).toEqual({ before: ["broll"], after: ["broll"] });
+
+    const rerated: Timeline = { ...a, projectRate: 25 };
+    const timelineRow = presentDiff(a, rerated).rows[0];
+    expect(timelineRow.jump).toEqual({ side: "after", frame: 0, clipId: null });
+    expect(timelineRow.laneIds).toEqual({ before: [], after: [] });
+  });
+
+  it("every row of a mixed edit carries both fields", () => {
+    const before = contiguous();
+    const after = apply(
+      before,
+      { op: "move", clipId: "d", newStart: t(600) },
+      { op: "deleteClip", clipId: "c" },
+      { op: "propertyChange", clipId: "b", property: "volume", value: 50 },
+    );
+    const p = presentDiff(before, after);
+    expect(p.rows.length).toBeGreaterThan(0);
+    for (const r of p.rows) {
+      expect(["before", "after"]).toContain(r.jump.side);
+      expect(Number.isFinite(r.jump.frame)).toBe(true);
+      expect(Array.isArray(r.laneIds.before)).toBe(true);
+      expect(Array.isArray(r.laneIds.after)).toBe(true);
+    }
   });
 });
