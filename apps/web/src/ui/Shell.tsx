@@ -672,7 +672,7 @@ export function Shell() {
             {viewing && (
               <div className="view-bar" aria-label="Viewing an old version">
                 <span className="view-bar-text">
-                  Viewing &ldquo;{viewing.name}&rdquo;
+                  {`Viewing "${viewing.name}"`}
                 </span>
                 <span className="view-bar-actions">
                   <button

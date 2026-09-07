@@ -55,8 +55,9 @@ export function HistoryPanel({
       {changesCount !== undefined && changesCount > 0 && headCardName && (
         <div className="history-now-line">
           <span className="history-now-dot" aria-hidden />
-          Now · {changesCount} {changesCount === 1 ? "change" : "changes"} since
-          &ldquo;{headCardName}&rdquo;
+          {`Now · ${changesCount} ${
+            changesCount === 1 ? "change" : "changes"
+          } since "${headCardName}"`}
         </div>
       )}
 

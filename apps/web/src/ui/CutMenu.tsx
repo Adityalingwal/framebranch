@@ -166,7 +166,7 @@ export function CutMenu({
             marginBottom: 10,
           }}
         >
-          Starts from &ldquo;{current}&rdquo; as it is right now.
+          {`Starts from "${current}" as it is right now.`}
         </p>
         <input
           autoFocus
