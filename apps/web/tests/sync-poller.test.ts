@@ -194,6 +194,87 @@ describe("createSyncPoller", () => {
     expect(poller.cursor()).toBeNull();
   });
 
+  /**
+   * B4b fix 5 (Codex GAP) — the two rules the React wrapper owns, driven
+   * through the core the wrapper is a thin shell over. `useSyncPoller`
+   * keeps the cursor in a ref OUTSIDE the poller and keys its effect on
+   * `enabled` alone, with `cut` / `playheadFrame` behind refs; these two
+   * tests reproduce exactly that arrangement.
+   */
+  it("stop → start with the kept cursor: the next request carries it, nothing is missed", async () => {
+    // `enabled` flips false on every switch to a cut whose timeline is not
+    // cached, so the hook throws the poller away and builds another. The
+    // handoff below is the hook's `cursorRef` doing its job.
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(answer({ cursor: 41 }))
+      .mockResolvedValue(answer({ cursor: 55 }));
+
+    let cursorRef: number | null = null; // the hook's ref
+    const build = () =>
+      createSyncPoller({
+        send,
+        read: here,
+        initialCursor: cursorRef,
+        onAnswer: (data) => {
+          cursorRef = data.cursor;
+        },
+      });
+
+    const first = build();
+    first.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send.mock.calls[0][0].cursor).toBeNull();
+    expect(cursorRef).toBe(41);
+
+    first.stop(); // enabled → false
+
+    const second = build(); // enabled → true again
+    second.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    // Not null. A fresh cursor would be answered with the high-water mark
+    // and NO events, silently swallowing everything that happened while
+    // the switch was in the air.
+    expect(send.mock.calls[1][0].cursor).toBe(41);
+    expect(second.cursor()).toBe(55);
+    second.stop();
+  });
+
+  it("a cut change or a playhead move neither restarts the poller nor fires an extra tick", async () => {
+    // The hook's effect depends on `enabled` ALONE; `cut` and
+    // `playheadFrame` live in refs. If they were effect dependencies, a
+    // scrub would tear the interval down and rebuild it dozens of times a
+    // second, each rebuild firing an immediate tick.
+    const send = vi.fn().mockResolvedValue(answer({ cursor: 1 }));
+    const state = { cut: "main", playheadFrame: 0 };
+    const poller = createSyncPoller({
+      send,
+      read: () => ({ tabId: "tab-aaaaaaaa", colourSeed: 10, ...state }),
+      onAnswer: () => {},
+    });
+
+    poller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send).toHaveBeenCalledTimes(1);
+
+    // 40 renders' worth of scrubbing and a cut change, inside one interval.
+    for (let frame = 1; frame <= 40; frame += 1) {
+      state.playheadFrame = frame;
+      await vi.advanceTimersByTimeAsync(10);
+    }
+    state.cut = "priya-music";
+    expect(send).toHaveBeenCalledTimes(1); // still only the first tick
+
+    await vi.advanceTimersByTimeAsync(3000 - 400);
+    expect(send).toHaveBeenCalledTimes(2); // the scheduled tick, on time
+    expect(send.mock.calls[1][0]).toMatchObject({
+      cut: "priya-music",
+      playheadFrame: 40,
+    });
+    poller.stop();
+  });
+
   it("start() twice does not double the interval", async () => {
     const send = vi.fn().mockResolvedValue(answer());
     const poller = createSyncPoller({ send, read: here, onAnswer: () => {} });
