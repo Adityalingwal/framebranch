@@ -176,7 +176,7 @@ export async function GET(request: Request): Promise<Response> {
       // cuts are required, a cut cannot be brought into itself.
       throw new ApiError(
         "E_BAD_REQUEST",
-        "a branch cannot be merged into itself",
+        "a cut cannot be brought into itself",
       );
     }
     const choices = readChoices(request);

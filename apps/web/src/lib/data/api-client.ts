@@ -102,11 +102,15 @@ export function mutationErrorMessage(error: unknown): string {
  * falls back to the server's own `message` — never a raw code to the user.
  */
 const FRIENDLY_MESSAGES: Partial<Record<string, string>> = {
-  E_STALE_HEAD: "This version moved — reload and try again.",
+  // #200. The Bring-in panel shows the SERVER's own sentence for this
+  // code (#151/#152 — only it knows who moved what); this is the line
+  // every other path gets.
+  E_STALE_HEAD: "This cut changed in the meantime — try again.",
   E_NAME_REQUIRED: "Give this version a name first.",
   E_BRANCH_EXISTS: "That name is taken.",
-  E_BRANCH_NOT_FOUND: "That branch no longer exists.",
-  E_PROJECT_NOT_FOUND: "This demo was reset elsewhere — reload the page.",
+  E_BRANCH_NOT_FOUND: "That cut no longer exists.",
+  E_PROJECT_NOT_FOUND:
+    "This project was reset in another window — reload the page.",
   E_BAD_REQUEST: "That request wasn't valid.",
   E_INTERNAL: "Something went wrong.",
   // #207 — the engine's own precondition prose is for logs and tests; the

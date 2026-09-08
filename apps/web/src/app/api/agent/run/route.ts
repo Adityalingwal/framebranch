@@ -63,7 +63,7 @@ export async function POST(request: Request): Promise<Response> {
         // envelope code rather than inventing a string.
         throw new ApiError(
           "E_BRANCH_EXISTS",
-          `a branch named "${cut}" already exists`,
+          `a cut named "${cut}" already exists`,
         );
       }
 

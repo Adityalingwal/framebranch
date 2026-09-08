@@ -14,6 +14,8 @@
  *   import    → `Imported timeline` (API-only)
  */
 
+import { quoted } from "../lib/format";
+
 /** The card a user-supplied `POST import` writes (API-only, G1). */
 export const IMPORTED_TIMELINE_COMMIT_NAME = "Imported timeline";
 
@@ -29,6 +31,11 @@ export const mergeCommitName = (from: string): string =>
 /**
  * B5-2b / C1(5) — restore: a NEW card whose content is an old version.
  * `name` is the name of the card that was restored FROM.
+ *
+ * B5 — the name goes through `quoted()`, the SAME non-nesting rule the UI
+ * uses inside sentences (B1 fix 4): a name that already carries quotes is
+ * not wrapped again, so restoring `Restored "Client pick"` reads
+ * `Restored Restored "Client pick"` and never grows a nested pair.
  */
 export const restoreCommitName = (name: string): string =>
-  `Restored "${name}"`;
+  `Restored ${quoted(name)}`;

@@ -213,8 +213,8 @@ function AutoFold({
               key={commit.commitId}
               type="button"
               className={`history-auto-card${commit.commitId === viewingCommitId ? " is-viewing" : ""}`}
-              aria-label={`View "${commit.name}"`}
-              title={`View "${commit.name}"`}
+              aria-label={`View ${quoted(commit.name)}`}
+              title={`View ${quoted(commit.name)}`}
               onClick={() => onViewCard(commit)}
             >
               <span className="history-auto-name">{commit.name}</span>

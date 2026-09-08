@@ -9,14 +9,14 @@
  * retries"), and every mutation hook needs to be able to set it without
  * being inside a particular provider's subtree.
  *
- * The exact banner text is locked (C6): "Connection lost — your saved work
- * is safe."
+ * The banner text is copy row #194: "Connection lost — your work is safe".
+ * (The older wording said "your saved work"; C5 bans `save` as a user
+ * action, and under B4 nothing waits to be saved — the work IS safe.)
  */
 
 import { useSyncExternalStore } from "react";
 
-export const CONNECTION_LOST_MESSAGE =
-  "Connection lost — your saved work is safe";
+export const CONNECTION_LOST_MESSAGE = "Connection lost — your work is safe";
 
 type ConnectionState = {
   lost: boolean;
