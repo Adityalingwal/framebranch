@@ -3,21 +3,34 @@
 import type { MergeChoice } from "@framebranch/engine";
 
 import type { HistoryCommit } from "../../lib/data/api-client";
-import type { BringInPreviewQuery, CompareQuery } from "../../lib/data/hooks";
+import type { AgentRun } from "../../lib/data/api-client";
+import type {
+  AgentPresetsQuery,
+  BringInPreviewQuery,
+  CompareQuery,
+} from "../../lib/data/hooks";
 import type { ConflictLine } from "../../server/conflict-cards";
 import type { DiffRow } from "../../server/diff-rows";
+import { AgentPanel } from "./AgentPanel";
 import { BringInPanel } from "./BringInPanel";
 import { ChangesPanel } from "./ChangesPanel";
 import { HistoryPanel } from "./HistoryPanel";
 
-export type PanelView = "changes" | "history";
+/**
+ * C6 — `agent` is the DEFAULT view: the Agent panel is what the right
+ * column shows when nothing else is open, and it has no rail button of its
+ * own ("one place, one time").
+ */
+export type PanelView = "agent" | "changes" | "history";
 
-const TABS: { id: PanelView; label: string }[] = [
-  { id: "changes", label: "Changes" },
-  { id: "history", label: "History" },
-];
+/** Copy #60 — the header title is the open view's name. */
+const VIEW_TITLE: Record<PanelView, string> = {
+  agent: "Agent",
+  changes: "Changes",
+  history: "History",
+};
 
-/** §6 — the right panel's tab IS the `?view=` param (M8 lock 2). */
+/** §6 — the right panel's view IS the `?view=` param (M8 lock 2). */
 export function RightPanel({
   view,
   onViewChange,
@@ -26,8 +39,10 @@ export function RightPanel({
   headCardName,
   changesCount,
   viewingCommitId,
-  // `editingLocked` stays in the props (the Shell passes it and B4's Agent
-  // panel reads it) but no panel below consumes it since the Merge tab went.
+  // I1 — the Agent panel is finally the consumer this prop was kept for:
+  // Run / View / Bring into main all write or switch cuts, so View mode,
+  // Compare and a lost connection turn every one of them off.
+  editingLocked,
   commits,
   comparePair,
   historyEmpty,
@@ -46,8 +61,11 @@ export function RightPanel({
   onCancelBringIn,
   onStartAgain,
   onLineClick,
-  hasInspector,
-  onCloseToInspector,
+  agentPresets,
+  runPending,
+  onRunPreset,
+  onViewRun,
+  onBringRunIntoMain,
 }: {
   view: PanelView;
   onViewChange: (view: PanelView) => void;
@@ -83,8 +101,13 @@ export function RightPanel({
   onCancelBringIn: () => void;
   onStartAgain: () => void;
   onLineClick: (line: ConflictLine) => void;
-  hasInspector?: boolean;
-  onCloseToInspector?: () => void;
+  /** I1 — presets + their derived run state, handed down like History. */
+  agentPresets: AgentPresetsQuery;
+  /** I1(5) — the preset whose run is in flight; every Run is off meanwhile. */
+  runPending: string | null;
+  onRunPreset: (presetId: string) => void;
+  onViewRun: (run: AgentRun) => void;
+  onBringRunIntoMain: (run: AgentRun) => void;
 }) {
   return (
     <div
@@ -99,62 +122,35 @@ export function RightPanel({
     >
       {/* C6 (#60-#62): the title is whichever view is open, the sub-line
           is the cut (B2 — the only cut label in History), and the control
-          is a bare ✕. It still returns to the Inspector; the Agent panel
-          that C6 wants behind it is B4's. */}
+          is a bare ✕ that returns to Agent. Agent is the default, so it
+          carries no control at all — there is nothing to close it to. */}
       <div className="version-panel-header">
         <div>
-          <h2>{TABS.find((tab) => tab.id === view)?.label ?? "History"}</h2>
+          <h2>{VIEW_TITLE[view]}</h2>
           <span>Cut: {currentBranch}</span>
         </div>
-        {hasInspector && onCloseToInspector && (
+        {view !== "agent" && (
           <button
             type="button"
             className="version-panel-close"
             aria-label="Close"
-            onClick={onCloseToInspector}
+            onClick={() => onViewChange("agent")}
           >
             ✕
           </button>
         )}
       </div>
-      <div
-        role="tablist"
-        style={{
-          display: "flex",
-          gap: 4,
-          padding: 8,
-          borderBottom: "1px solid rgba(255,255,255,.05)",
-          flexShrink: 0,
-        }}
-      >
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={view === tab.id}
-            onClick={() => onViewChange(tab.id)}
-            className="motion-hover right-panel-tab"
-            style={{
-              flex: 1,
-              padding: "6px 10px",
-              fontSize: 12,
-              fontWeight: 500,
-              borderRadius: "var(--fb-radius-sm)",
-              border: "none",
-              cursor: "pointer",
-              color:
-                view === tab.id
-                  ? "var(--fb-text-body-2)"
-                  : "var(--fb-text-mute)",
-              background: view === tab.id ? "var(--fb-panel-2)" : "transparent",
-            }}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
       <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: 12 }}>
+        {view === "agent" && (
+          <AgentPanel
+            presets={agentPresets}
+            runPending={runPending}
+            editingLocked={editingLocked}
+            onRun={onRunPreset}
+            onView={onViewRun}
+            onBringIntoMain={onBringRunIntoMain}
+          />
+        )}
         {view === "changes" && bringIn !== null && (
           <BringInPanel
             cut={bringIn.cut}

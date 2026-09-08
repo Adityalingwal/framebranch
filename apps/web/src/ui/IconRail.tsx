@@ -1,42 +1,36 @@
 "use client";
 
+/**
+ * IconRail.tsx — the left rail (C6, copy #50-#59).
+ *
+ * C6: three items, no section headings — **Changes · History · Export**.
+ * Merge left with its panel (B3), Import left the product (G1), and the
+ * agent has NO rail button: the Agent panel is the right panel's default,
+ * and "one place, one time" was the lock. The footer is Editor controls +
+ * `New project…`, which replaced `Reset demo`.
+ *
+ * Clicking Changes or History puts that view in the RIGHT panel; the panel
+ * is what shows content, this is only navigation.
+ */
+
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowCounterClockwise,
   ClockCounterClockwise,
   DownloadSimple,
   GitDiff,
   Keyboard,
+  Plus,
   PushPinSimple,
-  Robot,
-  UploadSimple,
 } from "@phosphor-icons/react";
 
-import type { ImportWarning } from "@framebranch/engine";
-
-import {
-  useAgentSimulateMutation,
-  useDemoResetMutation,
-  useExportMutation,
-  useImportMutation,
-} from "../lib/data/hooks";
+import { useExportMutation } from "../lib/data/hooks";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { showToast } from "../lib/state/toast-status";
-import { ConfirmDialog } from "./ConfirmDialog";
 import { ModalShell } from "./ModalShell";
+import { NewProjectDialog } from "./NewProjectDialog";
 import type { PanelView } from "./RightPanel/RightPanel";
 
-const AGENT_BRANCH = "tighten-intro";
-const AGENT_SCRIPT = "tighten-intro";
 const COLLAPSE_DELAY_MS = 240;
-
-function describeSkipped(items: ImportWarning[]): string {
-  if (items.length === 0) return "Imported successfully.";
-  const list = items
-    .map((warning) => `${warning.count} ${warning.detail}`)
-    .join(", ");
-  return `Imported. Skipped: ${list} — these will not come back on export.`;
-}
 
 function downloadJson(data: unknown, filename: string): void {
   const blob = new Blob([JSON.stringify(data, null, 2)], {
@@ -57,7 +51,7 @@ export function IconRail({
   changesCount,
   editingLocked,
   onViewChange,
-  onDemoReset,
+  onNewProject,
 }: {
   view: PanelView;
   versioningOpen: boolean;
@@ -70,35 +64,25 @@ export function IconRail({
   changesCount: number | undefined;
   /**
    * B5-1 — Shell's one derived lock (connection lost OR a card is being
-   * viewed). Import / Export / Agent / Reset all write; in View mode they
-   * must be off like every other edit path (triage 2026-09-07, item 1).
+   * viewed OR Compare is open). Export and New project both write, so in
+   * View mode they must be off like every other write path.
    */
   editingLocked: boolean;
   onViewChange: (view: PanelView) => void;
-  onDemoReset: () => void;
+  /** G1 — Shell's reset after the picker seeds a new project. */
+  onNewProject: () => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const [focusWithin, setFocusWithin] = useState(false);
   const [pinned, setPinned] = useState(false);
-  const [resetOpen, setResetOpen] = useState(false);
+  const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const importInputRef = useRef<HTMLInputElement>(null);
 
   const editingPaused = useConnectionStatus().lost || editingLocked;
-  const importMutation = useImportMutation();
   const exportMutation = useExportMutation();
-  const agentSimulate = useAgentSimulateMutation();
-  const demoReset = useDemoResetMutation();
 
   const expanded = pinned || hovered || focusWithin;
-
-  useEffect(() => {
-    const openImport = () => importInputRef.current?.click();
-    window.addEventListener("framebranch:open-import", openImport);
-    return () =>
-      window.removeEventListener("framebranch:open-import", openImport);
-  }, []);
 
   function clearCollapseTimer() {
     if (collapseTimer.current) {
@@ -120,26 +104,7 @@ export function IconRail({
     }, COLLAPSE_DELAY_MS);
   }
 
-  function handleImportFile(file: File) {
-    file
-      .text()
-      .then((text) => {
-        let otioJson: unknown;
-        try {
-          otioJson = JSON.parse(text);
-        } catch {
-          showToast("That file isn't valid JSON.", "error");
-          return;
-        }
-        importMutation.mutate(
-          { branch: currentBranch, otioJson },
-          {
-            onSuccess: (data) => showToast(describeSkipped(data.skippedItems)),
-          },
-        );
-      })
-      .catch(() => showToast("Couldn't read that file.", "error"));
-  }
+  useEffect(() => clearCollapseTimer, []);
 
   return (
     <div className={`rail-shell${pinned ? " is-pinned" : ""}`}>
@@ -184,8 +149,8 @@ export function IconRail({
           </button>
         </div>
 
+        {/* C6 / #52: three items need no headings. #53/#54/#55. */}
         <nav className="rail-navigation" aria-label="Editor sections">
-          <RailSectionLabel>Versioning</RailSectionLabel>
           <RailButton
             label="Changes"
             active={versioningOpen && view === "changes"}
@@ -197,8 +162,6 @@ export function IconRail({
             icon={<GitDiff size={18} weight="duotone" aria-hidden />}
             onClick={() => onViewChange("changes")}
           />
-          {/* B3 lock (1): the Merge item is gone with the panel behind it.
-              B4 rebuilds the rest of this rail (Import / Agent / Export). */}
           <RailButton
             label="History"
             active={versioningOpen && view === "history"}
@@ -207,27 +170,8 @@ export function IconRail({
             }
             onClick={() => onViewChange("history")}
           />
-
-          <RailSectionLabel>Project</RailSectionLabel>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept=".otio,application/json,.json"
-            style={{ display: "none" }}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              if (file) handleImportFile(file);
-            }}
-          />
           <RailButton
-            label={importMutation.isPending ? "Importing…" : "Import project"}
-            disabled={importMutation.isPending || editingPaused}
-            icon={<UploadSimple size={18} weight="duotone" aria-hidden />}
-            onClick={() => importInputRef.current?.click()}
-          />
-          <RailButton
-            label={exportMutation.isPending ? "Exporting…" : "Export project"}
+            label={exportMutation.isPending ? "Exporting…" : "Export"}
             disabled={exportMutation.isPending || editingPaused}
             icon={<DownloadSimple size={18} weight="duotone" aria-hidden />}
             onClick={() =>
@@ -239,24 +183,6 @@ export function IconRail({
               })
             }
           />
-          <RailButton
-            label={
-              agentSimulate.isPending
-                ? "Agent running…"
-                : "Simulate agent edits"
-            }
-            disabled={agentSimulate.isPending || editingPaused}
-            icon={<Robot size={18} weight="duotone" aria-hidden />}
-            onClick={() =>
-              agentSimulate.mutate(
-                { branch: AGENT_BRANCH, script: AGENT_SCRIPT },
-                {
-                  onSuccess: (data) =>
-                    showToast(`Agent run complete — "${data.name}".`),
-                },
-              )
-            }
-          />
         </nav>
 
         <div className="rail-footer">
@@ -265,14 +191,13 @@ export function IconRail({
             icon={<Keyboard size={18} weight="duotone" aria-hidden />}
             onClick={() => setShortcutsOpen(true)}
           />
+          {/* #43 — replaces `Reset demo` (#59): the picker's first row IS
+              the default demo, so a separate reset has nothing to add. */}
           <RailButton
-            label="Reset demo"
-            danger
+            label="New project…"
             disabled={editingPaused}
-            icon={
-              <ArrowCounterClockwise size={18} weight="duotone" aria-hidden />
-            }
-            onClick={() => setResetOpen(true)}
+            icon={<Plus size={18} weight="duotone" aria-hidden />}
+            onClick={() => setNewProjectOpen(true)}
           />
         </div>
       </aside>
@@ -304,29 +229,13 @@ export function IconRail({
         </div>
       </ModalShell>
 
-      <ConfirmDialog
-        open={resetOpen}
-        onOpenChange={setResetOpen}
-        title="Reset demo?"
-        description="This throws away everything in this session and starts over from the original demo project. This cannot be undone."
-        confirmLabel="Reset demo"
-        busy={demoReset.isPending}
-        onConfirm={() =>
-          demoReset.mutate(undefined, {
-            onSuccess: () => {
-              setResetOpen(false);
-              onDemoReset();
-              showToast("Demo reset.");
-            },
-          })
-        }
+      <NewProjectDialog
+        open={newProjectOpen}
+        onOpenChange={setNewProjectOpen}
+        onStarted={onNewProject}
       />
     </div>
   );
-}
-
-function RailSectionLabel({ children }: { children: React.ReactNode }) {
-  return <div className="rail-section-label">{children}</div>;
 }
 
 function RailButton({
@@ -334,7 +243,6 @@ function RailButton({
   icon,
   onClick,
   active = false,
-  danger = false,
   disabled = false,
   badge,
   title,
@@ -343,7 +251,6 @@ function RailButton({
   icon: React.ReactNode;
   onClick: () => void;
   active?: boolean;
-  danger?: boolean;
   disabled?: boolean;
   badge?: string;
   title?: string;
@@ -351,7 +258,7 @@ function RailButton({
   return (
     <button
       type="button"
-      className={`rail-item${active ? " is-active" : ""}${danger ? " is-danger" : ""}`}
+      className={`rail-item${active ? " is-active" : ""}`}
       aria-current={active ? "page" : undefined}
       disabled={disabled}
       title={title ?? label}
