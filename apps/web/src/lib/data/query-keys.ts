@@ -30,4 +30,16 @@ export const queryKeys = {
    */
   compare: (cut: string, a: string, b: string) =>
     ["diff", cut, "compare", a, b] as const,
+  /**
+   * B3 §2.4 — the Bring-in preview. Deliberately NOT under `diffAll`: that
+   * prefix is invalidated after every edit (and B4's poller will invalidate
+   * it on every event), and a silent refetch here would mint a new token and
+   * drop the decisions the user is halfway through. Only a choice change and
+   * `Start again` refetch this.
+   *
+   * B4 carry-over: the poller must not touch `["bring-in"]`.
+   */
+  bringInAll: () => ["bring-in"] as const,
+  bringIn: (cut: string, choicesKey: string) =>
+    ["bring-in", cut, choicesKey] as const,
 };

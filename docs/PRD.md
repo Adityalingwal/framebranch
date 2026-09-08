@@ -88,8 +88,8 @@ The demo walks through the full system in nine steps, using a single project:
 3. **Person edits** — the person makes a few edits directly on the timeline (for example, changing a clip's volume).
 4. **Agent edits** — the simulated agent runs its own separate, scripted set of edits.
 5. **Compare** — the two versions are shown as two lanes, one above the other, with one plain-English row per change beside them (for example, `Interview · Volume 100% → 60%`).
-6. **Merge** — the two branches are combined into one.
-7. **Resolve conflicts** — every conflict the merge produces is shown on screen, each one of the three types described earlier, with its own one-click buttons.
+6. **Bring in** — picking the other branch opens a preview of what main would look like with it: the two timelines side by side, one row per change, and nothing written yet.
+7. **Decide the conflicts** — every conflict is a card on that screen, each one of the three types described earlier, with its own one-click buttons; the preview updates with each answer. One button then lands the whole thing as a single version.
 8. **History** — the project's history shows every edit, marked with who made it — the person or the agent — including the merge itself, which shows both branches it came from. An earlier version can be restored from here.
 9. **Export** — the project exports to an OTIO file (a project format), not a rendered video file.
 

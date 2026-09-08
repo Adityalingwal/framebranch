@@ -4,7 +4,7 @@
  */
 export { applyCommand } from "./verbs";
 export { computeDiff } from "./diff";
-export { applyChoice, finalizeCheck, startMerge } from "./merge";
+export { applyChoice, finalizeCheck, recompute, startMerge } from "./merge";
 export { exportOtio, importOtio } from "./otio";
 
 export type {

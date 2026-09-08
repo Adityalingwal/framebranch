@@ -83,6 +83,16 @@ export type MergeSuccess = {
   ok: true;
   status: "ready" | "needs-resolution";
   timeline: Timeline;
+  /**
+   * The composed draft BEFORE the participants of an unanswered overlap are
+   * withheld from `timeline` — the only place the REAL position of each of
+   * those clips exists (`timeline` no longer holds them at all). Absent when
+   * nothing was withheld, and then it equals `timeline`; read it as
+   * `result.composed ?? result.timeline`.
+   *
+   * Additive and read-only: no merge behaviour depends on it.
+   */
+  composed?: Timeline;
   conflicts: readonly MergeConflict[];
   choices: MergeChoices;
   counts: MergeCounts;
@@ -151,6 +161,12 @@ type Normalized = {
   rootId: string;
   sourceClipId: string;
   mediaRefId?: string;
+  /**
+   * The clip's display name. NON-SEMANTIC: it is not an atom, `normalizedEqual`
+   * ignores it, and no conflict is ever raised for it. It rides along only so
+   * that a merged timeline still calls a clip what its editor called it.
+   */
+  name?: string;
   atoms: AtomMap;
 };
 
@@ -176,6 +192,8 @@ type MergeContext = {
   choices: MergeChoices;
   conflicts: Map<string, InternalConflict>;
   invalidChoice: string | null;
+  /** See `MergeSuccess.composed` — set only when a clip is actually withheld. */
+  composed: Timeline | null;
 };
 
 const VALUE_CHOICES = ["ours", "theirs", "base"] as const;
@@ -308,6 +326,7 @@ function normalize(loc: LocatedClip): Normalized {
       trackId: loc.trackId,
       rootId: clip.lineage.rootId,
       sourceClipId: clip.id,
+      ...(clip.name === undefined ? {} : { name: clip.name }),
       atoms,
     };
   }
@@ -335,6 +354,7 @@ function normalize(loc: LocatedClip): Normalized {
     rootId: clip.lineage.rootId,
     sourceClipId: clip.id,
     mediaRefId: clip.mediaRefId,
+    ...(clip.name === undefined ? {} : { name: clip.name }),
     atoms,
   };
 }
@@ -673,12 +693,16 @@ function mergeNormalized(
     if (merged === null) return null;
     atoms[field] = merged;
   }
+  // A name is not content: nothing here can conflict, so main's wins, then
+  // the cut's, then the Original's.
+  const name = input.ours.name ?? input.theirs.name ?? input.base.name;
   return {
     kind: input.base.kind,
     trackId: input.base.trackId,
     rootId: input.base.rootId,
     sourceClipId: input.base.sourceClipId,
     mediaRefId: input.base.mediaRefId,
+    ...(name === undefined ? {} : { name }),
     atoms,
   };
 }
@@ -717,6 +741,7 @@ function toClip(
       properties.position = clone(position.value as Position);
     const clip: TextClip = {
       id,
+      ...(normalized.name === undefined ? {} : { name: normalized.name }),
       timelineRange,
       textContent: normalized.atoms["text-content"]!.value as string,
       textStyle: clone(normalized.atoms["text-style"]!.value as TextStyle),
@@ -737,6 +762,7 @@ function toClip(
   const srcOffset = normalized.atoms["source-offset"]!.value as number;
   return {
     id,
+    ...(normalized.name === undefined ? {} : { name: normalized.name }),
     mediaRefId: normalized.mediaRefId!,
     sourceRange: {
       start: { value: srcOffset + start, rate },
@@ -1586,6 +1612,10 @@ function processOverlaps(ctx: MergeContext, input: Timeline): Timeline {
           }
         }
       }
+      // The composed draft still HOLDS those clips, at the positions that
+      // made them collide. Keep it before they are withheld: it is the only
+      // record of where each one really landed (B3 fix 1 / Codex BUG 1).
+      if (pendingIds.size > 0) ctx.composed = timeline;
       for (const id of pendingIds) timeline = replaceClip(timeline, id, null);
       return timeline;
     }
@@ -1619,7 +1649,18 @@ function canonicalChoices(choices: MergeChoices): MergeChoices {
   );
 }
 
-function recompute(
+/**
+ * The whole merge, from the three original timelines plus the permanent
+ * choices made so far. `startMerge` / `applyChoice` / `finalizeCheck` are
+ * all thin wrappers over it.
+ *
+ * Exported (B3 §2.2) because the Bring-in preview is STATELESS: it is
+ * handed a `choices` record by the client on every request and needs the
+ * one answer that record produces — a fold of `applyChoice` would replay
+ * the same computation once per choice and reject a choice the user is
+ * re-answering.
+ */
+export function recompute(
   baseInput: Timeline,
   oursInput: Timeline,
   theirsInput: Timeline,
@@ -1636,6 +1677,7 @@ function recompute(
     choices: canonicalChoices(choices),
     conflicts: new Map(),
     invalidChoice: null,
+    composed: null,
   };
   let timeline = composeTimeline(ctx);
   timeline = processOverlaps(ctx, timeline);
@@ -1659,6 +1701,9 @@ function recompute(
     ok: true,
     status: conflicts.length === 0 ? "ready" : "needs-resolution",
     timeline,
+    // Omitted when nothing was withheld — the field is then `timeline`
+    // itself, and an omitted key keeps the packet exactly as it was.
+    ...(ctx.composed === null ? {} : { composed: ctx.composed }),
     conflicts,
     choices: canonicalChoices(choices),
     counts,

@@ -185,7 +185,31 @@ export const branchSwitchBodySchema = z
 // ---------------------------------------------------------------------------
 
 /**
- * C4 (4) — POST merge `{ from, into }`: `from` is merged INTO `into`.
+ * C7 — the union of the three buckets' fixed button sets (B1 ours/theirs/
+ * base · B2 delete/clip/base · B3 shift-a/shift-b/base). Whether a given
+ * choice is legal for a given conflict is the ENGINE's call, not this
+ * schema's. Exported because the preview's `choices` query parameter is a
+ * record of these (B3 §2.2).
+ */
+export const mergeChoiceSchema = z.enum([
+  "ours",
+  "theirs",
+  "base",
+  "delete",
+  "clip",
+  "shift-a",
+  "shift-b",
+]);
+
+/**
+ * C4 (4) + B3 lock (3) — POST merge: the LANDING. `from` is brought into
+ * `into` (always `main`, F1 — kept in the body so the door can refuse a
+ * wrong target explicitly rather than by omission).
+ *
+ * `token` is the four plain fields the preview handed out (both heads, both
+ * working revs); the route revalidates them before any write, which is F4's
+ * whole mechanism. `choices` is the complete answer set — the server holds
+ * no draft, so the request carries everything.
  *
  * The `from !== into` refusal is a SHAPE rule (two distinct branch names are
  * required), not a merge rule: merging a branch into itself would write a
@@ -193,10 +217,21 @@ export const branchSwitchBodySchema = z
  * baap" cannot mean. Rejected at the door → E_BAD_REQUEST (reported as an
  * assumption).
  */
+export const bringInTokenSchema = z
+  .object({
+    mainHead: z.string().min(1),
+    cutHead: z.string().min(1),
+    mainRev: z.number().int().nonnegative(),
+    cutRev: z.number().int().nonnegative(),
+  })
+  .strict();
+
 export const mergeBodySchema = z
   .object({
     from: branchName,
     into: branchName,
+    token: bringInTokenSchema,
+    choices: z.record(z.string(), mergeChoiceSchema).default({}),
     ticket,
   })
   .strict()
@@ -204,37 +239,6 @@ export const mergeBodySchema = z
     message: "a branch cannot be merged into itself",
     path: ["from"],
   });
-
-/**
- * C4 (4) — POST merge/resolve. `choice` is the union of the three buckets'
- * fixed button sets (C7: B1 ours/theirs/base · B2 delete/clip/base ·
- * B3 shift-a/shift-b/base). Whether a given choice is legal for a given
- * conflict is the ENGINE's call (`applyChoice`), not this schema's.
- */
-export const mergeResolveBodySchema = z
-  .object({
-    attemptId: z.uuid(),
-    conflictId: z.string().min(1),
-    choice: z.enum([
-      "ours",
-      "theirs",
-      "base",
-      "delete",
-      "clip",
-      "shift-a",
-      "shift-b",
-    ]),
-    ticket,
-  })
-  .strict();
-
-/** C4 (4) — POST merge/abort (DISCARD: the draft row goes, nothing else). */
-export const mergeAbortBodySchema = z
-  .object({
-    attemptId: z.uuid(),
-    ticket,
-  })
-  .strict();
 
 /** C4 (4) + F5(a) — POST restore {branch, commitId}. */
 export const restoreBodySchema = z

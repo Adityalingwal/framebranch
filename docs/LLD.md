@@ -57,7 +57,7 @@ The last column is the engine's own inverse of each operation — the shape a re
 
 ## Database Schema
 
-Eight tables, each with one clear job.
+Seven tables, each with one clear job.
 
 | Table | Stores | Key columns |
 |---|---|---|
@@ -67,21 +67,18 @@ Eight tables, each with one clear job.
 | `ops` | The individual edits inside a commit, in order | the edit itself, who made it |
 | `snapshots` | A full copy of the timeline — saved every 10th commit, and always for import, restore, and merge commits | the whole timeline, as JSON |
 | `working_state` | One row per branch — edits made but not yet committed | pending edits, a counter that increases with every edit |
-| `merge_attempts` | An in-progress merge — deleted once it's finished or cancelled | the draft result, the conflict list, saved resolution choices |
 | `tickets` | One row per request, so a retried request is never applied twice | which action it was, the stored result |
 
 ```mermaid
 erDiagram
     projects ||--o{ branches : "has"
     projects ||--o{ commits : "has"
-    projects ||--o{ merge_attempts : "has"
     projects ||--o{ tickets : "has"
     commits ||--o{ ops : "contains"
     commits ||--o| snapshots : "may have"
     commits ||--o| commits : "parent / parent2 (merge)"
     branches ||--|| working_state : "has exactly one"
     commits ||--o{ working_state : "base for"
-    branches ||--o{ merge_attempts : "branch_into / branch_from"
 
     projects {
         uuid id PK
@@ -118,13 +115,6 @@ erDiagram
         text base_commit_id FK
         int working_rev
     }
-    merge_attempts {
-        uuid id PK
-        uuid project_id FK
-        uuid branch_into FK
-        uuid branch_from FK
-        text status
-    }
     tickets {
         uuid ticket UK "globally unique"
         uuid project_id FK
@@ -140,7 +130,7 @@ erDiagram
 
 **Reading data** doesn't need a ticket, since nothing changes: getting the current timeline, the history, or a diff between two versions.
 
-**Every edit goes through one endpoint** (`POST ops`, described in Operations). Every other action — save a version, create a branch, switch branches, merge, resolve a conflict, cancel a merge, restore a version, run the agent, import, export, reset the demo — has its own endpoint, but all follow the same pattern: state which branch, include a ticket, get back the same envelope shape.
+**Every edit goes through one endpoint** (`POST ops`, described in Operations). Every other action — save a version, create a branch, switch branches, bring a cut in, restore a version, run the agent, import, export, reset the demo — has its own endpoint, but all follow the same pattern: state which branch, include a ticket, get back the same envelope shape.
 
 **Which branch, every time.** Every request scoped to a branch says which one explicitly — the server never remembers "the branch you were just on." This keeps two browser tabs on different branches from interfering with each other.
 
@@ -168,9 +158,8 @@ Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_
 | `/api/branch` | POST | yes | yes | `name`, `from` | branch id, head commit id | seals the source branch first → `E_STALE_HEAD` possible; `E_BRANCH_EXISTS` if name taken |
 | `/api/branch/switch` | POST | yes (may seal) | yes | `from`, `to` | timeline, working rev, pending count | seals dirty state before switching → `E_STALE_HEAD` possible |
 | `/api/agent/simulate` | POST | yes | yes | `branch`, `script` | commit id, ops applied | CAS on branch head → `E_STALE_HEAD` |
-| `/api/merge` | POST | yes | yes | `into`, `from` | attempt id + conflicts, or an auto-finalized commit if there are none | pre-merge seals → `E_STALE_HEAD`; unresolvable start → `E_MERGE_PRECONDITION` |
-| `/api/merge/resolve` | POST | yes | yes | `attemptId`, `conflictId`, `choice` | remaining conflicts, or the finalized commit | invalid/duplicate choice → `E_MERGE_PRECONDITION`; finalizing the last conflict can hit `E_STALE_HEAD` |
-| `/api/merge/abort` | POST | yes (discard) | yes | `attemptId` | `{ aborted: true }` | missing attempt → `E_MERGE_PRECONDITION` |
+| `/api/merge/preview` | GET | no | no | `from`, `choices?` | the whole preview: rows + count + runtime, both timelines, the conflict cards, the undecided clip ids, and a token (both heads + both working revs) | unknown cut → `E_BRANCH_NOT_FOUND`; malformed `choices` → `E_BAD_REQUEST` |
+| `/api/merge` | POST | yes | yes | `into`, `from`, `token`, `choices` | the merge commit id | either side moved since the preview → `E_STALE_HEAD` (with a message naming who, and `details`); a decision still missing → `E_MERGE_PRECONDITION` |
 | `/api/restore` | POST | yes | yes | `branch`, `commitId` | new commit id, name | seals before restoring → `E_STALE_HEAD` possible |
 | `/api/import` | POST | yes | yes | `branch`, `otioJson` | commit id, skipped items | seals first → `E_STALE_HEAD`; import failure writes nothing |
 | `/api/export` | POST | yes (may seal) | yes | `branch` | OTIO JSON, commit id | seals first → `E_STALE_HEAD` possible |
@@ -211,6 +200,6 @@ packages/engine/src/
   index.ts        — the only entry point other code is allowed to use
 ```
 
-**One narrow door in.** Everything outside the engine — the interface, the API layer — only ever imports from `index.ts`, never reaches into the internal files directly. `index.ts` exposes exactly seven functions: apply a command, compute a diff, start a merge, apply a conflict choice, check if a merge can finalize, import OTIO, export OTIO. As long as those seven keep working the same way, anything inside the engine can be reorganized freely without breaking anything outside it.
+**One narrow door in.** Everything outside the engine — the interface, the API layer — only ever imports from `index.ts`, never reaches into the internal files directly. `index.ts` exposes exactly eight functions: apply a command, compute a diff, start a merge, apply a conflict choice, recompute a merge from a whole set of choices (what the stateless bring-in preview asks for), check if a merge can finalize, import OTIO, export OTIO. As long as those eight keep working the same way, anything inside the engine can be reorganized freely without breaking anything outside it.
 
 **No database, no network, no interface code anywhere in the engine.** Every function here takes a timeline in and returns a timeline (or a diff, or a merge result) out — which is what makes it possible to test and benchmark the engine directly, without running a server or a browser.

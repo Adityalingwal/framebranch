@@ -13,6 +13,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = "Cancel",
   onConfirm,
   busy,
   tone = "danger",
@@ -22,6 +23,12 @@ export function ConfirmDialog({
   title: string;
   description: string;
   confirmLabel: string;
+  /**
+   * B3 #157 — the Bring-in cancel box needs `Keep going`, because "Cancel"
+   * would mean two different things in one dialog. Defaults to `Cancel`, so
+   * B1's Restore box is untouched.
+   */
+  cancelLabel?: string;
   onConfirm: () => void;
   busy?: boolean;
   /** `danger` (red) for discard-type actions; `primary` for Restore (B5: it deletes nothing). */
@@ -47,7 +54,7 @@ export function ConfirmDialog({
           onClick={() => onOpenChange(false)}
           disabled={busy}
         >
-          Cancel
+          {cancelLabel}
         </button>
         <button
           type="button"

@@ -6,7 +6,6 @@ import {
   ClockCounterClockwise,
   DownloadSimple,
   GitDiff,
-  GitMerge,
   Keyboard,
   PushPinSimple,
   Robot,
@@ -198,12 +197,8 @@ export function IconRail({
             icon={<GitDiff size={18} weight="duotone" aria-hidden />}
             onClick={() => onViewChange("changes")}
           />
-          <RailButton
-            label="Merge"
-            active={versioningOpen && view === "merge"}
-            icon={<GitMerge size={18} weight="duotone" aria-hidden />}
-            onClick={() => onViewChange("merge")}
-          />
+          {/* B3 lock (1): the Merge item is gone with the panel behind it.
+              B4 rebuilds the rest of this rail (Import / Agent / Export). */}
           <RailButton
             label="History"
             active={versioningOpen && view === "history"}

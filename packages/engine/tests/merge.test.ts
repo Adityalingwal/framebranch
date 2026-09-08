@@ -1550,3 +1550,36 @@ describe("C2/T2-E: deterministic Shift goldens", () => {
     expect(shiftedA(scenario).timelineRange.start.value).toBe(60);
   });
 });
+
+// ---------------------------------------------------------------------------
+// B3 fix 1 — the composed draft behind a withheld overlap
+// ---------------------------------------------------------------------------
+
+describe("B3: MergeSuccess.composed", () => {
+  it("holds both overlap participants at the positions that collided, while `timeline` has neither", () => {
+    const base = videoTimeline([
+      mediaClip("A", "mV", 0, 100, 10),
+      mediaClip("B", "mV", 20, 120, 10),
+    ]);
+    const ours = edit(base, { op: "move", clipId: "A", newStart: t(50) });
+    const theirs = edit(base, { op: "move", clipId: "B", newStart: t(50) });
+    const state = needs(startMerge({ base, ours, theirs }));
+
+    // The safe draft withholds both — that is what makes the card necessary.
+    expect(maybeClip(state.timeline, "A")).toBeUndefined();
+    expect(maybeClip(state.timeline, "B")).toBeUndefined();
+
+    const composed = state.composed;
+    expect(composed).toBeDefined();
+    expect(clipById(composed!, "A").timelineRange.start.value).toBe(50);
+    expect(clipById(composed!, "B").timelineRange.start.value).toBe(50);
+  });
+
+  it("is absent when nothing is withheld — and reads as `timeline` itself", () => {
+    const base = baseTimeline();
+    const ours = edit(base, { op: "move", clipId: "A", newStart: t(60) });
+    const result = ready(startMerge({ base, ours, theirs: clone(base) }));
+    expect(result.composed).toBeUndefined();
+    expect(result.composed ?? result.timeline).toEqual(result.timeline);
+  });
+});

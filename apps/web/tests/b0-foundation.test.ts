@@ -30,6 +30,8 @@ import type { HistoryItem } from "../src/app/api/history/route";
 import { POST as postAgent } from "../src/app/api/agent/simulate/route";
 import { POST as postBranchSwitch } from "../src/app/api/branch/switch/route";
 import { POST as postMerge } from "../src/app/api/merge/route";
+import { GET as getMergePreview } from "../src/app/api/merge/preview/route";
+import type { BringInPreview } from "../src/app/api/merge/preview/route";
 import { POST as postRestore } from "../src/app/api/restore/route";
 import { POST as postOps } from "../src/app/api/ops/route";
 import {
@@ -99,6 +101,36 @@ async function mark(s: Session, branch: string, name: string): Promise<string> {
     ),
   ) as { commitId: string };
   return data.commitId;
+}
+
+/**
+ * B3 — a bring-in is two calls now: the stateless preview hands out the
+ * four-field token, and the landing revalidates it. These fixtures have no
+ * conflicts, so `choices` stays empty.
+ */
+async function bringIntoMain(
+  s: Session,
+  from: string,
+): Promise<{ done: true; mergeCommitId: string }> {
+  const preview = expectOk(
+    await get(getMergePreview, `/api/merge/preview?from=${from}`, s),
+  ) as BringInPreview;
+  expect(preview.conflicts).toHaveLength(0);
+  return expectOk(
+    await post(
+      postMerge,
+      "/api/merge",
+      {
+        from,
+        into: "main",
+        token: preview.token,
+        choices: {},
+        ticket: ticket(),
+      },
+      s,
+      NAME_HEADER,
+    ),
+  ) as { done: true; mergeCommitId: string };
 }
 
 async function historyOf(s: Session, cut: string): Promise<HistoryItem[]> {
@@ -334,15 +366,7 @@ describe("C-C — GET /api/history?cut (B2 chain)", () => {
     const mainCard = await mark(s, "main", "Louder interview");
     await editOn(s, "main", 1, "clip-2", 65);
 
-    const merged = expectOk(
-      await post(
-        postMerge,
-        "/api/merge",
-        { from: "priya-music", into: "main", ticket: ticket() },
-        s,
-        NAME_HEADER,
-      ),
-    ) as { done: true; mergeCommitId: string };
+    const merged = await bringIntoMain(s, "priya-music");
     expect(merged.done).toBe(true);
 
     const main = await historyOf(s, "main");
@@ -521,15 +545,7 @@ describe("Identity + generated names (B4 / C1 / F2a)", () => {
     await editOn(s, "priya-music", 0, "clip-4", 30);
     const priyaCard = await mark(s, "priya-music", "Quieter music");
 
-    const merged = expectOk(
-      await post(
-        postMerge,
-        "/api/merge",
-        { from: "priya-music", into: "main", ticket: ticket() },
-        s,
-        NAME_HEADER,
-      ),
-    ) as { done: true; mergeCommitId: string };
+    const merged = await bringIntoMain(s, "priya-music");
     const [bringIn] = await getDb()
       .select()
       .from(commits)

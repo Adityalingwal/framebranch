@@ -21,14 +21,16 @@ import type {
   Command,
   ImportWarning,
   MergeChoice,
-  MergeConflict,
-  MergeCounts,
   Timeline,
 } from "@framebranch/engine";
 // Type-only imports: erased at build time, so no server code reaches the
 // browser bundle — but the client and the route share ONE shape definition.
 import type { BranchListItem } from "../../app/api/branch/route";
 import type { DiffResponse } from "../../app/api/diff/route";
+import type {
+  BringInPreview,
+  BringInToken,
+} from "../../app/api/merge/preview/route";
 import type { HistoryItem } from "../../app/api/history/route";
 import type { TimelineAtResponse } from "../../app/api/timeline/route";
 import { getEditorName } from "../state/editor-name";
@@ -39,15 +41,39 @@ import { getEditorName } from "../state/editor-name";
 
 type Envelope<T> =
   | { ok: true; data: T }
-  | { ok: false; error: { code: string; message: string } };
+  | {
+      ok: false;
+      error: {
+        code: string;
+        message: string;
+        details?: Record<string, unknown>;
+      };
+    };
 
-/** A designed answer from the server — not a transport problem. */
+/**
+ * A designed answer from the server — not a transport problem.
+ *
+ * `message` is the friendly text (the switch below already ran when this was
+ * constructed). B3 adds `serverMessage`: F4's staleness refusal is the one
+ * case where the server knows more than the map does — who moved what — and
+ * the Bring-in panel shows that sentence verbatim (lock (3)). `details`
+ * carries the same facts in machine form (`{ side, who }`).
+ */
 export class ApiClientError extends Error {
   readonly code: string;
-  constructor(code: string, message: string) {
+  readonly serverMessage: string;
+  readonly details?: Record<string, unknown>;
+  constructor(
+    code: string,
+    message: string,
+    serverMessage: string = message,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
+    this.serverMessage = serverMessage;
+    this.details = details;
   }
 }
 
@@ -76,6 +102,10 @@ const FRIENDLY_MESSAGES: Partial<Record<string, string>> = {
   E_PROJECT_NOT_FOUND: "This demo was reset elsewhere — reload the page.",
   E_BAD_REQUEST: "That request wasn't valid.",
   E_INTERNAL: "Something went wrong.",
+  // #207 — the engine's own precondition prose is for logs and tests; the
+  // Bring-in panel shows #159 with the cut's name, and this is the
+  // name-less version for anywhere else.
+  E_MERGE_PRECONDITION: "Couldn't finish bringing in. Start again.",
 };
 
 function friendlyMessage(code: string, serverMessage: string): string {
@@ -115,6 +145,8 @@ async function fetchEnvelope<T>(url: string, init?: RequestInit): Promise<T> {
   throw new ApiClientError(
     envelope.error.code,
     friendlyMessage(envelope.error.code, envelope.error.message),
+    envelope.error.message,
+    envelope.error.details,
   );
 }
 
@@ -359,40 +391,39 @@ export function postOps(
   return runMutation(() => postJson("/api/ops", { ...input, ticket }), hooks);
 }
 
-export type MergeStartResult =
-  | { done: true; mergeCommitId: string }
-  | { attemptId: string; conflicts: MergeConflict[]; counts: MergeCounts };
+/** B3 — the whole Bring-in screen, computed by one GET (F3(1)). */
+export type BringInPreviewData = BringInPreview;
+export type { BringInToken };
+export type { ConflictCard } from "../../server/conflict-cards";
 
-export function postMergeStart(
-  input: { from: string; into: string },
-  hooks: RetryHooks,
-): Promise<MergeStartResult> {
-  const ticket = newTicket();
-  return runMutation(() => postJson("/api/merge", { ...input, ticket }), hooks);
+/**
+ * Stateless: the choices travel with every request and nothing is remembered
+ * server-side. Conflict ids carry an encoded payload, so the parameter is
+ * URL-encoded JSON rather than an `id:choice,…` list.
+ */
+export function getBringInPreview(
+  from: string,
+  choices: Record<string, MergeChoice>,
+): Promise<BringInPreviewData> {
+  const q = new URLSearchParams({ from });
+  if (Object.keys(choices).length > 0) {
+    q.set("choices", JSON.stringify(choices));
+  }
+  return get<BringInPreviewData>(`/api/merge/preview?${q.toString()}`);
 }
 
-export type MergeResolveResult =
-  | { done: true; mergeCommitId: string }
-  | { counts: MergeCounts; conflicts: MergeConflict[] };
-
-export function postMergeResolve(
-  input: { attemptId: string; conflictId: string; choice: MergeChoice },
+/** The landing. `into` is always `main` (F1); the token is F4's whole check. */
+export function postBringIn(
+  input: {
+    from: string;
+    token: BringInToken;
+    choices: Record<string, MergeChoice>;
+  },
   hooks: RetryHooks,
-): Promise<MergeResolveResult> {
+): Promise<{ done: true; mergeCommitId: string }> {
   const ticket = newTicket();
   return runMutation(
-    () => postJson("/api/merge/resolve", { ...input, ticket }),
-    hooks,
-  );
-}
-
-export function postMergeAbort(
-  input: { attemptId: string },
-  hooks: RetryHooks,
-): Promise<{ aborted: true }> {
-  const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/merge/abort", { ...input, ticket }),
+    () => postJson("/api/merge", { ...input, into: "main", ticket }),
     hooks,
   );
 }

@@ -2,10 +2,15 @@
  * envelope.ts — every response has the same outer shape:
  *
  *   success → { ok: true,  data: {...} }
- *   failure → { ok: false, error: { code, message } }
+ *   failure → { ok: false, error: { code, message, details? } }
  *
  * code is the machine contract (the UI switches on it), message is for a
  * human. Per-endpoint custom shapes were explicitly rejected.
+ *
+ * B3 / F4 IMPL-NOTE: `details` is the structured half of a message the
+ * SERVER composed — `{ side, who }` on the bring-in staleness refusal, so
+ * the panel can point at the right side without parsing English. It is
+ * absent on every other failure.
  */
 
 /** Phase A verb codes. Mirrors the engine's own ErrorCode union. */
@@ -100,11 +105,18 @@ const STATUS_BY_CODE: Partial<Record<ApiErrorCode, number>> = {
 /** Every designed failure path throws one of these. */
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
+  /** Machine-readable extras for the one error the UI renders itself. */
+  readonly details?: Record<string, unknown>;
 
-  constructor(code: ApiErrorCode, message: string) {
+  constructor(
+    code: ApiErrorCode,
+    message: string,
+    details?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "ApiError";
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -120,9 +132,13 @@ export function errorResponse(
   code: ApiErrorCode,
   message: string,
   headers?: HeadersInit,
+  details?: Record<string, unknown>,
 ): Response {
   return Response.json(
-    { ok: false, error: { code, message } },
+    {
+      ok: false,
+      error: { code, message, ...(details ? { details } : {}) },
+    },
     { status: statusForCode(code), headers },
   );
 }

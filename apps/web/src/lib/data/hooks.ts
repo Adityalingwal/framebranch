@@ -14,6 +14,7 @@
  */
 
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -285,46 +286,68 @@ export function useOpsMutation(branch: string) {
 }
 
 // ---------------------------------------------------------------------------
-// M8b — merge. No GET exists for a merge draft (C4 has none), so the
-// attempt/conflicts/counts live in the Merge panel's own component state;
-// these hooks are plain request wrappers, same shared `onError` as everyone
-// else. Invalidation after a `done` answer happens where the branch name is
-// known (the panel), same as the top bar's inline `onSuccess` callbacks.
+// B3 — Bring in. The preview is a QUERY (stateless, re-asked on every
+// choice); the landing is the only mutation.
 // ---------------------------------------------------------------------------
 
-export function useMergeStartMutation() {
-  return useMutation({
-    mutationFn: (input: { from: string; into: string }) =>
-      api.postMergeStart(input, retryHooks),
-    onError: onMutationError,
+/**
+ * §2.4 — the preview. `enabled` only while the preview is open, so no other
+ * screen pays for it. `staleTime: Infinity` because nothing but a choice or
+ * `Start again` may change this answer: an automatic refetch would mint a
+ * new token behind the user's back. `keepPreviousData` so a choice does not
+ * blank the lanes while the next answer is in flight.
+ */
+export function useBringInPreviewQuery(
+  cut: string | null,
+  choices: Record<string, MergeChoice>,
+  choicesKey: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: queryKeys.bringIn(cut ?? "", choicesKey),
+    queryFn: () => api.getBringInPreview(cut as string, choices),
+    enabled: enabled && cut !== null,
+    staleTime: Infinity,
+    placeholderData: keepPreviousData,
   });
 }
 
-export function useMergeResolveMutation() {
+export type BringInPreviewQuery = ReturnType<typeof useBringInPreviewQuery>;
+
+/**
+ * The landing. On success main's head moved and the cut may have been
+ * auto-sealed, so both timelines and the branch list / History / diff
+ * prefixes are refreshed.
+ *
+ * `onError` stays SILENT for the two answers the panel renders itself (F4's
+ * staleness patti and the engine precondition, §2.6) — a toast on top of the
+ * patti would say the same thing twice.
+ */
+export function useBringInMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: {
-      attemptId: string;
-      conflictId: string;
-      choice: MergeChoice;
-    }) => api.postMergeResolve(input, retryHooks),
+      from: string;
+      token: api.BringInToken;
+      choices: Record<string, MergeChoice>;
+    }) => api.postBringIn(input, retryHooks),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeline("main") });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.timeline(variables.from),
+      });
+      refreshBranches(queryClient);
+    },
     onError: (error) => {
-      // §7 locked exception: E_STALE_HEAD on the LAST resolve gets its own
-      // plain sentence + [Restart merge] action in the Merge panel, not the
-      // generic toast (the panel's own onError, passed at the call site,
-      // renders that). Every other merge-resolve error still gets it.
-      if (error instanceof ApiClientError && error.code === "E_STALE_HEAD") {
+      if (
+        error instanceof ApiClientError &&
+        (error.code === "E_STALE_HEAD" ||
+          error.code === "E_MERGE_PRECONDITION")
+      ) {
         return;
       }
       onMutationError(error);
     },
-  });
-}
-
-export function useMergeAbortMutation() {
-  return useMutation({
-    mutationFn: (input: { attemptId: string }) =>
-      api.postMergeAbort(input, retryHooks),
-    onError: onMutationError,
   });
 }
 
