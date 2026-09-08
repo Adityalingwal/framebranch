@@ -27,7 +27,7 @@ import { GET as getDiff } from "../src/app/api/diff/route";
 import type { DiffResponse } from "../src/app/api/diff/route";
 import { GET as getHistory } from "../src/app/api/history/route";
 import type { HistoryItem } from "../src/app/api/history/route";
-import { POST as postAgent } from "../src/app/api/agent/simulate/route";
+import { POST as postAgentRun } from "../src/app/api/agent/run/route";
 import { POST as postBranchSwitch } from "../src/app/api/branch/switch/route";
 import { POST as postMerge } from "../src/app/api/merge/route";
 import { GET as getMergePreview } from "../src/app/api/merge/preview/route";
@@ -571,15 +571,18 @@ describe("Identity + generated names (B4 / C1 / F2a)", () => {
     expect(restoredRow.kind).toBe("restore");
     expect(restoredRow.actorName).toBe("Priya");
 
+    // I1 patch (a): the run makes its own cut off main, so nothing here
+    // hands it a branch; the header's name still never reaches the card.
     const run = expectOk(
       await post(
-        postAgent,
-        "/api/agent/simulate",
-        { branch: "priya-music", script: "tighten-intro", ticket: ticket() },
+        postAgentRun,
+        "/api/agent/run",
+        { preset: "tighten-intro", ticket: ticket() },
         s,
         NAME_HEADER,
       ),
-    ) as { commitId: string; name: string };
+    ) as { cut: string; commitId: string; name: string };
+    expect(run.cut).toBe("agent-tighten-intro");
     expect(run.name).toBe("Tighten intro");
     const [agentRow] = await getDb()
       .select()

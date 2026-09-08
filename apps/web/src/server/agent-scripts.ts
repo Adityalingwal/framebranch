@@ -1,15 +1,19 @@
 /**
- * agent-scripts.ts — the simulated agent. POST agent/simulate takes a script
- * NAME, not a payload of commands — the scripted edits are server-side
- * fixtures.
+ * agent-scripts.ts — the simulated agent's preset registry.
+ *
+ * I1: the Agent panel offers three PRESETS. Each is a fixed, server-side
+ * script — no model, no live AI — and the panel's honesty line (#175) says
+ * so. `POST /api/agent/run` takes a preset id, not a payload of commands.
  *
  * The agent uses the same eight verbs through the same applyCommand the
- * human path uses. Differences: a whole run is one request and every op
- * carries actor "agent" (the 🤖 badge).
+ * human path uses. Differences: a whole run is one request, every op
+ * carries actor "agent" (the 🤖 badge), and the run happens on the preset's
+ * OWN cut — `agent-‹id›`, never on main (I1 patch (a)).
  *
  * A script is a function of the timeline, not a frozen list, because clip
- * ids are minted at import time. It resolves targets positionally — the
- * same way the choreography describes them.
+ * ids are minted at import time. It resolves targets POSITIONALLY — the way
+ * the choreography describes them, and the reason every shipped preset
+ * fixture has to satisfy the geometry in `presets.ts`.
  */
 
 import type {
@@ -21,6 +25,7 @@ import type {
   Track,
 } from "@framebranch/engine";
 
+import { clipDisplayName } from "../lib/clip-helpers";
 import { ApiError } from "./envelope";
 
 /** `Track.clips` is `Clip[] | TextClip[]`; positional lookup needs neither. */
@@ -30,11 +35,13 @@ type AnyClip = Clip | TextClip;
 export const AGENT_ACTOR_NAME = "Agent";
 
 export type AgentScript = {
-  /** The script id the API accepts. */
+  /** The preset id the API accepts; also the cut name's suffix (#186). */
+  id: string;
+  /** C1(3) / copy #176-#178 — the preset's name, and its card's name. */
   name: string;
-  /** C1(3) — the card name of an agent-run commit. */
-  displayName: string;
-  /** Build the run's commands against the branch's current timeline. */
+  /** Copy #176-#178 — one line, the truth about what the script does. */
+  description: string;
+  /** Build the run's commands against the cut's current timeline. */
   build: (timeline: Timeline) => Command[];
 };
 
@@ -79,8 +86,17 @@ const mediaByUrlSuffix = (timeline: Timeline, suffix: string): MediaRef => {
 
 const frames = (seconds: number, rate: number): number => seconds * rate;
 
+/** The name the editor sees on a clip — the same one the Compare rows use. */
+const displayNameOf = (timeline: Timeline, clip: AnyClip): string =>
+  clipDisplayName(
+    clip,
+    "mediaRefId" in clip
+      ? timeline.mediaRefs.find((ref) => ref.id === clip.mediaRefId)
+      : undefined,
+  );
+
 /**
- * C8's locked agent script, run on branch `tighten-intro`:
+ * C8's locked agent script, now run on the cut `agent-tighten-intro`:
  *   A.volume = 40          → collides with the user's A.volume = 80  (B1)
  *   caption DELETE         → collides with the user's caption edit   (B2)
  *   add clip D at 0:20     → collides with the user's C moved to 0:20 (B3)
@@ -95,8 +111,10 @@ const frames = (seconds: number, rate: number): number => seconds * rate;
  * real shortening, small enough to stay inside the clip).
  */
 const tightenIntro: AgentScript = {
-  name: "tighten-intro",
-  displayName: "Tighten intro",
+  id: "tighten-intro",
+  name: "Tighten intro",
+  description:
+    "Trims the opening, dips a clip's volume and swaps the caption for B-roll.",
   build: (timeline) => {
     const rate = timeline.projectRate;
     const video = trackOfKind(timeline, "video");
@@ -137,17 +155,99 @@ const tightenIntro: AgentScript = {
   },
 };
 
-const SCRIPTS: Record<string, AgentScript> = {
-  [tightenIntro.name]: tightenIntro,
+/**
+ * B4a lock (2) — one second off each end of the first video clip.
+ *
+ * The engine's trim convention (`verbs/transform-clip.ts`): the delta is
+ * applied as "minus = cut, plus = extend" on BOTH edges — `start` moves the
+ * clip's start to `start - delta`, `end` changes the duration by `+delta`.
+ * So "shorter by 1s at each end" is a NEGATIVE delta twice, not a signed
+ * pair. The test asserts the resulting duration, not the sign.
+ */
+const trimSilences: AgentScript = {
+  id: "trim-silences",
+  name: "Trim silences",
+  description: "Shortens the interview clip at both ends.",
+  build: (timeline) => {
+    const rate = timeline.projectRate;
+    const video = trackOfKind(timeline, "video");
+    const clipA = nth(video, 0, "A");
+    return [
+      {
+        op: "trim",
+        clipId: clipA.id,
+        edge: "start",
+        delta: { value: -frames(1, rate), rate },
+      },
+      {
+        op: "trim",
+        clipId: clipA.id,
+        edge: "end",
+        delta: { value: -frames(1, rate), rate },
+      },
+    ];
+  },
 };
 
-/** An unknown script name is rejected at the door (E_BAD_REQUEST). */
-export function agentScript(name: string): AgentScript {
-  const script = SCRIPTS[name];
+/**
+ * B4a lock (2) — a caption over the second and third video clips, each
+ * carrying that clip's own display name.
+ *
+ * The text track has to be free over both ranges: the engine refuses an
+ * overlapping addClip and the whole run then fails atomically, which is the
+ * designed behaviour. On both shipped fixtures those ranges are empty.
+ */
+const addCaptions: AgentScript = {
+  id: "add-captions",
+  name: "Add captions",
+  description: "Puts a text caption over the second and third video clips.",
+  build: (timeline) => {
+    const video = trackOfKind(timeline, "video");
+    const text = trackOfKind(timeline, "text");
+    return [1, 2].map((index) => {
+      const clip = nth(video, index, `V1[${index}]`);
+      return {
+        op: "addClip",
+        trackId: text.id,
+        textContent: displayNameOf(timeline, clip),
+        textStyle: { font: "Arial", size: 48, color: "#ffffff" },
+        timelineRange: clip.timelineRange,
+      } as Command;
+    });
+  },
+};
+
+const SCRIPTS: readonly AgentScript[] = [
+  tightenIntro,
+  trimSilences,
+  addCaptions,
+];
+
+/** The public shape of the registry — what `GET /api/agent/presets` lists. */
+export type AgentPresetInfo = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+export const AGENT_PRESETS: readonly AgentPresetInfo[] = SCRIPTS.map(
+  ({ id, name, description }) => ({ id, name, description }),
+);
+
+/** An unknown preset id is rejected at the door (E_BAD_REQUEST). */
+export function agentPreset(id: string): AgentScript {
+  const script = SCRIPTS.find((candidate) => candidate.id === id);
   if (!script) {
-    throw new ApiError("E_BAD_REQUEST", `unknown agent script "${name}"`);
+    throw new ApiError("E_BAD_REQUEST", `unknown agent preset "${id}"`);
   }
   return script;
 }
 
-export const AGENT_SCRIPT_NAMES = Object.keys(SCRIPTS);
+/**
+ * Copy #186 — the cut a preset runs on. ONE function: the run route mints
+ * it, the presets route looks the run state up by it, and the tests read it
+ * rather than spelling the name out.
+ */
+export function agentCutName(id: string): string {
+  return `agent-${id}`;
+}

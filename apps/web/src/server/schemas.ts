@@ -272,14 +272,13 @@ export const exportBodySchema = z
   .strict();
 
 /**
- * C4 (4) + F5(a) — POST agent/simulate {branch, script}. `script` is a NAME
- * (C3's branch template is literally `agent/<script>-N`), not a payload of
- * commands; the scripted edits are a server-side fixture (C8).
+ * I1 patch (a) — POST agent/run { preset }. A preset ID, not a payload of
+ * commands (the scripted edits are a server-side fixture, C8) and NOT a
+ * branch either: the run makes its own cut, `agent-‹preset›`.
  */
-export const agentSimulateBodySchema = z
+export const agentRunBodySchema = z
   .object({
-    branch: branchName,
-    script: z.string().min(1).max(100),
+    preset: z.string().min(1).max(100),
     ticket,
   })
   .strict();

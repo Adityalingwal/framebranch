@@ -659,29 +659,59 @@ export function summaryName(rows: readonly DiffRow[]): string {
     const r = rows[0];
     return cap(`${r.clipName} ${lowerFirst(r.text)}`);
   }
-  const order: [DiffRowKind[], string][] = [
-    [["moved"], "moved"],
-    [["trimmed"], "trimmed"],
-    [["added"], "added"],
-    [["removed"], "removed"],
-    [["split"], "split"],
-    [["slipped"], "slipped"],
-    [["property", "raw"], "changed"],
-  ];
-  const parts: string[] = [];
-  for (const [kinds, verb] of order) {
-    const clips = new Set<string>();
-    for (const r of rows) {
-      if (kinds.includes(r.kind)) for (const id of r.clipIds) clips.add(id);
-    }
-    const n = clips.size;
-    if (n === 0) continue;
-    parts.push(parts.length === 0 ? `${plural(n, "clip")} ${verb}` : `${n} ${verb}`);
-  }
+  const parts = verbCounts(rows).map(([n, verb], index) =>
+    index === 0 ? `${plural(n, "clip")} ${verb}` : `${n} ${verb}`,
+  );
   for (const r of rows) {
     if (r.kind === "ripple") parts.push(`${r.clipIds.length} clips moved along`);
   }
   return cap(parts.join(", "));
+}
+
+/** G4-N's verb order. The FIRST part is the one that carries `clip(s)`. */
+const VERB_ORDER: [DiffRowKind[], string][] = [
+  [["moved"], "moved"],
+  [["trimmed"], "trimmed"],
+  [["added"], "added"],
+  [["removed"], "removed"],
+  [["split"], "split"],
+  [["slipped"], "slipped"],
+  [["property", "raw"], "changed"],
+];
+
+/**
+ * `[distinct clips, verb]` per non-empty verb, in G4-N order. DISTINCT
+ * CLIPS, not rows (C1 patch 2026-09-07): one clip with a font row and a
+ * colour row is `1 changed`, while `count` (the `‹N› changes` number) stays
+ * the row count.
+ */
+function verbCounts(rows: readonly DiffRow[]): [number, string][] {
+  const out: [number, string][] = [];
+  for (const [kinds, verb] of VERB_ORDER) {
+    const clips = new Set<string>();
+    for (const r of rows) {
+      if (kinds.includes(r.kind)) for (const id of r.clipIds) clips.add(id);
+    }
+    if (clips.size > 0) out.push([clips.size, verb]);
+  }
+  return out;
+}
+
+/**
+ * I1 / copy #184 line 3 — the run-log's `‹N› changes: ‹summary›`, where
+ * `‹summary›` is THIS: the same verb list `summaryName` builds, minus the
+ * leading count's `clip(s)` word (`3 trimmed, 1 removed, 2 moved`), because
+ * the count already stands in front of it. Unlike the card name, a ONE-row
+ * run also gets the verb form (`1 trimmed`), never the clip-name sentence —
+ * `2 changes: 2 added` and `1 change: 1 added` have to read alike.
+ */
+export function runSummary(rows: readonly DiffRow[]): string {
+  if (rows.length === 0) return "";
+  const parts = verbCounts(rows).map(([n, verb]) => `${n} ${verb}`);
+  for (const r of rows) {
+    if (r.kind === "ripple") parts.push(`${r.clipIds.length} moved along`);
+  }
+  return parts.join(", ");
 }
 
 function cap(s: string): string {

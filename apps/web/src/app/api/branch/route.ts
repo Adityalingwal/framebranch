@@ -13,11 +13,13 @@
 import { eq } from "drizzle-orm";
 
 import { branches, workingState } from "../../../db/schema";
-import { findBranch, loadBranchView } from "../../../server/branches";
+import {
+  createBranch,
+  findBranch,
+  loadBranchView,
+} from "../../../server/branches";
 import { ApiError } from "../../../server/envelope";
-import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
-import { INITIAL_WORKING_REV } from "../../../server/project";
 import { branchCreateBodySchema } from "../../../server/schemas";
 import { sealIfDirty } from "../../../server/seal";
 import { runWithTicket } from "../../../server/tickets";
@@ -113,28 +115,10 @@ export async function POST(request: Request): Promise<Response> {
           headCommitId = seal.commitId;
         }
 
-        const [created] = await tx
-          .insert(branches)
-          .values({
-            projectId: project.id,
-            name: body.name,
-            headCommitId,
-            createdBy: editorName,
-          })
-          .returning();
-
-        await tx.insert(workingState).values({
-          branchId: created.id,
-          projectId: project.id,
-          baseCommitId: headCommitId,
-          pendingOps: [],
-          workingRev: INITIAL_WORKING_REV,
-        });
-
-        await appendEvent(tx, project.id, "branch-created", {
-          branch: created.name,
+        const { branch: created } = await createBranch(tx, project.id, {
+          name: body.name,
           from: body.from,
-          head: headCommitId,
+          headCommitId,
           createdBy: editorName,
         });
 
