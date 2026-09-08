@@ -15,10 +15,12 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 
 import { applyCommand } from "@framebranch/engine";
 import type { Timeline } from "@framebranch/engine";
 
+import { branches } from "../../../../db/schema";
 import {
   AGENT_ACTOR_NAME,
   agentCutName,
@@ -30,7 +32,9 @@ import {
   loadBranchView,
 } from "../../../../server/branches";
 import { createCommit } from "../../../../server/commits";
+import { presentDiff } from "../../../../server/diff-rows";
 import { ApiError } from "../../../../server/envelope";
+import { appendEvent } from "../../../../server/events";
 import { handleRequest, readBody } from "../../../../server/handler";
 import { agentRunBodySchema } from "../../../../server/schemas";
 import { sealIfDirty } from "../../../../server/seal";
@@ -120,6 +124,34 @@ export async function POST(request: Request): Promise<Response> {
         actor: "agent",
         kind: "agent-run",
         actorName: AGENT_ACTOR_NAME,
+      });
+
+      // #172 / F3(4) — the agent marks its OWN cut Ready, with the auto
+      // summary of what it did as the note (`3 clips trimmed, 1 removed` —
+      // the G4-N format the seal names auto cards with, NOT the run-log's
+      // verb line). `view.timeline` is the fork point: the cut was created
+      // a moment ago with no pending ops, so its view IS the parent commit.
+      const presented = presentDiff(view.timeline, timeline);
+      const readyNote = presented.summaryName;
+      await tx
+        .update(branches)
+        .set({
+          readyNote,
+          readyBy: AGENT_ACTOR_NAME,
+          readyAt: sql`now()`,
+          // The run's ops went in through the COMMIT, not `/api/ops`, so
+          // the cut's working rev is still the initial one: `editedSince`
+          // is false until a person edits the agent's cut by hand.
+          readyWorkingRev: view.working.workingRev,
+        })
+        .where(
+          and(eq(branches.id, branch.id), eq(branches.projectId, project.id)),
+        );
+
+      await appendEvent(tx, project.id, "ready-set", {
+        cut,
+        by: AGENT_ACTOR_NAME,
+        note: readyNote,
       });
 
       return {

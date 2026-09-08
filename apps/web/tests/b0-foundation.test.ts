@@ -207,11 +207,14 @@ describe("C-A — data model", () => {
       .select()
       .from(projectEvents)
       .orderBy(asc(projectEvents.id));
+    // B4b: the edit in between now appends an `edit` event of its own
+    // (J1 — `Edited since ready` has no other carrier).
     expect(events.map((e) => e.kind)).toEqual([
       "commit-created",
+      "edit",
       "commit-created",
     ]);
-    expect(events[1].payload).toMatchObject({
+    expect(events[2].payload).toMatchObject({
       commitId: commit.commitId,
       kind: "mark",
       actorName: "Priya",

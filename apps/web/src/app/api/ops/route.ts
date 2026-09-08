@@ -14,6 +14,7 @@ import { applyCommand } from "@framebranch/engine";
 import { workingState } from "../../../db/schema";
 import { loadBranchView } from "../../../server/branches";
 import { ApiError } from "../../../server/envelope";
+import { appendEvent } from "../../../server/events";
 import { handleRequest, readBody } from "../../../server/handler";
 import { opsBodySchema } from "../../../server/schemas";
 import { runWithTicket } from "../../../server/tickets";
@@ -79,6 +80,21 @@ export async function POST(request: Request): Promise<Response> {
             eq(workingState.projectId, project.id),
           ),
         );
+
+      // J1 (B4b) — the one event a plain edit produces. Without it the
+      // other tab (and the editor's own top bar) could never learn that a
+      // Ready cut has moved: nothing else follows an edit, and
+      // `editedSince` is computed from exactly this rev. One row per edit
+      // is fine at demo scale — the poller coalesces a tick's events into
+      // ONE set of invalidations.
+      //
+      // Deliberately NOT on the no-change path above: a command that
+      // changes nothing is not recorded as a pending op either.
+      await appendEvent(tx, project.id, "edit", {
+        cut: body.branch,
+        workingRev: nextRev,
+        editorName,
+      });
 
       return { workingRev: nextRev, pendingCount: pending.length };
     });
