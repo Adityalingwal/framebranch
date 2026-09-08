@@ -8,8 +8,10 @@ import { quoted } from "../lib/format";
 import { showToast } from "../lib/state/toast-status";
 import {
   useCreateBranchMutation,
+  useReadyMutation,
   useSaveVersionMutation,
   useSwitchBranchMutation,
+  useUnreadyMutation,
 } from "../lib/data/hooks";
 import { BringInMenu } from "./BringInMenu";
 import { CutMenu } from "./CutMenu";
@@ -31,6 +33,7 @@ export function TopBar({
   cuts,
   headCardName,
   changesCount,
+  ready,
   editingLocked,
   cutSwitching,
   comparing,
@@ -44,6 +47,8 @@ export function TopBar({
   headCardName: string | null;
   /** undefined = the diff has not answered yet: show the chip without a number. */
   changesCount: number | undefined;
+  /** F3(4) — the CURRENT cut's Ready state (null on main, and when unmarked). */
+  ready: BranchListItem["ready"];
   editingLocked: boolean;
   /**
    * B4a fix 1(a) — a cut change Shell started (the Agent panel's `View` /
@@ -65,11 +70,17 @@ export function TopBar({
   const saveVersion = useSaveVersionMutation(currentBranch);
   const createBranch = useCreateBranchMutation();
   const switchBranch = useSwitchBranchMutation();
+  // F3(4) — the Ready pair lives here, beside the switch mutation the Cut
+  // menu already drives, so the menu stays a presentation component.
+  const markReady = useReadyMutation();
+  const unmarkReady = useUnreadyMutation();
+  const readyPending = markReady.isPending || unmarkReady.isPending;
 
   const busy =
     saveVersion.isPending ||
     createBranch.isPending ||
     switchBranch.isPending ||
+    readyPending ||
     cutSwitching;
 
   // E1: nothing changed since the head card → marking again would write a
@@ -137,8 +148,10 @@ export function TopBar({
           <CutMenu
             current={currentBranch}
             cuts={cuts}
+            ready={ready}
             disabled={editingLocked}
             busy={busy}
+            readyPending={readyPending}
             onSwitch={(to) => {
               switchBranch.mutate(
                 { from: currentBranch, to },
@@ -151,6 +164,20 @@ export function TopBar({
                 { onSuccess: (data) => onBranchChanged(data.name) },
               );
             }}
+            onMarkReady={(note) => {
+              markReady.mutate(
+                { cut: currentBranch, note },
+                // #166. The toast is the caller's, as `Marked "‹name›".`
+                // above is — no hook in `hooks.ts` toasts on success.
+                { onSuccess: () => showToast("Marked ready — main will see it.") },
+              );
+            }}
+            onUnmarkReady={() => {
+              unmarkReady.mutate(
+                { cut: currentBranch },
+                { onSuccess: () => showToast("No longer marked ready.") }, // #169
+              );
+            }}
           />
           {/* A2 (#16) — the head card's name, plain text. Nothing at all
               while the branch and History queries disagree: a name here is
@@ -158,6 +185,17 @@ export function TopBar({
           {headCardName && (
             <span className="topbar-current-card" title={headCardName}>
               · {headCardName}
+            </span>
+          )}
+          {/* #35/#167 — the Ready tag, right of the card name. Not a
+              button and never on main. #171 lock (3): once the cut was
+              edited after the mark, the SAME tag reads `Edited since
+              ready` — one green family, one word at a time, never both. */}
+          {ready !== null && (
+            <span
+              className={`topbar-ready-tag${ready.editedSince ? " is-edited" : ""}`}
+            >
+              {ready.editedSince ? "Edited since ready" : "Ready"}
             </span>
           )}
         </div>

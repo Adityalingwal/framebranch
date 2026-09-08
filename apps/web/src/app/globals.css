@@ -523,6 +523,29 @@ input[type="range"]::-moz-range-thumb {
   white-space: nowrap;
 }
 
+/* F3(4)(a) #35/#167 — the Ready tag beside the current-card name. Not a
+   button: nothing happens when you press it. Lock (3) — `Edited since
+   ready` (#171) is the SAME tag in the SAME green, only dimmer: the cut is
+   still ready, the words are the warning, so there is no amber and no
+   second colour anywhere in this feature. */
+.topbar-ready-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--fb-radius-pill);
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: rgba(63, 207, 142, 0.15);
+  color: var(--fb-good);
+}
+
+.topbar-ready-tag.is-edited {
+  background: rgba(63, 207, 142, 0.09);
+  opacity: 0.8;
+}
+
 .cut-menu-trigger {
   display: inline-flex;
   align-items: center;

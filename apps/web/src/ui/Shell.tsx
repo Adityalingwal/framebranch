@@ -1060,6 +1060,9 @@ export function Shell() {
         cuts={cuts}
         headCardName={headCard?.name ?? null}
         changesCount={changesCount}
+        // F3(4) — the cut list is the only source of Ready; nothing about
+        // the mark is remembered in the browser.
+        ready={cuts.find((cut) => cut.name === currentBranch)?.ready ?? null}
         editingLocked={editingPaused}
         // Fix 1(a): Shell's own switch (and a run) locks the cut controls
         // here too — TopBar's `busy` only knows about TopBar's mutations.
