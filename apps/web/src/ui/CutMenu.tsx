@@ -20,20 +20,37 @@ import { primaryButton, secondaryButton, textInput } from "./styles";
 export function CutMenu({
   current,
   cuts,
+  ready,
   disabled,
   busy,
+  readyPending,
   onSwitch,
   onCreate,
+  onMarkReady,
+  onUnmarkReady,
 }: {
   current: string;
   cuts: BranchListItem[];
+  /** F3(4) — the CURRENT cut's Ready state; `main` never has one. */
+  ready: BranchListItem["ready"];
   disabled?: boolean;
   busy?: boolean;
+  /** A Ready mutation is in the air: the dialog's button waits for it. */
+  readyPending?: boolean;
   onSwitch: (to: string) => void;
   onCreate: (name: string) => void;
+  /**
+   * The dialog stays open until the server answers: `onSuccess` is what
+   * closes it, so a refusal keeps the note the person typed instead of
+   * throwing it away behind a toast. Same shape as `Mark version`.
+   */
+  onMarkReady: (note: string, onSuccess: () => void) => void;
+  onUnmarkReady: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
+  const [readyOpen, setReadyOpen] = useState(false);
+  const [note, setNote] = useState("");
   const [name, setName] = useState("");
   const [position, setPosition] = useState({ top: 0, left: 0, width: 220 });
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -94,6 +111,23 @@ export function CutMenu({
     setCreateOpen(true);
   }
 
+  // F3(4)(a) — Ready lives on the cut you are standing on, and `main` is
+  // what cuts are brought INTO, so it can never be ready for itself.
+  const showReadyItems = current !== "main";
+  const trimmedNote = note.trim();
+  const canMarkReady = trimmedNote.length > 0 && !readyPending;
+
+  function openReady() {
+    setOpen(false);
+    setNote("");
+    setReadyOpen(true);
+  }
+
+  function submitReady() {
+    if (!canMarkReady) return;
+    onMarkReady(trimmedNote, () => setReadyOpen(false));
+  }
+
   return (
     <>
       <button
@@ -150,8 +184,35 @@ export function CutMenu({
                 )}
               </button>
             ))}
-            {/* B4 puts the Ready items (#8 `✓ Ready for main…` / #9
-                `✕ Not ready anymore`) here, on non-main cuts only. */}
+            {/* F3(4)(a) — the Ready pair, for the CURRENT cut only and
+                never on main. One slot, two strings: #8/#161 before the
+                mark, #9/#168 after it (`Edited since ready` is still
+                Ready, so it keeps the second one). Un-marking has no
+                dialog — F3(4) has nothing to confirm. */}
+            {showReadyItems && (
+              <>
+                <div className="cut-menu-divider" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="cut-menu-item"
+                  onClick={() => {
+                    if (ready === null) {
+                      openReady();
+                      return;
+                    }
+                    setOpen(false);
+                    onUnmarkReady();
+                  }}
+                >
+                  <span className="cut-menu-item-label">
+                    {ready === null
+                      ? "✓ Ready for main…"
+                      : "✕ Not ready anymore"}
+                  </span>
+                </button>
+              </>
+            )}
             <div className="cut-menu-divider" />
             <button
               type="button"
@@ -224,6 +285,68 @@ export function CutMenu({
             }}
           >
             Create cut
+          </button>
+        </div>
+      </ModalShell>
+
+      {/* F3(4)(a) — the Ready dialog. #162 title, #163 body, #164 note,
+          #165 buttons. The note is REQUIRED (one line is the whole point
+          of the mark), so `Mark ready` is off while it is empty; the
+          server refuses an empty one too. */}
+      <ModalShell
+        open={readyOpen}
+        onOpenChange={setReadyOpen}
+        title="Ready for main"
+      >
+        <p
+          style={{
+            fontSize: 12,
+            color: "var(--fb-text-dim)",
+            margin: 0,
+            marginBottom: 10,
+          }}
+        >
+          Whoever is on main will see this cut marked ready, with your note,
+          and can bring it in. Nothing changes on main until they do.
+        </p>
+        <input
+          autoFocus
+          style={textInput}
+          placeholder="What's in this cut? One line for whoever brings it in."
+          aria-label="Ready note"
+          maxLength={200}
+          value={note}
+          onChange={(event) => setNote(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") submitReady();
+          }}
+        />
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: 8,
+            marginTop: 16,
+          }}
+        >
+          <button
+            type="button"
+            style={secondaryButton}
+            onClick={() => setReadyOpen(false)}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            style={
+              canMarkReady
+                ? primaryButton
+                : { ...primaryButton, opacity: 0.45, cursor: "not-allowed" }
+            }
+            disabled={!canMarkReady}
+            onClick={submitReady}
+          >
+            Mark ready
           </button>
         </div>
       </ModalShell>

@@ -49,6 +49,9 @@ export type TicketEndpoint =
   | "agent-run"
   | "branch-create"
   | "branch-switch"
+  /** F3(4) — one resource (`/api/branch/ready`), two verbs (B4b lock (1)). */
+  | "ready-set"
+  | "ready-clear"
   | "demo-reset"
   | "project-new"
   | "restore";

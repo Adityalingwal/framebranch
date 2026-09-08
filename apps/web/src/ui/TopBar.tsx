@@ -4,12 +4,15 @@ import { useState } from "react";
 import { GitBranch } from "@phosphor-icons/react";
 
 import type { BranchListItem } from "../app/api/branch/route";
+import type { Peer } from "../lib/data/api-client";
 import { quoted } from "../lib/format";
 import { showToast } from "../lib/state/toast-status";
 import {
   useCreateBranchMutation,
+  useReadyMutation,
   useSaveVersionMutation,
   useSwitchBranchMutation,
+  useUnreadyMutation,
 } from "../lib/data/hooks";
 import { BringInMenu } from "./BringInMenu";
 import { CutMenu } from "./CutMenu";
@@ -31,6 +34,8 @@ export function TopBar({
   cuts,
   headCardName,
   changesCount,
+  ready,
+  peers,
   editingLocked,
   cutSwitching,
   comparing,
@@ -44,6 +49,14 @@ export function TopBar({
   headCardName: string | null;
   /** undefined = the diff has not answered yet: show the chip without a number. */
   changesCount: number | undefined;
+  /** F3(4) — the CURRENT cut's Ready state (null on main, and when unmarked). */
+  ready: BranchListItem["ready"];
+  /**
+   * J1 lock (2) — the peers standing on ANOTHER cut, one chip each (#218).
+   * A peer on the SAME cut gets no words at all: their coloured playhead in
+   * the timeline is the whole signal.
+   */
+  peers: Peer[];
   editingLocked: boolean;
   /**
    * B4a fix 1(a) — a cut change Shell started (the Agent panel's `View` /
@@ -65,11 +78,17 @@ export function TopBar({
   const saveVersion = useSaveVersionMutation(currentBranch);
   const createBranch = useCreateBranchMutation();
   const switchBranch = useSwitchBranchMutation();
+  // F3(4) — the Ready pair lives here, beside the switch mutation the Cut
+  // menu already drives, so the menu stays a presentation component.
+  const markReady = useReadyMutation();
+  const unmarkReady = useUnreadyMutation();
+  const readyPending = markReady.isPending || unmarkReady.isPending;
 
   const busy =
     saveVersion.isPending ||
     createBranch.isPending ||
     switchBranch.isPending ||
+    readyPending ||
     cutSwitching;
 
   // E1: nothing changed since the head card → marking again would write a
@@ -137,8 +156,10 @@ export function TopBar({
           <CutMenu
             current={currentBranch}
             cuts={cuts}
+            ready={ready}
             disabled={editingLocked}
             busy={busy}
+            readyPending={readyPending}
             onSwitch={(to) => {
               switchBranch.mutate(
                 { from: currentBranch, to },
@@ -151,6 +172,27 @@ export function TopBar({
                 { onSuccess: (data) => onBranchChanged(data.name) },
               );
             }}
+            onMarkReady={(note, onSuccess) => {
+              markReady.mutate(
+                { cut: currentBranch, note },
+                {
+                  // #166. The toast is the caller's, as `Marked "‹name›".`
+                  // above is — no hook in `hooks.ts` toasts on success.
+                  // The dialog closes HERE and not on the click, so a
+                  // refusal leaves the typed note on screen to retry.
+                  onSuccess: () => {
+                    showToast("Marked ready — main will see it.");
+                    onSuccess();
+                  },
+                },
+              );
+            }}
+            onUnmarkReady={() => {
+              unmarkReady.mutate(
+                { cut: currentBranch },
+                { onSuccess: () => showToast("No longer marked ready.") }, // #169
+              );
+            }}
           />
           {/* A2 (#16) — the head card's name, plain text. Nothing at all
               while the branch and History queries disagree: a name here is
@@ -158,6 +200,17 @@ export function TopBar({
           {headCardName && (
             <span className="topbar-current-card" title={headCardName}>
               · {headCardName}
+            </span>
+          )}
+          {/* #35/#167 — the Ready tag, right of the card name. Not a
+              button and never on main. #171 lock (3): once the cut was
+              edited after the mark, the SAME tag reads `Edited since
+              ready` — one green family, one word at a time, never both. */}
+          {ready !== null && (
+            <span
+              className={`topbar-ready-tag${ready.editedSince ? " is-edited" : ""}`}
+            >
+              {ready.editedSince ? "Edited since ready" : "Ready"}
             </span>
           )}
         </div>
@@ -196,6 +249,33 @@ export function TopBar({
             "No changes"
           )}
         </button>
+        )}
+
+        {/* #218 / lock (2) — right of the chip, in the flexible middle
+            space. Not buttons: there is nothing to press, and jumping to
+            someone else's cut is what the Cut menu is for. Many peers →
+            many chips in a row; the container clips rather than wrapping,
+            because a wrapped top bar would change height. */}
+        {peers.length > 0 && (
+          <div className="topbar-presence">
+            {peers.map((peer) => {
+              const text = `${peer.name} is on ${peer.cut}`;
+              return (
+                <span
+                  key={peer.tabId}
+                  className="topbar-presence-chip"
+                  title={text}
+                >
+                  <span
+                    aria-hidden
+                    className="topbar-presence-dot"
+                    style={{ background: `hsl(${peer.colourSeed} 70% 55%)` }}
+                  />
+                  {text}
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
 

@@ -13,7 +13,7 @@ import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import type { DiffRow } from "../server/diff-rows";
 import { ApiClientError } from "../lib/data/api-client";
-import type { AgentRun, BringInToken } from "../lib/data/api-client";
+import type { AgentRun, BringInToken, SyncEvent } from "../lib/data/api-client";
 import { queryKeys } from "../lib/data/query-keys";
 import {
   choicesKeyFor,
@@ -25,8 +25,11 @@ import {
 import type { ConflictLine } from "../server/conflict-cards";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { quoted } from "../lib/format";
-import { createPendingDoorSlot } from "../lib/pending-door";
+import { canOpenParkedCompare, createPendingDoorSlot } from "../lib/pending-door";
 import { useConnectionStatus } from "../lib/state/connection-status";
+import { useEditorName } from "../lib/state/editor-name";
+import { decideSyncAction, syncInvalidations } from "../lib/data/sync-plan";
+import { useSyncPoller } from "../lib/data/use-sync-poller";
 import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
 import {
@@ -39,6 +42,7 @@ import {
   useDiffQuery,
   useHistoryQuery,
   useOpsMutation,
+  refreshBranches,
   useRestoreMutation,
   useSwitchBranchMutation,
   useTimelineAtQuery,
@@ -695,6 +699,89 @@ export function Shell() {
   }, [doors, setView]);
 
   /**
+   * Codex BUG 1 — the moment this tab's OWN New project succeeded, or
+   * `null`. Set on the click path only (`IconRail` → `NewProjectDialog` →
+   * `onStarted`), never on the poller path, so it can only ever swallow a
+   * reset this tab has already performed.
+   *
+   * A ref and not state: nothing renders differently because of it, and it
+   * has to be readable by the poller callback in the same turn it is set.
+   */
+  const selfResetAtRef = useRef<number | null>(null);
+
+  /**
+   * The New-project reset AS THIS TAB'S OWN ACTION. Identical to
+   * `handleNewProject` plus the arm — the poller keeps calling the plain
+   * one, so the guard can never be set by an event.
+   */
+  const handleOwnNewProject = useCallback(() => {
+    selfResetAtRef.current = Date.now();
+    handleNewProject();
+  }, [handleNewProject]);
+
+  /**
+   * J1 — the 3s poller, called ONCE for the whole app.
+   *
+   * The gate is two traps at once: a tick before the first
+   * `GET /api/timeline` would reach `handleRequest` with no cookie and
+   * BOOTSTRAP A SECOND PROJECT under the running app, and a tick before
+   * the name gate would write a presence row literally named `Editor` for
+   * everyone else to see.
+   *
+   * `onEvents` does exactly what `sync-plan.ts` decides and nothing else —
+   * in particular it never touches `["bring-in"]` (a refetch there mints a
+   * new token and drops half-made decisions) and never the current cut's
+   * timeline (this tab's own optimistic surface; nothing another tab does
+   * moves this tab's working rev).
+   */
+  const editorName = useEditorName();
+  const { peers } = useSyncPoller({
+    enabled: timeline.isSuccess && editorName !== null,
+    cut: currentBranch,
+    playheadFrame,
+    onEvents: useCallback(
+      (events: SyncEvent[]) => {
+        // `decideSyncAction` holds the whole rule, including the one-shot
+        // self-reset guard, so it can be proved in a node test.
+        const decision = decideSyncAction(
+          syncInvalidations(events),
+          selfResetAtRef.current,
+          Date.now(),
+        );
+        if (decision.disarmSelfReset) selfResetAtRef.current = null;
+
+        if (decision.action === "reset-project") {
+          // The OTHER tab started a New project: the cookie is shared, so
+          // this tab's whole project (and possibly its cut) is gone. The
+          // same reset this tab runs after its own New project, plus the
+          // wholesale invalidation `useNewProjectMutation` does — nothing
+          // cached is about the new project. No toast: no copy row exists
+          // for it (a B5 question, not a string to invent).
+          queryClient.invalidateQueries();
+          handleNewProject();
+          return;
+        }
+        // Includes the swallowed self-seed: the reset already happened on
+        // the click, but the events beside it are real and the cut list
+        // still has to catch up.
+        if (decision.action === "refresh-branches") refreshBranches(queryClient);
+      },
+      [handleNewProject, queryClient],
+    ),
+  });
+
+  // Lock (2) — a peer on THIS cut gets a coloured playhead and no words; a
+  // peer anywhere else gets a chip and no line.
+  const samePeers = useMemo(
+    () => peers.filter((peer) => peer.cut === currentBranch),
+    [peers, currentBranch],
+  );
+  const otherPeers = useMemo(
+    () => peers.filter((peer) => peer.cut !== currentBranch),
+    [peers, currentBranch],
+  );
+
+  /**
    * I1(3)/(4) — apply a parked door once the cut switch has actually
    * landed. Declared AFTER the `currentBranch` reset effects and the
    * default-pair effect, so what this sets is what survives the render.
@@ -702,15 +789,35 @@ export function Shell() {
    * A Compare door waits for the new cut's History too: effect (i-b) drops
    * any pair naming a commit that is not on the settled chain, so setting
    * one before the chain arrives would be undone by it.
+   *
+   * Codex BUG 2 — that wait is `history.isSuccess` AND BOTH IDS PRESENT,
+   * never `!history.isFetching`. Every eventful 3s tick calls
+   * `refreshBranches`, which invalidates `historyAll`; with another tab
+   * editing at least once per tick and History answering slower than the
+   * tick, each invalidation restarts the refetch before `isFetching` can
+   * settle and the door stays parked FOREVER — B4a's guarantee is
+   * "possibly one fetch later; never dropped".
+   *
+   * Dropping `isFetching` is safe precisely because the ids check does the
+   * real work. `useHistoryQuery` has no `placeholderData`, so a cut switch
+   * makes `isSuccess` false until the NEW cut's chain lands — the data
+   * this reads while a refetch is in flight is always this cut's own, one
+   * generation old at worst. And effect (i-b) judges the pair against the
+   * same `historyCommits` array: a pair whose ids are both on it cannot be
+   * dropped by the validation that runs on it. If a refetch later removes
+   * one of them, (i-b) clears the pair — which is correct, the commit is
+   * genuinely gone.
    */
   useEffect(() => {
     const door = doors.peek();
     if (door === null || door.target !== currentBranch) return;
     if (door.kind === "compare") {
-      if (!history.isSuccess || history.isFetching) return;
-      const known = (ref: string) =>
-        historyCommits.some((commit) => commit.commitId === ref);
-      if (!known(door.pair.a) || !known(door.pair.b)) return;
+      const ready = canOpenParkedCompare({
+        historyIsSuccess: history.isSuccess,
+        historyCommitIds: historyCommits.map((commit) => commit.commitId),
+        pair: door.pair,
+      });
+      if (!ready) return;
       doors.clear();
       openCompare(door.pair);
     } else {
@@ -721,7 +828,6 @@ export function Shell() {
     doors,
     currentBranch,
     history.isSuccess,
-    history.isFetching,
     historyCommits,
     openCompare,
     openBringIn,
@@ -1060,6 +1166,11 @@ export function Shell() {
         cuts={cuts}
         headCardName={headCard?.name ?? null}
         changesCount={changesCount}
+        // F3(4) — the cut list is the only source of Ready; nothing about
+        // the mark is remembered in the browser.
+        ready={cuts.find((cut) => cut.name === currentBranch)?.ready ?? null}
+        // Lock (2) — chips are for peers on ANOTHER cut only.
+        peers={otherPeers}
         editingLocked={editingPaused}
         // Fix 1(a): Shell's own switch (and a run) locks the cut controls
         // here too — TopBar's `busy` only knows about TopBar's mutations.
@@ -1082,7 +1193,7 @@ export function Shell() {
           onViewChange={(next) =>
             next === "changes" ? openChangesDoor() : setView(next)
           }
-          onNewProject={handleNewProject}
+          onNewProject={handleOwnNewProject}
         />
         <div
           ref={workspaceRef}
@@ -1196,6 +1307,12 @@ export function Shell() {
                   onRowClick={handleRowClick}
                   onViewCard={openView}
                   bringIn={bringIn}
+                  bringInReady={
+                    bringIn === null
+                      ? null
+                      : (cuts.find((cut) => cut.name === bringIn.cut)?.ready ??
+                        null)
+                  }
                   preview={preview}
                   landPending={bringInMutation.isPending}
                   landError={bringInMutation.error}
@@ -1400,6 +1517,9 @@ export function Shell() {
                 currentBranch={currentBranch}
                 resetToken={timelineResetToken}
                 editingLocked={editingPaused}
+                // Lock (2) — only the editing timeline carries peer
+                // playheads; Compare's lanes do not (not in the lock).
+                peers={samePeers}
               />
             )}
           </div>

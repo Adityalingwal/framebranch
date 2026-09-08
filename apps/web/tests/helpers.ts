@@ -109,6 +109,32 @@ export async function post<T = unknown>(
   return { status: response.status, body: await response.json(), response };
 }
 
+/**
+ * B4b — `DELETE /api/branch/ready` carries a JSON body (lock (1): one
+ * resource, two verbs). Same shape as `post`, different method.
+ */
+export async function del<T = unknown>(
+  handler: (request: Request) => Promise<Response>,
+  path: string,
+  body: unknown,
+  session: Session = { token: null },
+  headers: Record<string, string> = {},
+): Promise<Call<T>> {
+  const response = await handler(
+    new Request(`${BASE}${path}`, {
+      method: "DELETE",
+      headers: {
+        "content-type": "application/json",
+        ...cookieHeader(session),
+        ...headers,
+      },
+      body: JSON.stringify(body),
+    }),
+  );
+  captureToken(session, response);
+  return { status: response.status, body: await response.json(), response };
+}
+
 export function expectOk<T>(call: Call<T>): T {
   if (!call.body.ok) {
     throw new Error(

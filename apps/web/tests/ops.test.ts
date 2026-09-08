@@ -2,6 +2,8 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import type { Timeline } from "@framebranch/engine";
 
+import { projectEvents } from "../src/db/schema";
+import { findClipById } from "../src/lib/clip-helpers";
 import { GET as getTimeline } from "../src/app/api/timeline/route";
 import { POST as postOps } from "../src/app/api/ops/route";
 import {
@@ -9,6 +11,7 @@ import {
   expectError,
   expectOk,
   get,
+  getDb,
   post,
   resetDatabase,
   ticket,
@@ -257,5 +260,95 @@ describe("C4 (3) — POST ops", () => {
     const code = expectError(call).code;
     expect(code).not.toBe("E_BAD_REQUEST");
     expect(code).toBe("E_CLIP_NOT_FOUND");
+  });
+});
+
+/**
+ * J1 / B4b — the `edit` event. `POST /api/ops` is the ONLY thing that moves
+ * `working_rev`, so it is the only thing that can make `Edited since ready`
+ * true; without an event of its own that fact would reach no other tab (and
+ * not even the editor's own top bar, which refetches on events).
+ */
+describe("B4b — the `edit` event", () => {
+  const editEvents = async () =>
+    (await getDb().select().from(projectEvents)).filter(
+      (row) => row.kind === "edit",
+    );
+
+  it("one accepted edit appends exactly one `edit` event with { cut, workingRev, editorName }", async () => {
+    const { session } = await seeded();
+    expectOk(
+      await post(
+        postOps,
+        "/api/ops",
+        {
+          branch: "main",
+          workingRev: 0,
+          ticket: ticket(),
+          command: {
+            op: "propertyChange",
+            clipId: "clip-1",
+            property: "volume",
+            value: 40,
+          },
+        },
+        session,
+        { "X-Editor-Name": "Priya" },
+      ),
+    );
+
+    const rows = await editEvents();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].payload).toEqual({
+      cut: "main",
+      workingRev: 1,
+      editorName: "Priya",
+    });
+  });
+
+  it("a no-change command appends NOTHING — nothing happened", async () => {
+    const { session, view } = await seeded();
+    const clip = findClipById(view.timeline, "clip-1")!;
+    const data = expectOk(
+      await post(
+        postOps,
+        "/api/ops",
+        {
+          branch: "main",
+          workingRev: 0,
+          ticket: ticket(),
+          command: {
+            op: "move",
+            clipId: "clip-1",
+            newStart: { value: clip.timelineRange.start.value, rate: 24 },
+          },
+        },
+        session,
+      ),
+    ) as OpsData;
+    expect(data.noChange).toBe(true);
+    expect(await editEvents()).toHaveLength(0);
+  });
+
+  it("a rejected edit (E_STALE_REV) appends nothing either", async () => {
+    const { session } = await seeded();
+    const call = await post(
+      postOps,
+      "/api/ops",
+      {
+        branch: "main",
+        workingRev: 7,
+        ticket: ticket(),
+        command: {
+          op: "propertyChange",
+          clipId: "clip-1",
+          property: "volume",
+          value: 40,
+        },
+      },
+      session,
+    );
+    expect(expectError(call).code).toBe("E_STALE_REV");
+    expect(await editEvents()).toHaveLength(0);
   });
 });

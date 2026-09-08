@@ -2,6 +2,8 @@
 
 import type { MergeChoice } from "@framebranch/engine";
 
+import type { BranchListItem } from "../../app/api/branch/route";
+
 import type { HistoryCommit } from "../../lib/data/api-client";
 import type { AgentRun } from "../../lib/data/api-client";
 import type {
@@ -53,6 +55,7 @@ export function RightPanel({
   onRowClick,
   onViewCard,
   bringIn,
+  bringInReady,
   preview,
   landPending,
   landError,
@@ -94,6 +97,8 @@ export function RightPanel({
    * and rows. Every piece of its state lives in the Shell.
    */
   bringIn: { cut: string } | null;
+  /** F3(4)(c) — the Ready state of `bringIn.cut`, looked up by Shell. */
+  bringInReady: BranchListItem["ready"];
   preview: BringInPreviewQuery;
   landPending: boolean;
   landError: unknown;
@@ -162,6 +167,7 @@ export function RightPanel({
         {view === "changes" && bringIn !== null && (
           <BringInPanel
             cut={bringIn.cut}
+            ready={bringInReady}
             preview={preview}
             landPending={landPending}
             landError={landError}

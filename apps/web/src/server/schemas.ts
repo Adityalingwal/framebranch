@@ -175,6 +175,53 @@ export const branchSwitchBodySchema = z
   })
   .strict();
 
+/**
+ * F3(4)(a) + B4b lock (1) — POST /api/branch/ready: mark a cut "Ready for
+ * main". The note is REQUIRED (the lock says "ek line note (zaroori)"): the
+ * dialog keeps `Mark ready` disabled while it is empty (#164) and this is
+ * the safety net, so a whitespace-only note is a 400 here, not an empty
+ * line in main's Bring-in list.
+ *
+ * `by` and `at` are NOT in the body: the name comes from `X-Editor-Name`
+ * (F2a) and the time from the database.
+ */
+export const readySetBodySchema = z
+  .object({
+    cut: branchName,
+    note: z.string().trim().min(1).max(200),
+    ticket,
+  })
+  .strict();
+
+/** F3(4)(a) — DELETE /api/branch/ready: un-mark. No note to un-say. */
+export const readyClearBodySchema = z
+  .object({
+    cut: branchName,
+    ticket,
+  })
+  .strict();
+
+/**
+ * J1 — POST /api/sync. The ONE body with no ticket: a heartbeat is not a
+ * mutation anyone may replay, and a lost tick is simply the next tick's
+ * problem (expiry covers a tab that stopped).
+ *
+ * `cut` is NOT validated against `branches`: a peer can be mid-switch, and
+ * the client sends what it is standing on. Presence is display-only.
+ */
+export const syncBodySchema = z
+  .object({
+    tabId: z.string().min(8).max(64),
+    cut: branchName,
+    /** J1 IMPL-NOTE: the cursor is a FRAME (timecode), never a pixel. */
+    playheadFrame: z.number().int().nonnegative(),
+    /** The tab's colour, as an HSL hue. */
+    colourSeed: z.number().int().min(0).max(359),
+    /** null = a fresh tab: it gets the current max id and NO replay. */
+    cursor: z.number().int().nonnegative().nullable(),
+  })
+  .strict();
+
 // ---------------------------------------------------------------------------
 // M7b bodies. Same discipline: SHAPE only. Merge rules belong to the engine
 // (startMerge / applyChoice / finalizeCheck), OTIO rules to importOtio.

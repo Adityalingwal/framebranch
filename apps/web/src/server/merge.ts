@@ -12,9 +12,12 @@
  * row to delete and no attempt id anywhere in this file.
  */
 
+import { and, eq } from "drizzle-orm";
+
 import { finalizeCheck } from "@framebranch/engine";
 import type { MergeChoices, Timeline } from "@framebranch/engine";
 
+import { branches } from "../db/schema";
 import { ancestorsOf, loadParentMap } from "./ancestry";
 import type { BranchRow, WorkingStateRow } from "./branches";
 import { createCommit } from "./commits";
@@ -175,9 +178,29 @@ export async function finalizeMerge({
     actorName,
   });
 
-  // B4: F3(4)(d) clears ready_note/ready_by/ready_at/ready_working_rev on
-  // `from` here — the cut stops being "Ready for main" the moment it lands.
-  //
-  // The `from` branch is untouched: no head move, no working-state change.
+  // F3(4)(d) — the mark clears ITSELF on landing: "ready for main" stops
+  // being true the moment the cut IS in main. Same transaction as the
+  // bring-in card, so a rolled-back landing leaves the mark standing.
+  // No toast (#173): `Brought "X" into main.` is the only one.
+  if (from.readyAt !== null) {
+    await tx
+      .update(branches)
+      .set({
+        readyNote: null,
+        readyBy: null,
+        readyAt: null,
+        readyWorkingRev: null,
+      })
+      .where(and(eq(branches.id, from.id), eq(branches.projectId, projectId)));
+
+    await appendEvent(tx, projectId, "ready-cleared", {
+      cut: from.name,
+      by: actorName,
+      reason: "landed",
+    });
+  }
+
+  // Otherwise the `from` branch is untouched: no head move, no
+  // working-state change.
   return { done: true, mergeCommitId: commit.commitId };
 }

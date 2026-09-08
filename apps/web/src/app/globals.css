@@ -507,6 +507,12 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ── A2 top bar: cut menu + current-card name ────────────────────── */
+/* The squeeze order in `.topbar-left`, left to right, is deliberate: the
+   presence chips give way FIRST (they are the least load-bearing thing on
+   the bar), then the current-card name ellipsizes, and `Cut: ‹cut›` — the
+   answer to "where am I" — never shrinks at all. Before this, one presence
+   chip at 1280px was enough to turn the trigger into `Cut: priy…` and the
+   card name into `Travel vl…`. */
 .topbar-cut-cluster {
   display: inline-flex;
   align-items: center;
@@ -516,6 +522,10 @@ input[type="range"]::-moz-range-thumb {
 
 .topbar-current-card {
   min-width: 0;
+  /* The last thing on the bar to give, and the only thing inside the
+     cluster that CAN: the trigger and the tag hold their size, so every
+     pixel the cluster loses comes out of this name, which ellipsizes. */
+  flex-shrink: 1;
   color: var(--fb-text-dim);
   font-size: 12px;
   overflow: hidden;
@@ -523,10 +533,38 @@ input[type="range"]::-moz-range-thumb {
   white-space: nowrap;
 }
 
+/* F3(4)(a) #35/#167 — the Ready tag beside the current-card name. Not a
+   button: nothing happens when you press it. Lock (3) — `Edited since
+   ready` (#171) is the SAME tag in the SAME green, only dimmer: the cut is
+   still ready, the words are the warning, so there is no amber and no
+   second colour anywhere in this feature. */
+.topbar-ready-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--fb-radius-pill);
+  padding: 2px 8px;
+  font-size: 10.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  background: rgba(63, 207, 142, 0.15);
+  color: var(--fb-good);
+}
+
+.topbar-ready-tag.is-edited {
+  background: rgba(63, 207, 142, 0.09);
+  opacity: 0.8;
+}
+
 .cut-menu-trigger {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+  /* `Cut: ‹cut›` is readable at every width a chip can appear at. The cap
+     is what stops a 60-character cut name doing the pushing instead; past
+     it the LABEL ellipsizes, never the word `Cut:`. */
+  flex-shrink: 0;
+  max-width: 220px;
   gap: 6px;
   padding: 4px 10px;
   background: rgba(255, 255, 255, 0.04);
@@ -635,6 +673,62 @@ input[type="range"]::-moz-range-thumb {
   flex-shrink: 0;
 }
 
+/* #29 — the Ready count on the trigger. No badge at 0 (the markup omits
+   it), and the visible number is `aria-hidden`: the trigger's own
+   accessible name carries `Bring in, ‹N› ready` instead. */
+.bring-in-badge {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: var(--fb-radius-pill);
+  background: rgba(63, 207, 142, 0.18);
+  color: var(--fb-good);
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* F3(4)(b) — a Ready row is a dot plus two lines, so this one item is a
+   column where every other `.cut-menu-item` is a single line. The dot is
+   the ONLY status marker: a not-Ready row gets no dot at all (#32 — there
+   is no "not ready" state to draw). */
+.cut-menu-item.is-ready {
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.bring-in-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--fb-good);
+}
+
+.bring-in-row {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* #33 line 2 — the note, verbatim and in straight double quotes. */
+.bring-in-note {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--fb-text-mute);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* #34 — dim and non-interactive: a fact, not an instruction. */
 .bring-in-empty {
   padding: 7px 8px;
@@ -647,6 +741,7 @@ input[type="range"]::-moz-range-thumb {
 .topbar-comparing-pill {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   border-radius: var(--fb-radius-pill);
   padding: 3px 10px;
   font-size: 11px;
@@ -658,6 +753,9 @@ input[type="range"]::-moz-range-thumb {
 .topbar-changes-chip {
   display: inline-flex;
   align-items: center;
+  /* Keeps its footprint beside the chips: the count is a live number and a
+     half-drawn one would read as a different number. */
+  flex-shrink: 0;
   gap: 5px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -672,6 +770,50 @@ input[type="range"]::-moz-range-thumb {
     color 0.12s var(--fb-ease-hover),
     border-color 0.12s var(--fb-ease-hover),
     background 0.12s var(--fb-ease-hover);
+}
+
+/* J1 #218 / lock (2) — presence chips in the flexible space right of the
+   changes chip. The row CLIPS rather than wraps: the top bar is a fixed
+   44px and a second line would move everything under it. */
+.topbar-presence {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  /* The first thing on the bar to give way — it shrinks 3× faster than the
+     cut cluster beside it — but only down to a floor where a chip still
+     reads as words rather than as a lone dot. Past that floor the CARD
+     NAME is what ellipsizes; `Cut: ‹cut›` never does. The floor is written
+     as `min(92px, 28%)` so it disappears on a narrow bar instead of
+     pushing the cluster out of its column. */
+  flex: 0 3 auto;
+  min-width: min(92px, 28%);
+  max-width: 28%;
+  overflow: hidden;
+}
+
+.topbar-presence-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  border-radius: var(--fb-radius-pill);
+  padding: 3px 9px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--fb-text-mute);
+  font-size: 10.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The dot carries the peer's own colour-seed hue — the same hue as their
+   playhead line, so the chip and the line read as one person. */
+.topbar-presence-dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
 }
 
 .topbar-changes-chip:hover {
@@ -2608,6 +2750,52 @@ input:disabled {
   box-shadow: 0 0 8px rgba(43, 127, 255, 0.45);
 }
 
+/* J1 — a peer's playhead. Same container, same `scale`, same z-index band
+   as the own playhead's lane part (25, under the sticky ruler at 30 and
+   the track headers at 26), so it slides beneath them on scroll. It is
+   `pointer-events: none` all the way down, INCLUDING the label: the ruler
+   band above owns the scrub handlers and a peer's name must never take a
+   click meant for the timeline. */
+.timeline-peer-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+}
+
+.timeline-peer-playhead::after {
+  content: "";
+  position: absolute;
+  z-index: 25;
+  top: 32px;
+  bottom: 0;
+  left: -1px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--fb-peer-colour, var(--fb-accent-to));
+  opacity: 0.75;
+}
+
+/* Below the ruler band (which ends at 32px), never over it. */
+.timeline-peer-label {
+  position: absolute;
+  z-index: 25;
+  top: 34px;
+  left: 0;
+  transform: translateX(-50%);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #0b0b10;
+  background: var(--fb-peer-colour, var(--fb-accent-to));
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
 .timeline-playhead-bubble {
   position: sticky;
   z-index: 31;
@@ -2748,6 +2936,15 @@ input:disabled {
   font-size: 13px;
   font-weight: 600;
   color: var(--fb-text-body-2);
+}
+
+/* #133 — the Ready facts under the preview's header, one line, same green
+   family as the dot and the tag. */
+.bring-in-ready-line {
+  margin: 0;
+  color: var(--fb-good);
+  font-size: 11px;
+  opacity: 0.85;
 }
 
 .bring-in-body {

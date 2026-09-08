@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiClientError,
+  deleteReady,
   EDITOR_NAME_HEADER,
   getAgentPresets,
   getPresets,
@@ -11,6 +12,8 @@ import {
   postBranch,
   postCommit,
   postProjectNew,
+  postReady,
+  postSync,
 } from "../src/lib/data/api-client";
 import type { RetryHooks } from "../src/lib/data/api-client";
 
@@ -326,5 +329,129 @@ describe("api-client — the Agent + project endpoints", () => {
     // This tab has never been named: the header is simply absent (B0
     // leniency — the server attributes the work to `Editor`).
     expect(headerOf(init, EDITOR_NAME_HEADER)).toBeUndefined();
+  });
+});
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// B4b — Ready (F3(4)) and the sync heartbeat (J1). The point of these three
+// is the shape each one sends: which verb, which body, and — for the
+// heartbeat — that it carries the name but NO ticket, because it is not a
+// mutation anyone may replay.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+describe("api-client — Ready + sync", () => {
+  it("postReady: POST /api/branch/ready, body { cut, note, ticket }, with the editor's name", async () => {
+    withEditorName("Priya");
+    const data = {
+      cut: "priya-music",
+      ready: {
+        note: "Music bed + VO dip",
+        by: "Priya",
+        at: "2026-09-08T12:00:00.000Z",
+        editedSince: false,
+      },
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      postReady(
+        { cut: "priya-music", note: "Music bed + VO dip" },
+        noopHooks(),
+      ),
+    ).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/branch/ready");
+    expect(init.method).toBe("POST");
+    const body = bodyOf(init);
+    expect(Object.keys(body).sort()).toEqual(["cut", "note", "ticket"]);
+    expect(body.cut).toBe("priya-music");
+    expect(body.note).toBe("Music bed + VO dip");
+    expect(body.ticket).toMatch(UUID);
+    expect(headerOf(init, EDITOR_NAME_HEADER)).toBe("Priya");
+  });
+
+  it("deleteReady: the SAME url with DELETE, body { cut, ticket } — one resource, two verbs", async () => {
+    withEditorName("Priya");
+    const data = { cut: "priya-music", ready: null };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      deleteReady({ cut: "priya-music" }, noopHooks()),
+    ).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/branch/ready");
+    expect(init.method).toBe("DELETE");
+    const body = bodyOf(init);
+    // There is no note to un-say, but the ticket stays: un-marking still
+    // goes through the retry ladder, so it still has to be replay-safe.
+    expect(Object.keys(body).sort()).toEqual(["cut", "ticket"]);
+    expect(body.cut).toBe("priya-music");
+    expect(body.ticket).toMatch(UUID);
+    expect(headerOf(init, EDITOR_NAME_HEADER)).toBe("Priya");
+  });
+
+  it("postSync: POST /api/sync with the name header and NO ticket — a heartbeat is not a mutation", async () => {
+    withEditorName("Aditya");
+    const data = {
+      cursor: 12,
+      events: [],
+      peers: [
+        {
+          tabId: "tab-b",
+          name: "Priya",
+          cut: "priya-music",
+          playheadFrame: 120,
+          colourSeed: 200,
+          lastSeenAt: "2026-09-08T12:00:00.000Z",
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const sent = {
+      tabId: "tab-aaaaaaaa",
+      cut: "main",
+      playheadFrame: 0,
+      colourSeed: 10,
+      cursor: null,
+    };
+    await expect(postSync(sent)).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/sync");
+    expect(init.method).toBe("POST");
+    expect(bodyOf(init)).toEqual(sent);
+    expect(bodyOf(init).ticket).toBeUndefined();
+    expect(headerOf(init, EDITOR_NAME_HEADER)).toBe("Aditya");
+  });
+
+  it("postSync stays OUT of the retry ladder: a network failure rejects at once", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("network error"));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      postSync({
+        tabId: "tab-aaaaaaaa",
+        cut: "main",
+        playheadFrame: 0,
+        colourSeed: 10,
+        cursor: 3,
+      }),
+    ).rejects.toBeInstanceOf(Error);
+
+    // No 1s/3s silent retries, and no banner: the poller swallows this and
+    // ticks again in 3 seconds.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
