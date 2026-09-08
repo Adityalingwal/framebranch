@@ -585,6 +585,31 @@ describe("F3(1) — the landing", () => {
     );
   });
 
+  it("B5 fix 1 (#95): a cut whose NAME carries quotes lands with ONE pair", async () => {
+    // `branchName` (schemas.ts) permits `"`, so this cut is creatable from
+    // the real endpoint. Before the fix the card read
+    // `Brought ""client"" into main`.
+    const QUOTED_CUT = '"client"';
+    const s = await session();
+    await makeCut(s, QUOTED_CUT);
+    await edit(s, QUOTED_CUT, 0, volume(MUSIC, 40));
+    await mark(s, QUOTED_CUT, "Quieter music");
+
+    const answer = expectOk(
+      await get(
+        getPreview,
+        `/api/merge/preview?from=${encodeURIComponent(QUOTED_CUT)}`,
+        s,
+      ),
+    ) as BringInPreview;
+    expectOk(await land(s, { from: QUOTED_CUT, token: answer.token }));
+
+    const merges = await mergeCommits();
+    expect(merges).toHaveLength(1);
+    expect(merges[0].name).toBe('Brought "client" into main');
+    expect(merges[0].name.match(/"/g)).toHaveLength(2);
+  });
+
   it("dirty sides: BOTH are sealed in the same transaction as the bring-in", async () => {
     const s = await session();
     await oneSided(s);

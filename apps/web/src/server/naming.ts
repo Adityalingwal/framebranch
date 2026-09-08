@@ -24,9 +24,16 @@ export const IMPORTED_TIMELINE_COMMIT_NAME = "Imported timeline";
  * `Brought "priya-music" into main`; `into` is spelled out rather than
  * hard-coded so the name stays honest until B3 makes main the only target.
  */
-/** F1/C4: Bring in only ever lands on `main`; the card says so literally. */
+/**
+ * F1/C4: Bring in only ever lands on `main`; the card says so literally.
+ *
+ * B5 fix 1 — the cut name goes through `quoted()`, the SAME non-nesting rule
+ * `restoreCommitName` uses (B1 fix 4). `branchName` permits `"`, so a cut
+ * literally named `"client"` would otherwise land as `Brought ""client""
+ * into main`; it now reads `Brought "client" into main`, one pair of quotes.
+ */
 export const mergeCommitName = (from: string): string =>
-  `Brought "${from}" into main`;
+  `Brought ${quoted(from)} into main`;
 
 /**
  * B5-2b / C1(5) — restore: a NEW card whose content is an old version.

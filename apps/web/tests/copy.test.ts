@@ -113,6 +113,15 @@ describe("G4-N — generated card names", () => {
     );
   });
 
+  it("bring-in of a cut whose NAME carries quotes (B1 fix 4): one pair, ever", () => {
+    // `branchName` permits `"` (schemas.ts), so this cut is creatable. The
+    // same `quoted()` rule `restoreCommitName` uses applies here: a name
+    // that already carries quotes is not wrapped again.
+    expect(mergeCommitName('"client"')).toBe('Brought "client" into main');
+    expect(mergeCommitName('"client"')).not.toContain('""');
+    expect(mergeCommitName('say "hi"')).toBe('Brought say "hi" into main');
+  });
+
   it("restore (#94): `Restored \"‹card›\"`", () => {
     expect(restoreCommitName("Client pick")).toBe('Restored "Client pick"');
   });
