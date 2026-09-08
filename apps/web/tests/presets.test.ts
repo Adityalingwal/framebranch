@@ -9,6 +9,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { importOtio } from "@framebranch/engine";
 
 import { commits, projectEvents } from "../src/db/schema";
+import { GET as getBranches, POST as postBranch } from "../src/app/api/branch/route";
 import { GET as getPresets } from "../src/app/api/presets/route";
 import { GET as getTimeline } from "../src/app/api/timeline/route";
 import { POST as postDemoReset } from "../src/app/api/demo/reset/route";
@@ -57,6 +58,7 @@ describe("preset registry", () => {
     const data = expectOk(await get(getPresets, "/api/presets", s)) as {
       presets: { id: string; name: string; clipCount: number; duration: string }[];
     };
+    // B4a lock (1): two presets, `travel-vlog` first (it is the default).
     expect(data.presets).toEqual([
       {
         id: "travel-vlog",
@@ -64,7 +66,41 @@ describe("preset registry", () => {
         clipCount: 5,
         duration: "00:00:22:00",
       },
+      {
+        id: "thirty-second-ad",
+        name: "30s ad",
+        clipCount: 7,
+        // The name is honest: the fixture really runs 30 seconds.
+        duration: "00:00:30:00",
+      },
     ]);
+  });
+
+  it("the `30s ad` fixture is 720 frames of the SAME four media files", () => {
+    const ad = PRESETS.find((preset) => preset.id === "thirty-second-ad");
+    expect(ad).toBeDefined();
+    const imported = importOtio(loadPresetOtio(ad!));
+    expect(imported.ok).toBe(true);
+    if (!imported.ok) return;
+    expect(imported.warnings).toEqual([]);
+    expect(imported.timeline.projectRate).toBe(24);
+    expect(
+      [...imported.timeline.mediaRefs.map((ref) => ref.url)].sort(),
+    ).toEqual([
+      "/media/broll.mp4",
+      "/media/interview.mp4",
+      "/media/logo.png",
+      "/media/music.wav",
+    ]);
+    const end = Math.max(
+      ...imported.timeline.tracks.flatMap((track) =>
+        track.clips.map(
+          (clip) =>
+            clip.timelineRange.start.value + clip.timelineRange.duration.value,
+        ),
+      ),
+    );
+    expect(end).toBe(720);
   });
 });
 
@@ -139,6 +175,51 @@ describe("POST /api/project/new", () => {
       .from(projectEvents)
       .where(eq(projectEvents.projectId, rows[0].projectId));
     expect(events).toHaveLength(1);
+  });
+
+  it("with `thirty-second-ad` → a seed card named `30s ad` on main", async () => {
+    const s = await session();
+    const data = expectOk(
+      await post(
+        postProjectNew,
+        "/api/project/new",
+        { preset: "thirty-second-ad", ticket: ticket() },
+        s,
+      ),
+    ) as { preset: { id: string; name: string }; branch: string; head: string };
+    expect(data.preset).toEqual({ id: "thirty-second-ad", name: "30s ad" });
+    expect(data.branch).toBe("main");
+
+    const rows = await getDb().select().from(commits);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].kind).toBe("seed");
+    expect(rows[0].name).toBe("30s ad");
+  });
+
+  it("from a non-main cut the answer is still `main` — the old cuts are gone", async () => {
+    const s = await session();
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name: "priya-music", from: "main", ticket: ticket() },
+        s,
+      ),
+    );
+    const data = expectOk(
+      await post(
+        postProjectNew,
+        "/api/project/new",
+        { preset: "thirty-second-ad", ticket: ticket() },
+        s,
+      ),
+    ) as { branch: string };
+    expect(data.branch).toBe("main");
+
+    const cuts = expectOk(await get(getBranches, "/api/branch", s)) as {
+      branches: { name: string }[];
+    };
+    expect(cuts.branches.map((cut) => cut.name)).toEqual(["main"]);
   });
 
   it("POST /api/demo/reset is a thin alias: same seed, default preset", async () => {
