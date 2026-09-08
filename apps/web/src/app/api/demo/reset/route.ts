@@ -1,7 +1,8 @@
 /**
  * POST /api/demo/reset — thin alias of `POST /api/project/new` for the
- * default preset (the UI's "Reset demo" goes away in B4; the route stays so
- * today's client keeps working). Same code path: resetProjectToPreset.
+ * default preset. Same code path: resetProjectToPreset. API-only since
+ * B4a: the rail's "Reset demo" became "New project…", whose first row IS
+ * the default preset, so nothing in the interface calls this any more.
  *
  * Tickets survive so the endpoint stays idempotent — deleting the project
  * row would cascade to the ticket row runWithTicket is about to write.

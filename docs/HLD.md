@@ -5,7 +5,7 @@
 FrameBranch has seven pieces:
 
 - **Interface** — what a person sees and uses in the browser.
-- **Agent** — produces the simulated edits (see PRD Scope).
+- **Agent** — produces the simulated edits (see PRD Scope). Three scripted presets; running one creates its own cut, `agent-‹preset›`, and makes its edits there, never on main.
 - **API layer** — receives and validates every request, from either source.
 - **Domain engine** — the rules of a video timeline: clips, the eight operations, what states are valid.
 - **Version-control engine** — compares, finds conflicts, and combines two versions.

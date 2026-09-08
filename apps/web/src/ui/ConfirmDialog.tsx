@@ -4,8 +4,11 @@ import { ModalShell } from "./ModalShell";
 import { dangerButton, primaryButton, secondaryButton } from "./styles";
 
 /**
- * Generic confirm dialog. Used by Reset demo — locked: "DISCARD endpoints
- * need a confirm" (M8 lock, §8.4).
+ * Generic confirm dialog — locked: "DISCARD endpoints need a confirm"
+ * (M8 lock, §8.4). Its callers are B1's Restore box and B3's
+ * `Cancel — nothing changes`. The New project picker deliberately has no
+ * confirm of its own: its body line already says what closing the open
+ * project costs, and a box on top of that would ask twice.
  */
 export function ConfirmDialog({
   open,
