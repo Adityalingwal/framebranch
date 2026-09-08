@@ -12,11 +12,18 @@
  *   #77             `formatClock`'s three forms
  *   C-3             `formatFrames` — 4-part, always
  *   B1 fix 4        `quoted()` never nests
- *   #137-#139       a conflict card's title, lines and buttons
+ *   #137-#145       the three conflict-card forms: titles, lines, buttons
  *
  * Pure only: no database, no React. The component-level literals (`Mark
  * version`, `Bring in now`, …) are pinned by the sheet audit itself, not
- * here — a test that retypes a JSX literal asserts nothing.
+ * here — a test that retypes a JSX literal asserts nothing. That is why
+ * #146 (`‹N› decisions left`), #147 (nothing) and #148 (`Cancel — nothing
+ * changes` / `Bring in now`) are absent: they are JSX in
+ * `ui/RightPanel/BringInPanel.tsx`, with no builder to call, and the suite
+ * has no DOM (`vitest.config.ts` includes `tests/**\/*.test.ts` only).
+ *
+ * Every expected string below is typed from the SHEET row named in the
+ * comment beside it, never read back off a run of the code.
  */
 
 import { describe, expect, it } from "vitest";
@@ -26,6 +33,9 @@ import type {
   Clip,
   Command,
   MediaRef,
+  MergeChoice,
+  MergeConflict,
+  TextClip,
   Timeline,
   Track,
 } from "@framebranch/engine";
@@ -37,7 +47,15 @@ import {
   runSummary,
   SUMMARY_NAME_MAX,
 } from "../src/server/diff-rows";
-import { presentConflictCards } from "../src/server/conflict-cards";
+import type { DiffRow } from "../src/server/diff-rows";
+import {
+  buildAfterDisplay,
+  presentConflictCards,
+} from "../src/server/conflict-cards";
+import type {
+  ConflictCard,
+  ConflictRecord,
+} from "../src/server/conflict-cards";
 import {
   IMPORTED_TIMELINE_COMMIT_NAME,
   mergeCommitName,
@@ -211,6 +229,57 @@ describe("summaryName / runSummary — the two generated summaries", () => {
     );
     expect(SUMMARY_NAME_MAX).toBe(60);
   });
+
+  /**
+   * #184 line 3 is `‹N› changes: ‹summary›`, and `‹summary›` is G4-N's auto
+   * template minus the leading `clip(s)` word. The row's own example
+   * (`3 trimmed, 1 removed, 2 moved`) lists the verbs out of order; G4-N
+   * fixes the order (moved · trimmed · added · removed · split · slipped ·
+   * changed), and G4-N is the template the row points at, so THAT is what
+   * is typed below. Lock (3) caps it at 60 with `…`, like the card name.
+   */
+  it("#184 + G4-N: `runSummary` keeps the verb order, and is capped at 60", () => {
+    const row = (kind: DiffRow["kind"], i: number): DiffRow => ({
+      key: `${i}`,
+      kind,
+      clipIds: [`c${i}`],
+      clipName: `Clip ${i}`,
+      thumbnail: null,
+      text: "x",
+      where: "",
+      trackId: "v1",
+      trackName: "V1",
+      jump: { side: "after", frame: 0, clipId: `c${i}` },
+      laneIds: { before: [`c${i}`], after: [`c${i}`] },
+    });
+    const rows = (kinds: DiffRow["kind"][]): DiffRow[] => kinds.map(row);
+
+    // Under the cap → untouched, and in G4-N order however the rows arrive.
+    expect(
+      runSummary(rows(["removed", "trimmed", "trimmed", "moved", "moved"])),
+    ).toBe("2 moved, 2 trimmed, 1 removed");
+    expect(runSummary(rows(["trimmed"]))).toBe("1 trimmed");
+
+    // Every verb at once → 60 characters, the last one cut, `…` at the end.
+    const everything = runSummary(
+      rows([
+        "moved",
+        "trimmed",
+        "added",
+        "removed",
+        "split",
+        "slipped",
+        "property",
+      ]),
+    );
+    expect(everything).toBe(
+      "1 moved, 1 trimmed, 1 added, 1 removed, 1 split, 1 slipped,…",
+    );
+    expect(everything.length).toBe(SUMMARY_NAME_MAX);
+
+    // Nothing changed → the empty string, never `0 changes`.
+    expect(runSummary([])).toBe("");
+  });
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -304,56 +373,331 @@ describe("`quoted()` — one pair of quotes, ever", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// #137-#139 — a conflict card's three parts
+// #137-#145 — the three conflict-card forms. One shape, three filled forms
+// (F3(2)); every title, line and button label below is typed from the sheet
+// row named beside it.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-describe("#137-#139 — the conflict card's shape", () => {
-  it("both cuts changed one property → title, three named lines, three buttons", () => {
-    const start = base();
+const CUT = "priya-music";
+
+const BROLL_MEDIA: MediaRef = {
+  id: "m-broll",
+  kind: "video",
+  url: "/media/broll.mp4",
+  hash: "",
+  sourceRate: R,
+  durationInSource: t(24 * 60 * 60),
+};
+
+function textClip(
+  id: string,
+  tlStart: number,
+  duration: number,
+  content: string,
+): TextClip {
+  return {
+    id,
+    timelineRange: range(tlStart, duration),
+    textContent: content,
+    textStyle: { font: "Arial", size: 48, color: "#ffffff" },
+    lineage: { rootId: id, span: range(0, duration) },
+  };
+}
+
+/**
+ * V1: Intro [0,48) · Interview [240,480) · B-roll [720,840)
+ * T1: an unnamed text clip reading `Welcome` [48,120)
+ */
+function conflictBase(): Timeline {
+  const v1: Track = {
+    id: "v1",
+    kind: "video",
+    name: "V1",
+    clips: [
+      media("intro", "Intro", 0, 48),
+      media("interview", "Interview", 240, 240),
+      {
+        ...media("broll", "B-roll", 720, 120),
+        mediaRefId: "m-broll",
+      },
+    ],
+  };
+  const t1: Track = {
+    id: "t1",
+    kind: "text",
+    name: "T1",
+    clips: [textClip("welcome", 48, 72, "Welcome")],
+  };
+  return { projectRate: R, tracks: [v1, t1], mediaRefs: [...MEDIA, BROLL_MEDIA] };
+}
+
+/** base → both sides → the engine → the cards, exactly as the route does. */
+function cardsFor(
+  ourCommands: Command[],
+  theirCommands: Command[],
+  choices: Record<string, MergeChoice> = {},
+): ConflictCard[] {
+  const start = conflictBase();
+  const ours = apply(start, ...ourCommands);
+  const theirs = apply(start, ...theirCommands);
+  const run = recompute(start, ours, theirs, choices);
+  if (!run.ok) throw new Error(`engine refused: ${run.error.message}`);
+  const { after } = buildAfterDisplay(run.timeline, ours, run.conflicts);
+  return presentConflictCards({
+    base: start,
+    ours,
+    theirs,
+    after,
+    cutName: CUT,
+    conflicts: run.conflicts.map((conflict) => ({
+      conflict,
+      composed: run.composed ?? run.timeline,
+    })),
+    choices,
+  });
+}
+
+/** The one card a two-command pair is expected to raise. */
+function oneCard(ourCommands: Command[], theirCommands: Command[]): ConflictCard {
+  const cards = cardsFor(ourCommands, theirCommands);
+  expect(cards).toHaveLength(1);
+  return cards[0];
+}
+
+/** `‹label› · ‹value›` per line — the sheet's own notation for #138/#141/#144. */
+const lineText = (card: ConflictCard): string[] =>
+  card.lines.map((line) => `${line.label} · ${line.value}`);
+
+describe("Case 1 (#137-#139) — both cuts changed the same thing", () => {
+  it("#137 text · #138 lines · #139 buttons", () => {
+    const card = oneCard(
+      [
+        {
+          op: "propertyChange",
+          clipId: "welcome",
+          property: "textContent",
+          value: "Welcome — 40% off",
+        },
+      ],
+      [
+        {
+          op: "propertyChange",
+          clipId: "welcome",
+          property: "textContent",
+          value: "Welcome — half price",
+        },
+      ],
+    );
+    expect(card.bucket).toBe(1);
+    // #137 `"‹clip›" — both cuts changed the text`
+    expect(card.title).toBe('"Welcome" — both cuts changed the text');
+    // #138 `main · "‹main's value›"` / `‹cut› · "‹cut's value›"` /
+    //      `Original · "‹original value›"`
+    expect(lineText(card)).toEqual([
+      'main · "Welcome — 40% off"',
+      `${CUT} · "Welcome — half price"`,
+      'Original · "Welcome"',
+    ]);
+    // #139 `Keep main's` / `Keep ‹cut›'s` / `Keep original`
+    expect(card.buttons).toEqual([
+      { label: "Keep main's", choice: "ours" },
+      { label: `Keep ${CUT}'s`, choice: "theirs" },
+      { label: "Keep original", choice: "base" },
+    ]);
+    expect(card.chosen).toBeNull();
+  });
+
+  it("#137a volume — the clip is named from the ORIGINAL", () => {
+    const card = oneCard(
+      [
+        {
+          op: "propertyChange",
+          clipId: "interview",
+          property: "volume",
+          value: 60,
+        },
+      ],
+      [
+        {
+          op: "propertyChange",
+          clipId: "interview",
+          property: "volume",
+          value: 30,
+        },
+      ],
+    );
+    // #137a `"‹clip›" — both cuts changed the volume`
+    expect(card.title).toBe('"Interview" — both cuts changed the volume');
+    // #138 — values render like the Compare rows (#119-#121): `Volume 60%`.
+    expect(lineText(card)).toEqual([
+      "main · Volume 60%",
+      `${CUT} · Volume 30%`,
+      "Original · Volume 100%",
+    ]);
+    expect(card.buttons).toEqual([
+      { label: "Keep main's", choice: "ours" },
+      { label: `Keep ${CUT}'s`, choice: "theirs" },
+      { label: "Keep original", choice: "base" },
+    ]);
+  });
+
+  it("#137h trimmed — the D4(4) Trimmed words, `now` only on the two cuts", () => {
+    const card = oneCard(
+      [{ op: "trim", clipId: "interview", edge: "end", delta: t(-24) }],
+      [{ op: "trim", clipId: "interview", edge: "end", delta: t(-48) }],
+    );
+    // #137h `"‹clip›" — both cuts trimmed it`, lines
+    // `main · now ends ‹tc›` / `‹cut› · now ends ‹tc›` / `Original · ends ‹tc›`
+    expect(card.title).toBe('"Interview" — both cuts trimmed it');
+    expect(lineText(card)).toEqual([
+      "main · now ends 00:00:19:00",
+      `${CUT} · now ends 00:00:18:00`,
+      "Original · ends 00:00:20:00",
+    ]);
+  });
+
+  it("#137i fallback — an engine field with no words of its own", () => {
+    // `source-bounds` is not reachable from normal editing, so the record is
+    // hand-built; the presenter is pure and takes the records it is given.
+    const start = conflictBase();
     const ours = apply(start, {
       op: "propertyChange",
       clipId: "interview",
       property: "volume",
-      value: 60,
+      value: 40,
     });
     const theirs = apply(start, {
       op: "propertyChange",
       clipId: "interview",
       property: "volume",
-      value: 30,
+      value: 80,
     });
-    const run = recompute(start, ours, theirs, {});
-    if (!run.ok) throw new Error(`engine refused: ${run.error.message}`);
-    expect(run.conflicts).toHaveLength(1);
-
+    const conflict: MergeConflict = {
+      conflictId: "m4:hand-built",
+      bucket: 1,
+      participants: {
+        kind: "value",
+        trackId: "v1",
+        rootId: "interview",
+        clipIds: ["interview"],
+        field: "source-bounds",
+      },
+      explanation: "Clip interview changed source-bounds differently",
+      choices: ["ours", "theirs", "base"],
+    };
+    const record: ConflictRecord = { conflict, composed: ours };
     const [card] = presentConflictCards({
       base: start,
       ours,
       theirs,
-      after: run.timeline,
-      cutName: "priya-music",
-      conflicts: run.conflicts.map((conflict) => ({
-        conflict,
-        composed: run.composed ?? run.timeline,
-      })),
+      after: ours,
+      cutName: CUT,
+      conflicts: [record],
       choices: {},
     });
+    // #137i `"‹clip›" — both cuts changed it`; the lines carry no value.
+    expect(card.title).toBe('"Interview" — both cuts changed it');
+    expect(card.lines.map((line) => line.value)).toEqual(["", "", ""]);
+  });
+});
 
-    // #137a — the clip is named from the ORIGINAL, and the phrase says
-    // which property collided.
-    expect(card.title).toBe('"Interview" — both cuts changed the volume');
-    // #138 — one line per side: main, the cut by NAME, then Original.
-    expect(card.lines.map((line) => [line.label, line.value])).toEqual([
-      ["main", "Volume 60%"],
-      ["priya-music", "Volume 30%"],
-      ["Original", "Volume 100%"],
+describe("Case 2 (#140-#142) — one side removed it", () => {
+  it("#140 title · #141 two lines, no Original · #142 two buttons", () => {
+    const card = oneCard(
+      [{ op: "deleteClip", clipId: "broll" }],
+      [{ op: "move", clipId: "broll", newStart: t(600) }],
+    );
+    expect(card.bucket).toBe(2);
+    // #140 `‹clip› — main removed it, ‹cut› moved it` — the remover first.
+    expect(card.title).toBe(`B-roll — main removed it, ${CUT} moved it`);
+    // #141 `main · Removed` / `‹cut› · Moved to ‹tc›`; no Original line.
+    expect(lineText(card)).toEqual([
+      "main · Removed",
+      `${CUT} · Moved to 00:00:25:00`,
     ]);
-    // #139 — cut names verbatim; never yours/theirs/agent's.
+    // #142 `Keep main's` / `Keep ‹cut›'s` — no `Keep original` in Case 2.
     expect(card.buttons).toEqual([
-      { label: "Keep main's", choice: "ours" },
-      { label: "Keep priya-music's", choice: "theirs" },
+      { label: "Keep main's", choice: "delete" },
+      { label: `Keep ${CUT}'s`, choice: "clip" },
+    ]);
+  });
+
+  it("#140a + #140b: the cut removed it, main trimmed it — the buttons swap", () => {
+    const card = oneCard(
+      [{ op: "trim", clipId: "broll", edge: "end", delta: t(-24) }],
+      [{ op: "deleteClip", clipId: "broll" }],
+    );
+    // #140a `‹clip› — ‹cut› removed it, main ‹verb› it`; #140b verb `trimmed`.
+    expect(card.title).toBe(`B-roll — ${CUT} removed it, main trimmed it`);
+    expect(lineText(card)).toEqual([
+      "main · End trimmed by 24 frames",
+      `${CUT} · Removed`,
+    ]);
+    expect(card.buttons).toEqual([
+      { label: "Keep main's", choice: "clip" },
+      { label: `Keep ${CUT}'s`, choice: "delete" },
+    ]);
+  });
+
+  it("#140c slipped · #140d split · #140e text · #140f a property", () => {
+    const removeBroll: Command = { op: "deleteClip", clipId: "broll" };
+    const titleOf = (ourCommand: Command): string =>
+      oneCard([ourCommand], [removeBroll]).title;
+
+    expect(titleOf({ op: "slip", clipId: "broll", delta: t(12) })).toBe(
+      `B-roll — ${CUT} removed it, main slipped it`,
+    );
+    expect(titleOf({ op: "split", clipId: "broll", at: t(780) })).toBe(
+      `B-roll — ${CUT} removed it, main split it`,
+    );
+    expect(
+      titleOf({
+        op: "propertyChange",
+        clipId: "broll",
+        property: "opacity",
+        value: 50,
+      }),
+    ).toBe(`B-roll — ${CUT} removed it, main changed the opacity`);
+    // #140e — a text clip, and the text verb.
+    expect(
+      oneCard(
+        [
+          {
+            op: "propertyChange",
+            clipId: "welcome",
+            property: "textContent",
+            value: "Hello",
+          },
+        ],
+        [{ op: "deleteClip", clipId: "welcome" }],
+      ).title,
+    ).toBe(`"Welcome" — ${CUT} removed it, main changed the text`);
+  });
+});
+
+describe("Case 3 (#143-#145) — two clips overlap", () => {
+  it("#143 title with the intersection · #144 lines by side · #145 buttons", () => {
+    const card = cardsFor(
+      [{ op: "move", clipId: "intro", newStart: t(600) }],
+      [{ op: "move", clipId: "broll", newStart: t(620) }],
+    ).find((c) => c.bucket === 3);
+    expect(card).toBeDefined();
+    // #143 `"‹clip A›" and "‹clip B›" overlap on ‹track› (‹tc›–‹tc›)`
+    expect(card!.title).toBe(
+      '"B-roll" and "Intro" overlap on V1 (00:00:25:20–00:00:27:00)',
+    );
+    // #144 `‹clip A› · from ‹cut›` / `‹clip B› · from main` /
+    //      `Original · (this spot was empty)`
+    expect(lineText(card!)).toEqual([
+      `B-roll · from ${CUT}`,
+      "Intro · from main",
+      "Original · (this spot was empty)",
+    ]);
+    // #145 `Move "‹clip A›" later` / `Move "‹clip B›" later` / `Keep original`
+    expect(card!.buttons).toEqual([
+      { label: 'Move "B-roll" later', choice: "shift-a" },
+      { label: 'Move "Intro" later', choice: "shift-b" },
       { label: "Keep original", choice: "base" },
     ]);
-    expect(card.chosen).toBeNull();
   });
 });
