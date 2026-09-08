@@ -134,18 +134,21 @@ describe("canOpenParkedCompare", () => {
     ).toBe(true);
   });
 
-  it("takes NO refetch flag: a permanently refetching History cannot starve it", () => {
-    // The regression this pins. With another tab editing once per tick and
-    // History slower than the tick, `isFetching` never becomes false —
-    // there is deliberately no input here that could carry it.
-    const inputs = canOpenParkedCompare.length;
-    expect(inputs).toBe(1);
-    expect(
-      Object.keys({
-        historyIsSuccess: true,
-        historyCommitIds: ["c1", "c2"],
-        pair,
-      }).sort(),
-    ).toEqual(["historyCommitIds", "historyIsSuccess", "pair"]);
+  it("opens WHILE a refetch is in flight, on the chain already in hand", () => {
+    // The regression this pins. Every eventful 3s tick invalidates
+    // `historyAll`, so with another tab editing once per tick and History
+    // slower than the tick, `isFetching` never becomes false. React Query
+    // keeps `isSuccess` true with the previous data through a refetch, and
+    // that data is what this reads — so the door opens on the tick it
+    // could, instead of waiting for a quiet moment that never comes.
+    const midRefetch = {
+      historyIsSuccess: true, // still true: the refetch has not answered
+      historyCommitIds: ["c3", "c2", "c1"], // the previous answer's chain
+      pair,
+    };
+    expect(canOpenParkedCompare(midRefetch)).toBe(true);
+    // And there is no second argument a caller could pass a refetch flag
+    // through: the door's whole condition is the object above.
+    expect(canOpenParkedCompare.length).toBe(1);
   });
 });
