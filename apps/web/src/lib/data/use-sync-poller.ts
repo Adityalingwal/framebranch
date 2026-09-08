@@ -47,23 +47,36 @@ export function useSyncPoller(input: UseSyncPollerInput): { peers: Peer[] } {
   playheadRef.current = input.playheadFrame;
   const onEventsRef = useRef(input.onEvents);
   onEventsRef.current = input.onEvents;
+  /**
+   * The cursor lives HERE, not inside the poller, because the effect
+   * recycles the poller whenever `enabled` flips — and it flips on every
+   * switch to a cut whose timeline is not cached yet
+   * (`timeline.isSuccess` goes false while the GET is in the air). A new
+   * poller starting at `null` would be answered with the high-water mark
+   * and NO events, silently swallowing everything that happened in that
+   * window.
+   */
+  const cursorRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!input.enabled) {
-      // Not enabled → no fetch at all, and any peers drawn from an earlier
-      // enabled spell go: they are no longer being refreshed.
-      setPeers([]);
-      return;
-    }
+    // Not enabled → no fetch at all. The peers already drawn are LEFT
+    // standing: `enabled` drops for a few hundred milliseconds on every
+    // switch to an uncached cut, and blanking there would make everyone
+    // else's chip and playhead flicker for no reason. They go on the
+    // first tick after it comes back, or when the 10s window expires
+    // them server-side.
+    if (!input.enabled) return;
 
     const poller = createSyncPoller({
       send: api.postSync,
+      initialCursor: cursorRef.current,
       read: () => ({
         ...getTabIdentity(),
         cut: cutRef.current,
         playheadFrame: playheadRef.current,
       }),
       onAnswer: (data) => {
+        cursorRef.current = data.cursor;
         setPeers(data.peers);
         if (data.events.length > 0) onEventsRef.current(data.events);
       },

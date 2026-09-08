@@ -9,6 +9,7 @@ import { POST as postBranch } from "../src/app/api/branch/route";
 import { POST as postReady } from "../src/app/api/branch/ready/route";
 import { POST as postCommit } from "../src/app/api/commit/route";
 import { POST as postOps } from "../src/app/api/ops/route";
+import { POST as postProjectNew } from "../src/app/api/project/new/route";
 import { POST as postSync } from "../src/app/api/sync/route";
 import { GET as getTimeline } from "../src/app/api/timeline/route";
 import type { SyncData } from "../src/app/api/sync/route";
@@ -374,6 +375,49 @@ describe("POST /api/sync — what a second tab actually sees (the demo beat)", (
     );
     expect(idle.events).toEqual([]);
     expect(idle.cursor).toBe(tick.cursor);
+  });
+
+  /**
+   * B4b fix 1 — the client's whole New-project recovery rests on this.
+   * The brief said the OTHER tab's New project arrives as an `import`
+   * event; it does not. `resetProjectToPreset` DELETES the project's
+   * whole event feed and re-seeds, so what actually arrives is a
+   * `commit-created` carrying `kind: "seed"` — and it arrives at all only
+   * because `project_events.id` is a table-wide bigserial, so ids handed
+   * out after the truncate are still HIGHER than the cursor the other tab
+   * is holding. If that were a per-project counter the other tab would
+   * sit past the end of the new feed and never hear a thing again.
+   */
+  it("another tab's New project arrives as a `seed` card past the old cursor", async () => {
+    const s = await session();
+    await edit(s, "main", 0);
+    const before = (await okSync(s, { tabId: TAB_A, cursor: null }, ADITYA))
+      .cursor;
+    expect(before).toBeGreaterThan(0);
+
+    expectOk(
+      await post(
+        postProjectNew,
+        "/api/project/new",
+        { preset: "travel-vlog", ticket: ticket() },
+        s,
+        PRIYA,
+      ),
+    );
+
+    const tick = await okSync(s, { tabId: TAB_A, cursor: before }, ADITYA);
+    expect(tick.events).toHaveLength(1);
+    expect(tick.events[0].kind).toBe("commit-created");
+    expect(tick.events[0].payload).toMatchObject({ kind: "seed" });
+    expect(tick.events[0].id).toBeGreaterThan(before);
+
+    // The reset also wipes `presence`, so this very call is what puts the
+    // tab back on the board — one tick's gap in everyone else's chips,
+    // and no insert/delete dance beyond it.
+    const rows = await getDb()
+      .select({ tabId: presence.tabId })
+      .from(presence);
+    expect(rows.map((r) => r.tabId)).toEqual([TAB_A]);
   });
 
   it("a Mark on another tab arrives as `commit-created`", async () => {

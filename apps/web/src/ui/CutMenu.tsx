@@ -39,7 +39,12 @@ export function CutMenu({
   readyPending?: boolean;
   onSwitch: (to: string) => void;
   onCreate: (name: string) => void;
-  onMarkReady: (note: string) => void;
+  /**
+   * The dialog stays open until the server answers: `onSuccess` is what
+   * closes it, so a refusal keeps the note the person typed instead of
+   * throwing it away behind a toast. Same shape as `Mark version`.
+   */
+  onMarkReady: (note: string, onSuccess: () => void) => void;
   onUnmarkReady: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -120,8 +125,7 @@ export function CutMenu({
 
   function submitReady() {
     if (!canMarkReady) return;
-    onMarkReady(trimmedNote);
-    setReadyOpen(false);
+    onMarkReady(trimmedNote, () => setReadyOpen(false));
   }
 
   return (

@@ -172,12 +172,19 @@ export function TopBar({
                 { onSuccess: (data) => onBranchChanged(data.name) },
               );
             }}
-            onMarkReady={(note) => {
+            onMarkReady={(note, onSuccess) => {
               markReady.mutate(
                 { cut: currentBranch, note },
-                // #166. The toast is the caller's, as `Marked "‹name›".`
-                // above is — no hook in `hooks.ts` toasts on success.
-                { onSuccess: () => showToast("Marked ready — main will see it.") },
+                {
+                  // #166. The toast is the caller's, as `Marked "‹name›".`
+                  // above is — no hook in `hooks.ts` toasts on success.
+                  // The dialog closes HERE and not on the click, so a
+                  // refusal leaves the typed note on screen to retry.
+                  onSuccess: () => {
+                    showToast("Marked ready — main will see it.");
+                    onSuccess();
+                  },
+                },
               );
             }}
             onUnmarkReady={() => {

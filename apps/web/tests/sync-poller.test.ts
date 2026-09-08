@@ -18,8 +18,12 @@ function answer(over: Partial<SyncData> = {}): SyncData {
   return { cursor: 0, events: [], peers: [], ...over };
 }
 
-function event(id: number, kind: string): SyncEvent {
-  return { id, kind, payload: {}, at: "2026-09-08T12:00:00.000Z" };
+function event(
+  id: number,
+  kind: string,
+  payload: Record<string, unknown> = {},
+): SyncEvent {
+  return { id, kind, payload, at: "2026-09-08T12:00:00.000Z" };
 }
 
 function here() {
@@ -145,6 +149,45 @@ describe("createSyncPoller", () => {
     poller.stop();
   });
 
+  it("initialCursor is what the first tick sends — the hook's ref survives a recycle", async () => {
+    const send = vi.fn().mockResolvedValue(answer({ cursor: 44 }));
+    const poller = createSyncPoller({
+      send,
+      read: here,
+      onAnswer: () => {},
+      initialCursor: 41,
+    });
+
+    // `enabled` flips off on every switch to an uncached cut, so the hook
+    // throws the poller away and builds another. Starting again at `null`
+    // would be answered with the high-water mark and NO events.
+    poller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(send.mock.calls[0][0].cursor).toBe(41);
+    poller.stop();
+  });
+
+  it("stop() is final: an answer already in the air never reaches onAnswer", async () => {
+    let release: ((data: SyncData) => void) | null = null;
+    const send = vi
+      .fn()
+      .mockImplementation(
+        () => new Promise<SyncData>((resolve) => (release = resolve)),
+      );
+    const onAnswer = vi.fn();
+    const poller = createSyncPoller({ send, read: here, onAnswer });
+
+    poller.start();
+    poller.stop();
+    release!(answer({ cursor: 5, events: [event(5, "import")] }));
+    await vi.advanceTimersByTimeAsync(100);
+
+    // A double `refreshBranches` would be harmless; a second project reset
+    // from the same batch would not.
+    expect(onAnswer).not.toHaveBeenCalled();
+    expect(poller.cursor()).toBeNull();
+  });
+
   it("start() twice does not double the interval", async () => {
     const send = vi.fn().mockResolvedValue(answer());
     const poller = createSyncPoller({ send, read: here, onAnswer: () => {} });
@@ -188,6 +231,25 @@ describe("syncInvalidations", () => {
     expect(syncInvalidations([event(1, "edit"), event(2, "import")])).toEqual({
       refreshBranches: true,
       resetProject: true,
+    });
+  });
+
+  it("a seed card is the reset signal New project ACTUALLY writes", () => {
+    // `resetProjectToPreset` deletes the whole feed and re-seeds, so this
+    // is the first row of a brand new feed — the other tab's project has
+    // been replaced under it.
+    expect(
+      syncInvalidations([event(9, "commit-created", { kind: "seed" })]),
+    ).toEqual({ refreshBranches: true, resetProject: true });
+  });
+
+  it("an ordinary commit is NOT a reset — only `kind: \"seed\"` is", () => {
+    expect(
+      syncInvalidations([event(9, "commit-created", { kind: "manual" })]),
+    ).toEqual({ refreshBranches: true, resetProject: false });
+    expect(syncInvalidations([event(9, "commit-created")])).toEqual({
+      refreshBranches: true,
+      resetProject: false,
     });
   });
 

@@ -36,6 +36,15 @@ export type SyncPollerOptions = {
   read: () => { tabId: string; colourSeed: number; cut: string; playheadFrame: number };
   /** Called with each successful answer, on the tick's own turn. */
   onAnswer: (data: SyncData) => void;
+  /**
+   * Where to carry on from. The hook keeps the cursor in a ref OUTSIDE
+   * this object, because the effect recycles the poller whenever
+   * `enabled` flips — which it does on every switch to a cut whose
+   * timeline is not cached yet. Starting again at `null` there would make
+   * the server answer with the high-water mark and NO events, silently
+   * losing everything that happened during that window.
+   */
+  initialCursor?: number | null;
   intervalMs?: number;
 };
 
@@ -50,23 +59,32 @@ export function createSyncPoller(options: SyncPollerOptions): SyncPoller {
   const intervalMs = options.intervalMs ?? SYNC_INTERVAL_MS;
 
   /**
-   * null until the first answer. The server reads it as "a fresh tab":
-   * it hands back the current high-water mark and NO events, because this
-   * tab has just fetched everything it shows and replaying the feed would
-   * only re-run invalidations.
+   * null only on a genuinely fresh tab. The server reads that as "this
+   * tab has just fetched everything it shows": it hands back the current
+   * high-water mark and NO events, because replaying the feed would only
+   * re-run invalidations.
    */
-  let cursor: number | null = null;
+  let cursor: number | null = options.initialCursor ?? null;
   /** A tick still in flight → skip this one rather than pile up. */
   let busy = false;
   let timer: ReturnType<typeof setInterval> | null = null;
+  /**
+   * `stop()` must be final. The hook throws this instance away and builds
+   * another; without the guard a tick already in the air would land after
+   * the swap and hand the SAME batch of events to `onAnswer` a second
+   * time. A double `refreshBranches` is harmless — a double project reset
+   * is not.
+   */
+  let stopped = false;
 
   function tick(): void {
-    if (busy) return;
+    if (busy || stopped) return;
     busy = true;
     const here = options.read();
     options
       .send({ ...here, cursor })
       .then((data) => {
+        if (stopped) return;
         cursor = data.cursor;
         options.onAnswer(data);
       })
@@ -84,13 +102,14 @@ export function createSyncPoller(options: SyncPollerOptions): SyncPoller {
 
   return {
     start(): void {
-      if (timer !== null) return;
+      if (timer !== null || stopped) return;
       // First tick immediately: presence should not wait 3s to appear,
       // and the cursor should be claimed before anything else happens.
       tick();
       timer = setInterval(tick, intervalMs);
     },
     stop(): void {
+      stopped = true;
       if (timer === null) return;
       clearInterval(timer);
       timer = null;

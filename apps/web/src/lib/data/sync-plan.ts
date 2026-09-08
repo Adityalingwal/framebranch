@@ -35,13 +35,32 @@ export type SyncPlan = {
    */
   refreshBranches: boolean;
   /**
-   * An `import` event means the OTHER tab started a New project. The
-   * cookie is shared, so this tab's project has been replaced under it and
-   * its cut may not exist any more: the Shell runs the same reset it runs
-   * after its own New project.
+   * The project was replaced under this tab (the cookie is shared, so the
+   * OTHER tab's New project is this tab's too) and its cut may not exist
+   * any more: the Shell runs the same reset it runs after its own.
+   *
+   * TWO kinds mean that, and the brief named only the second:
+   *
+   *  - `commit-created` with `payload.kind === "seed"`. This is what New
+   *    project actually writes: `resetProjectToPreset` DELETES the whole
+   *    event feed and re-seeds, so a seed card is the first row of a brand
+   *    new feed. A seed can reach a tab from nowhere else — the only other
+   *    place one is written is the first-visit bootstrap, and a project
+   *    nobody yet holds a cookie for has no second tab to tell, while a
+   *    fresh tab's own first tick asks with `cursor: null` and is answered
+   *    with no events at all.
+   *  - `import`. `POST /api/import` has had no interface caller since G1
+   *    (it lands OTIO on ONE cut, leaving the project standing), so this
+   *    is kept because B4b's brief locks it, not because it fires — see
+   *    the reviewer question in the findings.
    */
   resetProject: boolean;
 };
+
+function isProjectReplaced(event: SyncEvent): boolean {
+  if (event.kind === "import") return true;
+  return event.kind === "commit-created" && event.payload.kind === "seed";
+}
 
 export const EMPTY_SYNC_PLAN: SyncPlan = {
   refreshBranches: false,
@@ -52,6 +71,6 @@ export function syncInvalidations(events: readonly SyncEvent[]): SyncPlan {
   if (events.length === 0) return EMPTY_SYNC_PLAN;
   return {
     refreshBranches: true,
-    resetProject: events.some((event) => event.kind === "import"),
+    resetProject: events.some(isProjectReplaced),
   };
 }

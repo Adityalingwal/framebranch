@@ -728,6 +728,12 @@ export function Shell() {
           // wholesale invalidation `useNewProjectMutation` does — nothing
           // cached is about the new project. No toast: no copy row exists
           // for it (a B5 question, not a string to invent).
+          //
+          // Self-events are not filtered, so the tab that CLICKED New
+          // project runs this a second time within 3s. Harmless (it is
+          // already on `main` with nothing selected) and inherent to the
+          // design — a "recently reset" timer would be a worse lie than
+          // one redundant reset. Written up in the findings.
           queryClient.invalidateQueries();
           handleNewProject();
           return;
