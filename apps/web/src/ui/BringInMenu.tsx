@@ -62,7 +62,12 @@ export function BringInMenu({
     if (!trigger) return;
     const update = () => {
       const rect = trigger.getBoundingClientRect();
-      const width = Math.max(260, rect.width);
+      // A Ready row is two lines and line 1 is long — `‹cut› · Ready ·
+      // ‹who› · ‹time›` ellipsized at 260, hiding the very thing the row
+      // exists to say. A plain `‹cut› · ‹who›` row does not need the extra
+      // width, so the menu only takes it when a Ready row is in the list.
+      // Line 2 (the note) may still ellipsize at one line; that is fine.
+      const width = Math.max(readyCount > 0 ? 340 : 260, rect.width);
       // Right-aligned to the trigger: this control lives in the right
       // cluster, so a left-aligned menu would hang off the window.
       const left = Math.min(
@@ -89,7 +94,10 @@ export function BringInMenu({
       window.removeEventListener("scroll", update, true);
       document.removeEventListener("pointerdown", onPointerDown);
     };
-  }, [open]);
+    // `readyCount` is a dependency so a mark landing from the 3s poller
+    // while the menu is open re-measures it, rather than leaving the
+    // Ready row it just added squeezed into 260.
+  }, [open, readyCount]);
 
   return (
     <>
