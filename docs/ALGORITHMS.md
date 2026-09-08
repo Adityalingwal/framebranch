@@ -12,16 +12,18 @@ Comparing two versions of a timeline works in three steps.
 flowchart LR
     A[Two timeline versions] --> M[Match: pair clips by stable ID]
     M --> C[Classify: what kind of change?]
-    C --> R[Render: plain-English sentence]
+    C --> R[Present: one plain-English row, in the web layer]
 ```
 
-**Example.** A clip named "A" runs from 5s to 15s in one version. In the other, it's been trimmed to end at 12s. Match finds it's the same clip (same ID). Classify sees only its length changed, from the end. Render produces: "Clip A trimmed by 3s at the end."
+**Example.** A clip named "A" runs from 5s to 15s in one version. In the other, it's been trimmed to end at 12s. Match finds it's the same clip (same ID). Classify sees only its length changed, from the end, by how many frames. Present turns that into the row a person reads: `A · End trimmed by 72 frames · now ends 00:00:12:00`.
 
-A clip can have more than one kind of change at once — each gets its own sentence.
+A clip can have more than one kind of change at once — each gets its own row.
+
+**Where the words come from.** Match and Classify are the engine's; Present is not. The engine returns structured entries and no prose at all — what changed, to which clip, by how much — and the web layer's presenter turns those into rows in the product's own vocabulary, grouping a ripple of shifted clips into one row and never showing a raw clip ID. Keeping the wording out of the engine means there is exactly one description of a change, not an engine sentence and an interface row that can drift apart.
 
 **Nothing gets missed.** The classify rules cover every field a clip can have: its position, its length, which part of the source file it shows, its properties, whether it exists at all, and whether it split. If a change ever doesn't fit one of these rules, the diff still describes it honestly — the raw before-and-after values — instead of crashing, staying silent, or guessing. There's always a truthful answer, never a missing one.
 
-**Why there's no AI in this step.** A diff has to be exactly right every time, not just usually right — that's why this whole process is deterministic: fixed rules, fixed sentences, nothing that could produce a wrong or misleading description.
+**Why there's no AI in this step.** A diff has to be exactly right every time, not just usually right — that's why this whole process is deterministic: fixed rules, fixed templates, nothing that could produce a wrong or misleading description.
 
 ## Split Identity
 

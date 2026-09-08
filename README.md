@@ -2,9 +2,9 @@
 
 Semantic version-control engine for video timelines — branch, diff, and merge edits at the timeline level instead of file-level diffs.
 
-Status: feature-complete. Engine (`packages/engine` — 8 verbs, diff, 3-way merge, OTIO import/export, benchmarks), server (`apps/web` — API routes, 7-table Postgres schema, bring-in preview and conflict cards), and UI (timeline, editing, agent/compare/history panels) are all built and merged. OTIO import is an API capability, not an interface one: projects are started from the built-in presets.
+Status: feature-complete. Engine (`packages/engine` — 8 verbs, diff, 3-way merge, OTIO import/export, benchmarks), server (`apps/web` — API routes, 9-table Postgres schema, bring-in preview and conflict cards), and UI (timeline, editing, agent/compare/history panels, a ready-for-main mark and two-tab presence over a 3-second poll) are all built and merged. OTIO import is an API capability, not an interface one: projects are started from the built-in presets.
 
-> Semantic diff of a 10,000-clip timeline in 5.23 ms, 3-way merge in 550.01 ms, backed by 363 tests and 10,000 fuzz cases. Full numbers: [`packages/engine/benchmarks/REPORT.md`](packages/engine/benchmarks/REPORT.md).
+> Semantic diff of a 10,000-clip timeline in 5.23 ms, 3-way merge in 550.01 ms, backed by 618 tests (300 engine + 318 server) and 10,000 fuzz cases in CI. Full numbers: [`packages/engine/benchmarks/REPORT.md`](packages/engine/benchmarks/REPORT.md).
 
 ## Documentation
 
