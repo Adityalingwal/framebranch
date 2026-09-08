@@ -31,6 +31,7 @@ export function TimelineView({
   onSplit,
   onAddClip,
   currentBranch,
+  resetToken = 0,
   editingLocked = false,
 }: {
   timeline: Timeline;
@@ -49,6 +50,12 @@ export function TimelineView({
    * another cut would leak, or silently hide a track here).
    */
   currentBranch: string;
+  /**
+   * H1 PATCH — a "reset the per-cut UI state now" nudge for the case the
+   * cut name cannot signal: a NEW PROJECT started while already on `main`.
+   * Shell bumps it; any change clears the same two sets.
+   */
+  resetToken?: number;
   /**
    * B5-1 — the editor is read-only (viewing an old version, or the
    * connection is lost). Only the add-clip menu reads it here; every edit
@@ -195,11 +202,12 @@ export function TimelineView({
 
   // H1 PATCH — eye/mute are per-cut UI state. Reset them when the cut
   // changes (a remount via `key` would also throw away zoom, tool and
-  // snapping, which belong to the editor, not the cut).
+  // snapping, which belong to the editor, not the cut) — and when Shell
+  // bumps `resetToken`, which is how a new project on `main` says so.
   useEffect(() => {
     setHiddenTracks(new Set());
     setMutedTracks(new Set());
-  }, [currentBranch]);
+  }, [currentBranch, resetToken]);
 
   return (
     <section className="timeline-editor" aria-label="Timeline editor">
