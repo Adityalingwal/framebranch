@@ -279,7 +279,10 @@ export const mergeBodySchema = z
   })
   .strict()
   .refine((body) => body.from !== body.into, {
-    message: "a branch cannot be merged into itself",
+    // Copy sheet #209 — the Cut vocabulary sweep. Dev-facing and mapped by
+    // `api-client`, but the row locks these words; `GET /api/merge/preview`
+    // gives the same sentence for the same refusal.
+    message: "a cut cannot be brought into itself",
     path: ["from"],
   });
 

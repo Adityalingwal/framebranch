@@ -241,12 +241,20 @@ describe("F1 / shape — the doors", () => {
 
   it("E_BAD_REQUEST: a cut cannot be brought into itself, on either endpoint", async () => {
     const s = await session();
-    expect(
-      expectError(await land(s, { from: "main", into: "main", token: DUMMY }))
-        .code,
-    ).toBe("E_BAD_REQUEST");
+    const landed = expectError(
+      await land(s, { from: "main", into: "main", token: DUMMY }),
+    );
+    expect(landed.code).toBe("E_BAD_REQUEST");
+    // #209 locks the sentence. The POST refusal is a SCHEMA refinement, so
+    // `readBody` prefixes it with the failing field — the locked words are
+    // the tail of the envelope message, verbatim.
+    expect(landed.message).toBe(
+      "invalid request body: from a cut cannot be brought into itself",
+    );
     const call = await get(getPreview, "/api/merge/preview?from=main", s);
-    expect(expectError(call).code).toBe("E_BAD_REQUEST");
+    const previewed = expectError(call);
+    expect(previewed.code).toBe("E_BAD_REQUEST");
+    expect(previewed.message).toBe("a cut cannot be brought into itself");
   });
 
   it("preview: an unknown cut is 404, a malformed `choices` is 400", async () => {
