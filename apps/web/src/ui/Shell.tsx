@@ -1199,6 +1199,12 @@ export function Shell() {
                   onRowClick={handleRowClick}
                   onViewCard={openView}
                   bringIn={bringIn}
+                  bringInReady={
+                    bringIn === null
+                      ? null
+                      : (cuts.find((cut) => cut.name === bringIn.cut)?.ready ??
+                        null)
+                  }
                   preview={preview}
                   landPending={bringInMutation.isPending}
                   landError={bringInMutation.error}

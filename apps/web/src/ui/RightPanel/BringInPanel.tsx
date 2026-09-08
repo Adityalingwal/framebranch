@@ -2,9 +2,10 @@
 
 import type { MergeChoice } from "@framebranch/engine";
 
+import type { BranchListItem } from "../../app/api/branch/route";
 import { ApiClientError } from "../../lib/data/api-client";
 import type { BringInPreviewQuery } from "../../lib/data/hooks";
-import { quoted } from "../../lib/format";
+import { formatClock, quoted } from "../../lib/format";
 import type { ConflictCard, ConflictLine } from "../../server/conflict-cards";
 import type { DiffRow } from "../../server/diff-rows";
 import { DiffRowList } from "./DiffRows";
@@ -25,6 +26,7 @@ import { DiffRowList } from "./DiffRows";
  */
 export function BringInPanel({
   cut,
+  ready,
   preview,
   landPending,
   landError,
@@ -38,6 +40,11 @@ export function BringInPanel({
   onLineClick,
 }: {
   cut: string;
+  /**
+   * F3(4)(c) — the Ready state of the cut being brought in, from the
+   * branches query. The panel owns nothing (B3 rule); Shell looks it up.
+   */
+  ready: BranchListItem["ready"];
   preview: BringInPreviewQuery;
   landPending: boolean;
   /** The landing's refusal, or null. The two the panel renders itself. */
@@ -66,7 +73,15 @@ export function BringInPanel({
           own <h2> still says `Changes`: this is a door into that view, not a
           fourth tab. */}
       <h3 className="bring-in-header">{`Bring ${quoted(cut)} into main`}</h3>
-      {/* #133 (Ready · ‹who› · ‹time› · "‹note›") is B4's line; it goes here. */}
+      {/* #133 — the same facts as the list row (#33), in one line, so
+          whoever opens the preview from somewhere else still reads why
+          this cut was offered. #171/lock (3): ` · edited since · ` in the
+          same place and the same words as everywhere else. */}
+      {ready !== null && (
+        <p className="bring-in-ready-line">
+          {`Ready · ${ready.editedSince ? "edited since · " : ""}${ready.by} · ${formatClock(ready.at)} · ${quoted(ready.note)}`}
+        </p>
+      )}
 
       {patti && (
         // F4 / lock (3) — the ONE place drift is caught. The sentence is the
