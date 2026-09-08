@@ -46,6 +46,14 @@ export function CutMenu({
   );
   const canCreate = trimmed.length > 0 && !nameTaken;
 
+  // B4a fix 1(a) — the trigger going disabled does NOT close the popover on
+  // its own: it is a portal, and the click that disabled the trigger (an
+  // Agent `View` / `Bring into main`, a run) never touched it. An open menu
+  // over a locked editor is a live second navigation, so it closes here.
+  useEffect(() => {
+    if (disabled || busy) setOpen(false);
+  }, [disabled, busy]);
+
   useEffect(() => {
     if (!open) return;
     const trigger = triggerRef.current;

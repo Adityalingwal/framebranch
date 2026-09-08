@@ -21,6 +21,7 @@ export function AgentPanel({
   presets,
   runPending,
   editingLocked,
+  cutSwitching,
   onRun,
   onView,
   onBringIntoMain,
@@ -30,6 +31,13 @@ export function AgentPanel({
   runPending: string | null;
   /** View mode / Compare / offline: a run WRITES, and both buttons switch cuts. */
   editingLocked: boolean;
+  /**
+   * B4a fix 1(a) — a cut change is already in flight (this panel's own
+   * `View` / `Bring into main`, or a run that creates a cut and can seal
+   * main). A second one started here would race the first, so every button
+   * on this panel waits for it.
+   */
+  cutSwitching: boolean;
   onRun: (presetId: string) => void;
   onView: (run: AgentRun) => void;
   onBringIntoMain: (run: AgentRun) => void;
@@ -73,7 +81,7 @@ export function AgentPanel({
                   className="agent-run-button"
                   // #181 — a preset that has run stays in the list as a
                   // disabled `Done`; it never disappears.
-                  disabled={done || anyPending || editingLocked}
+                  disabled={done || anyPending || editingLocked || cutSwitching}
                   onClick={() => onRun(preset.id)}
                 >
                   {done ? "Done" : running ? "Running…" : "Run"}
@@ -108,14 +116,16 @@ export function AgentPanel({
                 <div className="agent-run-actions">
                   <button
                     type="button"
-                    disabled={editingLocked || run.commitId === null}
+                    disabled={
+                      editingLocked || cutSwitching || run.commitId === null
+                    }
                     onClick={() => onView(run)}
                   >
                     View
                   </button>
                   <button
                     type="button"
-                    disabled={editingLocked}
+                    disabled={editingLocked || cutSwitching}
                     onClick={() => onBringIntoMain(run)}
                   >
                     Bring into main

@@ -25,6 +25,7 @@ import {
 import type { ConflictLine } from "../server/conflict-cards";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { quoted } from "../lib/format";
+import { createPendingDoorSlot } from "../lib/pending-door";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
@@ -71,22 +72,6 @@ const MIN_PREVIEW_HEIGHT = 220;
 function parseView(raw: string | null): PanelView {
   return VALID_VIEWS.includes(raw as PanelView) ? (raw as PanelView) : "agent";
 }
-
-/**
- * I1(3)/(4) — a door the Agent panel wants opened AFTER a cut switch has
- * landed. `switchBranch` is asynchronous and the `currentBranch` effects
- * below clear both `comparePair` and `bringIn` when the cut changes, so a
- * door opened before the switch would be wiped a tick later. The door is
- * parked in a ref and applied by an effect that watches for `target` to
- * become the current cut — no timers, and nothing to unwind if the switch
- * fails.
- *
- * `target` is where the editor must be STANDING; a bring-in also carries
- * `from`, the cut being brought in, which is a different cut entirely.
- */
-type PendingDoor =
-  | { kind: "compare"; target: string; pair: { a: string; b: string } }
-  | { kind: "bring-in"; target: string; from: string };
 
 export function Shell() {
   const router = useRouter();
@@ -150,7 +135,13 @@ export function Shell() {
    * eye/mute reset (which keys on the cut) would not fire.
    */
   const [timelineResetToken, setTimelineResetToken] = useState(0);
-  const pendingDoor = useRef<PendingDoor | null>(null);
+  /**
+   * The parked Agent door + its request token (`lib/pending-door.ts`). A
+   * lazy `useState` initialiser rather than a ref, because the slot must be
+   * created exactly ONCE for the life of the Shell: a ref initialised inline
+   * would build (and throw away) a new slot on every render.
+   */
+  const [doors] = useState(createPendingDoorSlot);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -188,6 +179,21 @@ export function Shell() {
   const agentPresets = useAgentPresetsQuery(timeline.isSuccess);
   const agentRun = useAgentRunMutation();
   const switchBranch = useSwitchBranchMutation();
+
+  /**
+   * B4a fix 1(a) — the ONE "the cut is changing" flag, and the reason it is
+   * not `editingPaused`: that flag means "editing is locked" (View mode /
+   * Compare / offline) and a cut switch is none of those.
+   *
+   * It covers Shell's OWN branch-switch mutation — `TopBar` has a separate
+   * `useSwitchBranchMutation` whose `busy` cannot see this one, which is
+   * exactly how a second navigation could start while the first was still in
+   * flight — and an in-flight agent run, which creates a cut and can seal
+   * main. While either is on, every control that moves the editor to another
+   * cut (the Cut menu, `Bring in ▾`, the Agent panel's `Run` / `View` /
+   * `Bring into main`) is off.
+   */
+  const cutSwitching = switchBranch.isPending || agentRun.isPending;
 
   const cuts = useMemo(
     () => branches.data?.branches ?? [],
@@ -635,6 +641,21 @@ export function Shell() {
     setRestoreOpen(false);
   }, []);
 
+  /**
+   * B4a fix 1(b) — the Cut menu's own switch (and its `New cut…`): a manual
+   * cut change is a NEWER navigation intent than any parked door, so the
+   * door goes and its token is burned. `switchToBranch` itself must not do
+   * this — the door's own `onSuccess` calls it, and clearing there would
+   * throw away the door on the way in.
+   */
+  const handleCutChanged = useCallback(
+    (branch: string) => {
+      doors.clear();
+      switchToBranch(branch);
+    },
+    [doors, switchToBranch],
+  );
+
   // A1a patch (e): the cut you are standing on stopped existing (a demo
   // reset elsewhere, a project rebuilt) → go back to `main`. Only once the
   // list has settled, so a cut created a moment ago is not mistaken for a
@@ -668,10 +689,10 @@ export function Shell() {
     // pair would keep pointing at commits the new project just deleted.
     setComparePair(null);
     setBringIn(null);
-    pendingDoor.current = null;
+    doors.clear();
     setTimelineResetToken((token) => token + 1);
     setView("agent");
-  }, [setView]);
+  }, [doors, setView]);
 
   /**
    * I1(3)/(4) — apply a parked door once the cut switch has actually
@@ -683,20 +704,21 @@ export function Shell() {
    * one before the chain arrives would be undone by it.
    */
   useEffect(() => {
-    const door = pendingDoor.current;
+    const door = doors.peek();
     if (door === null || door.target !== currentBranch) return;
     if (door.kind === "compare") {
       if (!history.isSuccess || history.isFetching) return;
       const known = (ref: string) =>
         historyCommits.some((commit) => commit.commitId === ref);
       if (!known(door.pair.a) || !known(door.pair.b)) return;
-      pendingDoor.current = null;
+      doors.clear();
       openCompare(door.pair);
     } else {
-      pendingDoor.current = null;
+      doors.clear();
       openBringIn(door.from);
     }
   }, [
+    doors,
     currentBranch,
     history.isSuccess,
     history.isFetching,
@@ -733,18 +755,24 @@ export function Shell() {
         openCompare(pair);
         return;
       }
-      pendingDoor.current = { kind: "compare", target: run.cut, pair };
+      // Fix 1(b): the answer may come back after the user has asked for
+      // somewhere else. It navigates only if this door is still the door.
+      const seq = doors.park({ kind: "compare", target: run.cut, pair });
       switchBranch.mutate(
         { from: currentBranch, to: run.cut },
         {
-          onSuccess: () => switchToBranch(run.cut),
+          onSuccess: () => {
+            if (!doors.isCurrent(seq)) return;
+            switchToBranch(run.cut);
+          },
           onError: () => {
-            pendingDoor.current = null;
+            if (!doors.isCurrent(seq)) return;
+            doors.clear();
           },
         },
       );
     },
-    [currentBranch, openCompare, switchBranch, switchToBranch],
+    [currentBranch, doors, openCompare, switchBranch, switchToBranch],
   );
 
   /**
@@ -760,22 +788,26 @@ export function Shell() {
         openBringIn(run.cut);
         return;
       }
-      pendingDoor.current = {
+      const seq = doors.park({
         kind: "bring-in",
         target: "main",
         from: run.cut,
-      };
+      });
       switchBranch.mutate(
         { from: currentBranch, to: "main" },
         {
-          onSuccess: () => switchToBranch("main"),
+          onSuccess: () => {
+            if (!doors.isCurrent(seq)) return;
+            switchToBranch("main");
+          },
           onError: () => {
-            pendingDoor.current = null;
+            if (!doors.isCurrent(seq)) return;
+            doors.clear();
           },
         },
       );
     },
-    [currentBranch, openBringIn, switchBranch, switchToBranch],
+    [currentBranch, doors, openBringIn, switchBranch, switchToBranch],
   );
 
   /**
@@ -1029,9 +1061,12 @@ export function Shell() {
         headCardName={headCard?.name ?? null}
         changesCount={changesCount}
         editingLocked={editingPaused}
+        // Fix 1(a): Shell's own switch (and a run) locks the cut controls
+        // here too — TopBar's `busy` only knows about TopBar's mutations.
+        cutSwitching={cutSwitching}
         comparing={compareOpen}
         onChangesClick={openChangesDoor}
-        onBranchChanged={switchToBranch}
+        onBranchChanged={handleCutChanged}
         onBringIn={openBringIn}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
@@ -1175,6 +1210,7 @@ export function Shell() {
                       ? (agentRun.variables?.preset ?? null)
                       : null
                   }
+                  cutSwitching={cutSwitching}
                   onRunPreset={runPreset}
                   onViewRun={viewRun}
                   onBringRunIntoMain={bringRunIntoMain}

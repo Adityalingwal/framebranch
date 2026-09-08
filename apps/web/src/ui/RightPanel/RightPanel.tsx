@@ -63,6 +63,7 @@ export function RightPanel({
   onLineClick,
   agentPresets,
   runPending,
+  cutSwitching,
   onRunPreset,
   onViewRun,
   onBringRunIntoMain,
@@ -105,6 +106,12 @@ export function RightPanel({
   agentPresets: AgentPresetsQuery;
   /** I1(5) — the preset whose run is in flight; every Run is off meanwhile. */
   runPending: string | null;
+  /**
+   * B4a fix 1(a) — a cut switch (or a run) is in flight: `Run`, `View` and
+   * `Bring into main` all move the editor's cut, so all three are off until
+   * it lands. Separate from `editingLocked`, which means "editing is locked".
+   */
+  cutSwitching: boolean;
   onRunPreset: (presetId: string) => void;
   onViewRun: (run: AgentRun) => void;
   onBringRunIntoMain: (run: AgentRun) => void;
@@ -146,6 +153,7 @@ export function RightPanel({
             presets={agentPresets}
             runPending={runPending}
             editingLocked={editingLocked}
+            cutSwitching={cutSwitching}
             onRun={onRunPreset}
             onView={onViewRun}
             onBringIntoMain={onBringRunIntoMain}

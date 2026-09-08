@@ -38,6 +38,12 @@ export function BringInMenu({
   // A→Z, so skipping main leaves A→Z).
   const others = cuts.filter((cut) => cut.name !== "main");
 
+  // B4a fix 1(a) — same as CutMenu: a popover that outlives its trigger's
+  // disabled state would let a second cut-changing click through.
+  useEffect(() => {
+    if (disabled || busy) setOpen(false);
+  }, [disabled, busy]);
+
   useEffect(() => {
     if (!open) return;
     const trigger = triggerRef.current;
