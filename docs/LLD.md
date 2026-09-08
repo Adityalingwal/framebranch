@@ -71,8 +71,8 @@ to keep.)
 | `snapshots` | A full copy of the timeline — saved every 10th commit, and always for import, restore, and merge commits | the whole timeline, as JSON |
 | `working_state` | One row per branch — edits made but not yet committed | pending edits, a counter that increases with every edit |
 | `tickets` | One row per request, so a retried request is never applied twice | which action it was, the stored result |
-| `project_events` | The append-only feed every browser tab reads to catch up | sequence number, kind, payload |
-| `presence` | One row per live browser tab — display-only | tab id, name, cut, playhead frame, colour seed, last seen |
+| `project_events` | The append-only feed every browser tab reads to catch up | `id` (the cursor a poller resumes from), kind, payload |
+| `presence` | One row per project and browser tab — display-only | tab id, name, cut, playhead frame, colour seed, last seen |
 
 ```mermaid
 erDiagram
@@ -128,17 +128,17 @@ erDiagram
         text endpoint
     }
     project_events {
-        bigint seq PK
+        bigserial id PK "the poller's cursor"
         uuid project_id FK
         text kind
         jsonb payload
     }
     presence {
+        uuid project_id PK,FK "with tab_id"
         text tab_id PK
-        uuid project_id FK
         text name
         text cut
-        timestamp last_seen
+        timestamp last_seen_at
     }
 ```
 
