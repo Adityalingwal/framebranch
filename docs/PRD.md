@@ -37,7 +37,7 @@ Five operations were left out of version 1:
 
 - **Transitions** (like a crossfade between two clips) — the boundary between two clips is complicated to represent and merge.
 - **Named effects** (blur, color grading, and similar) — the "change a property" operation already covers this for the six chosen properties.
-- **Reordering tracks.**
+- **Track management** — adding, renaming, reordering, duplicating, recolouring, resizing or deleting a track is not part of the editor at all; the timeline's tracks come from the project and stay as they are.
 - **A separate operation for captions** — captions are text clips on a text track, so they already use the same eight operations as any other clip.
 - **A direct "change the timeline range" operation** — moving and trimming already cover every way a clip's position and length can change.
 

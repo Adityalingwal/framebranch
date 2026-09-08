@@ -35,7 +35,6 @@ export const OPTIMISTIC_VERBS: ReadonlySet<Command["op"]> = new Set([
   "trim",
   "slip",
   "split",
-  "replaceTracks",
   "deleteClip",
   "rippleDelete",
   "propertyChange",

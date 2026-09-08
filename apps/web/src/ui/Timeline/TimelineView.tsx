@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import type { Command, Timeline, Track, TrackKind } from "@framebranch/engine";
+import type { Command, Timeline, Track } from "@framebranch/engine";
 import { Cursor, Magnet, Minus, Plus, Scissors } from "@phosphor-icons/react";
 
 import type { AnyClip } from "../../lib/clip-helpers";
@@ -30,7 +30,7 @@ export function TimelineView({
   onSlip,
   onSplit,
   onAddClip,
-  onReplaceTracks,
+  currentBranch,
   editingLocked = false,
 }: {
   timeline: Timeline;
@@ -43,7 +43,12 @@ export function TimelineView({
   onSlip: (clipId: string, deltaFrame: number) => void;
   onSplit: (clipId: string, atFrame: number) => void;
   onAddClip: (command: Command) => void;
-  onReplaceTracks: (tracks: Track[]) => void;
+  /**
+   * H1 PATCH — the cut the editor is standing on. Eye/mute are UI-only
+   * state; when the cut changes they must reset (a hidden track id from
+   * another cut would leak, or silently hide a track here).
+   */
+  currentBranch: string;
   /**
    * B5-1 — the editor is read-only (viewing an old version, or the
    * connection is lost). Only the add-clip menu reads it here; every edit
@@ -58,15 +63,10 @@ export function TimelineView({
     () => new Set(),
   );
   const [mutedTracks, setMutedTracks] = useState<Set<string>>(() => new Set());
-  const [lockedTracks, setLockedTracks] = useState<Set<string>>(
-    () => new Set(),
-  );
   const scrollRegionRef = useRef<HTMLDivElement>(null);
   const playheadRef = useRef<HTMLDivElement>(null);
   const rulerCanvasRef = useRef<HTMLDivElement>(null);
   const scrubbingRef = useRef(false);
-  const addTrackRef = useRef<HTMLDivElement>(null);
-  const [addTrackOpen, setAddTrackOpen] = useState(false);
   const scale = pxPerFrame(timeline.projectRate, pxPerSecond);
   const visibleEndFrame = timelineEndFrame(timeline) + timeline.projectRate * 2;
   const totalSeconds = Math.ceil(visibleEndFrame / timeline.projectRate) + 1;
@@ -193,70 +193,13 @@ export function TimelineView({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  // H1 PATCH — eye/mute are per-cut UI state. Reset them when the cut
+  // changes (a remount via `key` would also throw away zoom, tool and
+  // snapping, which belong to the editor, not the cut).
   useEffect(() => {
-    if (!addTrackOpen) return;
-    const close = (event: PointerEvent) => {
-      if (!addTrackRef.current?.contains(event.target as Node)) {
-        setAddTrackOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [addTrackOpen]);
-
-  function addTrack(kind: TrackKind) {
-    const count = timeline.tracks.filter((track) => track.kind === kind).length;
-    const prefix =
-      kind === "video" ? "Video" : kind === "audio" ? "Audio" : "Text";
-    onReplaceTracks([
-      ...timeline.tracks,
-      {
-        id: `track-${crypto.randomUUID()}`,
-        kind,
-        name: `${prefix} ${count + 1}`,
-        clips: [],
-      },
-    ]);
-    setAddTrackOpen(false);
-  }
-
-  function updateTrack(trackId: string, update: Partial<Track>) {
-    onReplaceTracks(
-      timeline.tracks.map((track) =>
-        track.id === trackId ? { ...track, ...update } : track,
-      ),
-    );
-  }
-
-  function duplicateTrack(trackId: string) {
-    const index = timeline.tracks.findIndex((track) => track.id === trackId);
-    if (index < 0) return;
-    const source = timeline.tracks[index];
-    const duplicateId = `track-${crypto.randomUUID()}`;
-    const duplicate: Track = {
-      ...source,
-      id: duplicateId,
-      name: `${source.name ?? trackLabels.get(source.id) ?? source.kind} copy`,
-      clips: source.clips.map((clip, clipIndex) => ({
-        ...clip,
-        id: `${duplicateId}-clip-${clipIndex}`,
-      })) as Track["clips"],
-    };
-    const next = [...timeline.tracks];
-    next.splice(index + 1, 0, duplicate);
-    onReplaceTracks(next);
-  }
-
-  function reorderTrack(sourceId: string, targetId: string) {
-    if (sourceId === targetId) return;
-    const next = [...timeline.tracks];
-    const sourceIndex = next.findIndex((track) => track.id === sourceId);
-    const targetIndex = next.findIndex((track) => track.id === targetId);
-    if (sourceIndex < 0 || targetIndex < 0) return;
-    const [moved] = next.splice(sourceIndex, 1);
-    next.splice(targetIndex, 0, moved);
-    onReplaceTracks(next);
-  }
+    setHiddenTracks(new Set());
+    setMutedTracks(new Set());
+  }, [currentBranch]);
 
   return (
     <section className="timeline-editor" aria-label="Timeline editor">
@@ -296,40 +239,6 @@ export function TimelineView({
           <Magnet size={15} weight="duotone" aria-hidden />
           <span>Snap</span>
         </button>
-
-        <span className="timeline-tools-divider" aria-hidden />
-
-        <div ref={addTrackRef} className="track-add-anchor">
-          <button
-            type="button"
-            className="timeline-tool-button"
-            aria-expanded={addTrackOpen}
-            aria-haspopup="menu"
-            title="Add track"
-            onClick={() => setAddTrackOpen((value) => !value)}
-          >
-            <Plus size={15} weight="bold" aria-hidden />
-            <span>Add track</span>
-          </button>
-          {addTrackOpen && (
-            <div className="track-add-menu" role="menu">
-              {(["video", "audio", "text"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => addTrack(kind)}
-                >
-                  {kind === "video"
-                    ? "Video track"
-                    : kind === "audio"
-                      ? "Audio track"
-                      : "Text track"}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
 
         <div
           className="timeline-timecode"
@@ -403,7 +312,6 @@ export function TimelineView({
                 selectedClipId={selectedClipId}
                 hidden={hiddenTracks.has(track.id)}
                 muted={mutedTracks.has(track.id)}
-                locked={lockedTracks.has(track.id)}
                 editingLocked={editingLocked}
                 tool={tool}
                 snapping={snapping}
@@ -411,46 +319,14 @@ export function TimelineView({
                 onAddClip={onAddClip}
                 onToggleHidden={() => toggleTrack(setHiddenTracks, track.id)}
                 onToggleMuted={() => toggleTrack(setMutedTracks, track.id)}
-                onToggleLocked={() => toggleTrack(setLockedTracks, track.id)}
                 onSelectClip={onSelectClip}
                 onSetPlayhead={onSetPlayhead}
                 onMove={onMove}
                 onTrim={onTrim}
                 onSlip={onSlip}
                 onSplit={onSplit}
-                onRename={(name) => updateTrack(track.id, { name })}
-                onAppearanceChange={(changes) => updateTrack(track.id, changes)}
-                onDuplicate={() => duplicateTrack(track.id)}
-                onRemove={() =>
-                  onReplaceTracks(
-                    timeline.tracks.filter((item) => item.id !== track.id),
-                  )
-                }
-                onDropTrack={reorderTrack}
               />
             ))}
-            <div className="track-ghost-row">
-              <span>Add track</span>
-              {(["video", "audio", "text"] as const).map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  style={
-                    {
-                      "--ghost-kind": `var(--fb-track-${kind})`,
-                    } as React.CSSProperties
-                  }
-                  onClick={() => addTrack(kind)}
-                >
-                  <Plus size={11} weight="bold" aria-hidden />
-                  {kind === "video"
-                    ? "Video"
-                    : kind === "audio"
-                      ? "Audio"
-                      : "Text"}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div

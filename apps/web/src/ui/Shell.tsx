@@ -8,7 +8,6 @@ import type {
   Command,
   MergeChoice,
   PropertyValue,
-  Track,
 } from "@framebranch/engine";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
@@ -691,8 +690,8 @@ export function Shell() {
   const emit = useCallback(
     (command: Command, options?: { onError?: () => void }) => {
       // ONE funnel: every edit verb (add/move/trim/slip/split/delete/
-      // ripple-delete/property/replaceTracks) comes through here, so this
-      // is the only place the read-only states have to be enforced.
+      // ripple-delete/property) comes through here, so this is the only
+      // place the read-only states have to be enforced.
       //
       // Compare first, and SILENTLY: the lanes are not an editing surface,
       // there is no copy-sheet string for "you can't edit here", and the
@@ -748,10 +747,6 @@ export function Shell() {
       emit({ op: "split", clipId, at: { value: atFrame, rate } });
     },
     [emit, rate],
-  );
-  const handleReplaceTracks = useCallback(
-    (tracks: Track[]) => emit({ op: "replaceTracks", tracks }),
-    [emit],
   );
   const handleDelete = useCallback(
     (clipId: string) => {
@@ -1208,7 +1203,7 @@ export function Shell() {
                 onSlip={handleSlip}
                 onSplit={handleSplit}
                 onAddClip={handleAddClip}
-                onReplaceTracks={handleReplaceTracks}
+                currentBranch={currentBranch}
                 editingLocked={editingPaused}
               />
             )}

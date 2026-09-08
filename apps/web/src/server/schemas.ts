@@ -113,13 +113,6 @@ const split = z
   })
   .strict();
 
-const replaceTracks = z
-  .object({
-    op: z.literal("replaceTracks"),
-    tracks: z.array(z.unknown()),
-  })
-  .strict();
-
 export const commandSchema = z.union([
   addClipMedia,
   addClipText,
@@ -130,7 +123,10 @@ export const commandSchema = z.union([
   propertyChange,
   rippleDelete,
   split,
-  replaceTracks,
+  // H1 — `replaceTracks` is deliberately absent: track management left the
+  // product, so the web API refuses the verb (400 E_BAD_REQUEST). The
+  // engine's Command union still carries it (public API); the cast below
+  // absorbs the narrower web schema.
 ]) as unknown as z.ZodType<Command>;
 
 /** C6(1) — the ticket is a browser `crypto.randomUUID()`. */

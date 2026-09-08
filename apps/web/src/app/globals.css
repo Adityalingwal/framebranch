@@ -2144,64 +2144,21 @@ body.workspace-is-resizing-horizontal * {
   background: rgba(79, 162, 255, 0.09);
 }
 
-.timeline-track-row.is-locked .timeline-track-header {
-  background: #0d0d11;
-}
-
-.track-drag-handle,
-.track-name-button {
-  padding: 0;
-  border: 0;
-  color: var(--fb-text-dim);
-  background: transparent;
-  font: inherit;
-  cursor: grab;
-}
-
-.track-drag-handle {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-}
-
-.track-drag-handle:hover {
-  color: var(--fb-text-body-2);
-  background: rgba(255, 255, 255, 0.055);
-}
-.track-name-button {
+.track-name {
+  display: block;
   max-width: 62px;
   overflow: hidden;
   color: var(--fb-text-body-2);
   font-size: 11px;
   font-weight: 500;
-  text-align: left;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: text;
 }
-.track-name-input {
-  width: 64px;
-  height: 22px;
-  padding: 0 5px;
-  border: 1px solid rgba(79, 162, 255, 0.6);
-  border-radius: 4px;
-  color: var(--fb-text-body-2);
-  background: var(--fb-deep);
-  font: inherit;
-  font-size: 10.5px;
-  outline: 0;
-}
-.track-menu-anchor,
-.track-add-anchor {
+.track-menu-anchor {
   position: relative;
 }
 
-.track-menu,
-.track-add-menu {
+.track-menu {
   position: absolute;
   z-index: 90;
   top: calc(100% + 5px);
@@ -2227,8 +2184,7 @@ body.workspace-is-resizing-horizontal * {
   z-index: 500;
   width: 190px;
 }
-.track-menu > button,
-.track-add-menu button {
+.track-menu > button {
   width: 100%;
   min-height: 32px;
   display: flex;
@@ -2244,61 +2200,10 @@ body.workspace-is-resizing-horizontal * {
   text-align: left;
   cursor: pointer;
 }
-.track-menu > button:hover,
-.track-add-menu button:hover {
+.track-menu > button:hover {
   color: var(--fb-text-body-2);
   background: rgba(79, 162, 255, 0.09);
 }
-.track-menu > button.is-danger {
-  color: var(--fb-bad);
-}
-.track-menu-section,
-.track-height-control {
-  padding: 7px 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-.track-menu-section > span,
-.track-height-control > span {
-  color: var(--fb-text-mute);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-.track-color-options {
-  display: flex;
-  gap: 6px;
-  margin-top: 7px;
-}
-.track-color-options button {
-  width: 24px !important;
-  height: 24px !important;
-  padding: 0;
-  border: 2px solid transparent !important;
-  border-radius: 50% !important;
-}
-.track-color-options button[aria-pressed="true"] {
-  border-color: white !important;
-  box-shadow: 0 0 0 2px rgba(79, 162, 255, 0.25);
-}
-.track-height-control {
-  display: grid;
-  grid-template-columns: 1fr 28px 28px 28px;
-  align-items: center;
-  gap: 3px;
-}
-.track-height-control button {
-  width: 28px !important;
-  height: 28px !important;
-}
-.track-height-control strong {
-  color: var(--fb-text-body-2);
-  font-size: 10px;
-  text-align: center;
-}
-.track-add-menu {
-  top: calc(100% + 6px);
-}
-
 .preview-empty-dropzone {
   width: calc(100% - 48px);
   height: calc(100% - 48px);
@@ -2364,53 +2269,6 @@ input:disabled {
   background: #0c0c11;
 }
 
-/* ghost add-track row — puts the dead space below the tracks to work.
-   Sticky-left so it stays put during horizontal scroll. */
-.track-ghost-row {
-  position: sticky;
-  left: 12px;
-  width: max-content;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 12px;
-  padding: 6px 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.13);
-  border-radius: var(--fb-radius-md);
-  color: var(--fb-text-mute);
-}
-
-.track-ghost-row > span {
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.track-ghost-row button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--fb-radius-sm);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--fb-text-dim);
-  font: inherit;
-  font-size: 10.5px;
-  cursor: pointer;
-  transition:
-    color 0.12s var(--fb-ease-hover),
-    border-color 0.12s var(--fb-ease-hover),
-    background 0.12s var(--fb-ease-hover);
-}
-
-.track-ghost-row button:hover {
-  color: var(--fb-text-body-2);
-  border-color: var(--ghost-kind, rgba(255, 255, 255, 0.16));
-  background: rgba(255, 255, 255, 0.055);
-}
-
 .timeline-lane-grid {
   position: absolute;
   inset: 0;
@@ -2464,11 +2322,8 @@ input:disabled {
     0 0 0 3px rgba(43, 127, 255, 0.14);
 }
 
-.timeline-clip.is-locked {
-  cursor: not-allowed;
-}
 
-.timeline-clip.is-blade:not(.is-locked) {
+.timeline-clip.is-blade {
   cursor: crosshair;
 }
 
@@ -2566,7 +2421,7 @@ input:disabled {
 
 /* trim affordance on hover — teaches that clips are trimmable before
    selection; selected state stays the stronger tint */
-.timeline-clip:hover:not(.is-locked):not(.is-selected) .timeline-trim-handle {
+.timeline-clip:hover:not(.is-selected) .timeline-trim-handle {
   background: rgba(140, 197, 255, 0.12);
 }
 
