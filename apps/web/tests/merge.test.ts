@@ -241,12 +241,20 @@ describe("F1 / shape — the doors", () => {
 
   it("E_BAD_REQUEST: a cut cannot be brought into itself, on either endpoint", async () => {
     const s = await session();
-    expect(
-      expectError(await land(s, { from: "main", into: "main", token: DUMMY }))
-        .code,
-    ).toBe("E_BAD_REQUEST");
+    const landed = expectError(
+      await land(s, { from: "main", into: "main", token: DUMMY }),
+    );
+    expect(landed.code).toBe("E_BAD_REQUEST");
+    // #209 locks the sentence. The POST refusal is a SCHEMA refinement, so
+    // `readBody` prefixes it with the failing field — the locked words are
+    // the tail of the envelope message, verbatim.
+    expect(landed.message).toBe(
+      "invalid request body: from a cut cannot be brought into itself",
+    );
     const call = await get(getPreview, "/api/merge/preview?from=main", s);
-    expect(expectError(call).code).toBe("E_BAD_REQUEST");
+    const previewed = expectError(call);
+    expect(previewed.code).toBe("E_BAD_REQUEST");
+    expect(previewed.message).toBe("a cut cannot be brought into itself");
   });
 
   it("preview: an unknown cut is 404, a malformed `choices` is 400", async () => {
@@ -583,6 +591,31 @@ describe("F3(1) — the landing", () => {
     expect((clipIn(merged, BROLL) as unknown as { name?: string }).name).toBe(
       "B-roll",
     );
+  });
+
+  it("B5 fix 1 (#95): a cut whose NAME carries quotes lands with ONE pair", async () => {
+    // `branchName` (schemas.ts) permits `"`, so this cut is creatable from
+    // the real endpoint. Before the fix the card read
+    // `Brought ""client"" into main`.
+    const QUOTED_CUT = '"client"';
+    const s = await session();
+    await makeCut(s, QUOTED_CUT);
+    await edit(s, QUOTED_CUT, 0, volume(MUSIC, 40));
+    await mark(s, QUOTED_CUT, "Quieter music");
+
+    const answer = expectOk(
+      await get(
+        getPreview,
+        `/api/merge/preview?from=${encodeURIComponent(QUOTED_CUT)}`,
+        s,
+      ),
+    ) as BringInPreview;
+    expectOk(await land(s, { from: QUOTED_CUT, token: answer.token }));
+
+    const merges = await mergeCommits();
+    expect(merges).toHaveLength(1);
+    expect(merges[0].name).toBe('Brought "client" into main');
+    expect(merges[0].name.match(/"/g)).toHaveLength(2);
   });
 
   it("dirty sides: BOTH are sealed in the same transaction as the bring-in", async () => {

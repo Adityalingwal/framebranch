@@ -15,7 +15,12 @@ import type {
   Track,
 } from "@framebranch/engine";
 
-import { presentDiff, runSummary, summaryName } from "../src/server/diff-rows";
+import {
+  presentDiff,
+  runSummary,
+  SUMMARY_NAME_MAX,
+  summaryName,
+} from "../src/server/diff-rows";
 import type { DiffRow } from "../src/server/diff-rows";
 
 const R = 24;
@@ -515,6 +520,48 @@ describe("presentDiff — names, timecode boundaries, empty diff", () => {
       clipName: "Welcome",
     }));
     expect(runSummary(twoRowsOneClip)).toBe("1 changed");
+  });
+
+  // B5 lock (3) — the run-log's line 3 and the agent's Ready note are both
+  // one line; every verb at once would overflow them, so `runSummary` is
+  // capped by the SAME `cap()` the card name uses.
+  it("runSummary: capped at 60 characters with `…`, like the card name", () => {
+    const rows = (kinds: DiffRow["kind"][]): DiffRow[] =>
+      kinds.map((kind, i) => ({
+        key: `${i}`,
+        kind,
+        clipIds: kind === "ripple" ? ["p", "q", "r", "s"] : [`c${i}`],
+        clipName: kind === "ripple" ? "4 clips" : `Clip ${i}`,
+        thumbnail: null,
+        text: "x",
+        where: "",
+        trackId: "v1",
+        trackName: "V1",
+        jump: { side: "after" as const, frame: 0, clipId: `c${i}` },
+        laneIds: { before: [`c${i}`], after: [`c${i}`] },
+      }));
+    // All seven verbs plus a ripple = nine parts, well past 60 characters.
+    const everything = runSummary(
+      rows([
+        "moved",
+        "trimmed",
+        "added",
+        "removed",
+        "split",
+        "slipped",
+        "property",
+        "raw",
+        "ripple",
+      ]),
+    );
+    expect(everything).toBe(
+      "1 moved, 1 trimmed, 1 added, 1 removed, 1 split, 1 slipped,…",
+    );
+    expect(everything.length).toBe(SUMMARY_NAME_MAX);
+    expect(everything.endsWith("…")).toBe(true);
+    // Shorter than the cap → untouched; empty → still `""`.
+    expect(runSummary(rows(["trimmed"]))).toBe("1 trimmed");
+    expect(runSummary([])).toBe("");
   });
 });
 

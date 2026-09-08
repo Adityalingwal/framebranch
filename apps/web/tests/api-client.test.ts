@@ -189,7 +189,7 @@ describe("api-client — C6 retry ladder", () => {
       postCommit({ branch: "main", name: "Client pick" }, hooks),
     ).rejects.toMatchObject({
       code: "E_STALE_HEAD",
-      message: "This version moved — reload and try again.",
+      message: "This cut changed in the meantime — try again.", // #200
     });
     await vi.advanceTimersByTimeAsync(1000);
     await assertion;

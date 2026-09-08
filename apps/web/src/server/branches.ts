@@ -35,7 +35,7 @@ export async function loadBranch(
   if (rows.length === 0) {
     // A branch belonging to a different project is simply not found —
     // the project_id predicate makes that true.
-    throw new ApiError("E_BRANCH_NOT_FOUND", `no branch named "${name}"`);
+    throw new ApiError("E_BRANCH_NOT_FOUND", `no cut named "${name}"`);
   }
   return rows[0];
 }
@@ -69,7 +69,7 @@ export async function loadBranchById(
     .where(and(eq(branches.projectId, projectId), eq(branches.id, branchId)))
     .limit(1);
   if (rows.length === 0) {
-    throw new ApiError("E_BRANCH_NOT_FOUND", `no branch "${branchId}"`);
+    throw new ApiError("E_BRANCH_NOT_FOUND", `no cut "${branchId}"`);
   }
   return rows[0];
 }

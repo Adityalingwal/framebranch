@@ -103,7 +103,7 @@ export async function POST(request: Request): Promise<Response> {
           // "that name is taken" instead of a generic error.
           throw new ApiError(
             "E_BRANCH_EXISTS",
-            `a branch named "${body.name}" already exists`,
+            `a cut named "${body.name}" already exists`,
           );
         }
 

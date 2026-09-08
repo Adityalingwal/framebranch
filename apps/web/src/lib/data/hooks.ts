@@ -303,7 +303,9 @@ export function useOpsMutation(branch: string) {
       }
       if (error instanceof ApiClientError && error.code === "E_STALE_REV") {
         queryClient.invalidateQueries({ queryKey: key });
-        showToast("Timeline updated.");
+        // #198 — with live edits from another tab, say WHY the edit was
+        // dropped rather than announcing a refresh with no reason.
+        showToast("Timeline updated — someone else edited this cut.");
         return;
       }
       onMutationError(error);

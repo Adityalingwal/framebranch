@@ -189,7 +189,7 @@ export async function createCommit({
   if (moved.length !== 1) {
     throw new ApiError(
       "E_STALE_HEAD",
-      `branch "${branch.name}" moved while this version was being saved`,
+      `cut "${branch.name}" moved while this version was being marked`,
     );
   }
 

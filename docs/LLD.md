@@ -57,7 +57,10 @@ The last column is the engine's own inverse of each operation — the shape a re
 
 ## Database Schema
 
-Seven tables, each with one clear job.
+Nine tables, each with one clear job. (A tenth, `merge_attempts`, held a
+bring-in mid-flight; migration 0004 dropped it — the preview is stateless
+and recomputed from the two cuts on every answer, so there was nothing left
+to keep.)
 
 | Table | Stores | Key columns |
 |---|---|---|
@@ -68,12 +71,16 @@ Seven tables, each with one clear job.
 | `snapshots` | A full copy of the timeline — saved every 10th commit, and always for import, restore, and merge commits | the whole timeline, as JSON |
 | `working_state` | One row per branch — edits made but not yet committed | pending edits, a counter that increases with every edit |
 | `tickets` | One row per request, so a retried request is never applied twice | which action it was, the stored result |
+| `project_events` | The append-only feed every browser tab reads to catch up | `id` (the cursor a poller resumes from), kind, payload |
+| `presence` | One row per project and browser tab — display-only | tab id, name, cut, playhead frame, colour seed, last seen |
 
 ```mermaid
 erDiagram
     projects ||--o{ branches : "has"
     projects ||--o{ commits : "has"
     projects ||--o{ tickets : "has"
+    projects ||--o{ project_events : "has"
+    projects ||--o{ presence : "has"
     commits ||--o{ ops : "contains"
     commits ||--o| snapshots : "may have"
     commits ||--o| commits : "parent / parent2 (merge)"
@@ -120,7 +127,28 @@ erDiagram
         uuid project_id FK
         text endpoint
     }
+    project_events {
+        bigserial id PK "the poller's cursor"
+        uuid project_id FK
+        text kind
+        jsonb payload
+    }
+    presence {
+        uuid project_id PK,FK "with tab_id"
+        text tab_id PK
+        text name
+        text cut
+        timestamp last_seen_at
+    }
 ```
+
+**The nine event kinds.** `project_events` carries exactly these, and every
+tab reacts to each: `commit-created` (a version was written — its payload
+names the kind, so a `seed` is what tells another tab the project was
+replaced), `branch-created`, `branch-switched`, `restore`,
+`merge-finalized`, `import`, `ready-set`, `ready-cleared`, and `edit`. The
+last is appended by `POST /api/ops`: without it, a cut edited after being
+marked ready would look unchanged to everyone but the person typing.
 
 `branches_project_id_name_key` and `projects_owner_token_key` are the other unique constraints worth knowing about: a branch name is unique per project, and an owner token identifies exactly one project. Full column list is `apps/web/src/db/schema.ts`; this diagram is for relationships, not every field.
 
@@ -153,7 +181,8 @@ Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_
 | `/api/timeline` | GET | no | no | `branch` | timeline, working rev, pending count | n/a — read-only |
 | `/api/history` | GET | no | no | (project from context) | commits: id, name, actor, time, parents | n/a — read-only |
 | `/api/diff` | GET | no | no | `cut`, `a`, `b`, `timelines?` | presenter rows + count + runtime + which side is older; with `timelines=1` also both timelines | n/a — read-only |
-| `/api/ops` | POST | yes | yes | `branch`, `workingRev`, `command` | new working rev, pending count | working-rev mismatch → `E_STALE_REV` |
+| `/api/branch` | GET | no | no | (project from context) | every cut: name, who made it, its head, and its ready state (note, who, when, edited-since) | n/a — read-only |
+| `/api/ops` | POST | yes | yes | `branch`, `workingRev`, `command` | new working rev, pending count | working-rev mismatch → `E_STALE_REV`. Appends an `edit` event, so another tab learns that a cut marked ready has moved |
 | `/api/commit` | POST | yes | yes | `branch`, `name?` | commit id, name | CAS on branch head → `E_STALE_HEAD`; no-op if branch is already clean |
 | `/api/branch` | POST | yes | yes | `name`, `from` | branch id, head commit id | seals the source branch first → `E_STALE_HEAD` possible; `E_BRANCH_EXISTS` if name taken |
 | `/api/branch/switch` | POST | yes (may seal) | yes | `from`, `to` | timeline, working rev, pending count | seals dirty state before switching → `E_STALE_HEAD` possible |
@@ -211,3 +240,39 @@ packages/engine/src/
 **One narrow door in.** Everything outside the engine — the interface, the API layer — only ever imports from `index.ts`, never reaches into the internal files directly. `index.ts` exposes exactly eight functions: apply a command, compute a diff, start a merge, apply a conflict choice, recompute a merge from a whole set of choices (what the stateless bring-in preview asks for), check if a merge can finalize, import OTIO, export OTIO. As long as those eight keep working the same way, anything inside the engine can be reorganized freely without breaking anything outside it.
 
 **No database, no network, no interface code anywhere in the engine.** Every function here takes a timeline in and returns a timeline (or a diff, or a merge result) out — which is what makes it possible to test and benchmark the engine directly, without running a server or a browser.
+
+## Known Limits
+
+Everything below works as described — these are the edges the demo does not
+reach, recorded so nobody has to rediscover them.
+
+- **A hand-made cut named `agent-‹preset›` counts as that preset's run.** Run
+  state is derived from the cut list rather than stored, and the `agent-`
+  prefix is not reserved, so a cut a person names `agent-tighten-intro` makes
+  the Agent panel read `Done` for that preset.
+- **The preview pane's empty state is a single line.** With no clip selected
+  it reads `Select a clip to start editing` and nothing else — no thumbnail
+  strip, no hint about what a clip is.
+- **A New-project reset can run twice in the tab that started it.** The tab
+  arms a six-second one-shot guard against its own `seed` event; an event
+  that arrives in the window between the server committing and the mutation
+  answering (0–3 seconds, one poll tick) can still outrun the guard and reset
+  that tab a second time.
+- **`GET /api/agent/presets` walks the commit chain once per preset**, and is
+  refetched on every eventful three-second sync tick. Three walks at demo
+  scale; it would need its own narrower query at any real size.
+- **Two tabs duplicated from one another share one presence identity.**
+  Duplicating a browser tab copies its session storage, the `fb_tab` id
+  included, so the two show as one person. Presence is display-only, so this
+  costs a name, never an edit.
+- **A conflict card names a clip by its ORIGINAL name.** The card reads the
+  name off the merge base, so a clip renamed on either cut is still called
+  what it was called before the cut was made.
+- **A slipped clip's `Original` line reads an absolute timecode.** The two
+  cut lines say how far the slip went (`starts 12 frames later`), while the
+  Original line says where the source started (`starts 00:00:02:00`) — two
+  different units in one card.
+- **The top bar reserves an empty column** the width of its left cluster, to
+  centre the version controls. Below 940px that spacer collapses; above it, a
+  long cut name and a presence chip share a capped left side, ellipsizing
+  while the mirrored column sits empty.

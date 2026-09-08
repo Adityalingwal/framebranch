@@ -23,6 +23,6 @@ The exact edits behind the walkthrough in the PRD's Demo Story — precise enoug
 | 6 | Open the bring-in preview | Exactly 3 conflict cards appear — a value conflict (volume), a delete conflict (caption), and an overlap conflict (logo vs. the new clip); clip B's trim merges automatically, no conflict |
 | 7 | Decide all 3, then land it | One merge commit, with both branches as parents |
 | 8 | View history, restore an older version | Every entry marked person or agent; restoring creates a new version |
-| 9 | Export, then re-import the result | Comes back identical — nothing lost |
+| 9 | Export, then re-import the result | Comes back identical — nothing lost. The export is a rail button; the re-import is API-only (`POST /api/import`), so this step is run with a request, not a click |
 
 **The two-tab beat.** Open the app in a second tab and give it a different name at the gate — same project, two people. Priya, on her own cut, opens the Cut menu, picks `Ready for main…` and types one line about what is in it. Within about three seconds, and with no reload, Aditya's `Bring in ▾` on main grows a count badge and her cut jumps to the top of the list with a green dot, `Ready`, her name and the time, and her note underneath. Nothing on main has changed — the mark is an invitation, not a lock, and it clears itself the moment he brings the cut in. While that happens each tab shows where the other is: a chip `● Priya is on priya-music` when they are on different cuts, and a coloured playhead with her name when they are on the same one.
