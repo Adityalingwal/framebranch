@@ -40,7 +40,6 @@ export function ClipBlock({
   pxPerSecond,
   selected,
   slipEnabled,
-  locked,
   tool,
   snapping,
   onSelect,
@@ -59,7 +58,6 @@ export function ClipBlock({
   pxPerSecond: number;
   selected: boolean;
   slipEnabled: boolean;
-  locked: boolean;
   tool: TimelineTool;
   snapping: boolean;
   onSelect: () => void;
@@ -137,7 +135,7 @@ export function ClipBlock({
     return {
       onPointerDown: (event: React.PointerEvent) => {
         event.stopPropagation();
-        if (locked || tool === "blade") return;
+        if (tool === "blade") return;
         (event.target as Element).setPointerCapture(event.pointerId);
         setDrag({
           mode,
@@ -184,7 +182,7 @@ export function ClipBlock({
   return (
     <button
       type="button"
-      className={`timeline-clip timeline-clip-${trackKind}${selected ? " is-selected" : ""}${locked ? " is-locked" : ""}${tool === "blade" ? " is-blade" : ""}`}
+      className={`timeline-clip timeline-clip-${trackKind}${selected ? " is-selected" : ""}${tool === "blade" ? " is-blade" : ""}`}
       style={
         {
           left,
@@ -195,15 +193,12 @@ export function ClipBlock({
         } as React.CSSProperties
       }
       aria-label={label}
-      aria-disabled={locked}
       title={
-        locked
-          ? `${label} — track locked`
-          : tool === "blade"
-            ? `${label} — click to split`
-            : slipEnabled
-              ? `${label} — drag to move, edges to trim, Alt+drag to slip`
-              : `${label} — drag to move, edges to trim`
+        tool === "blade"
+          ? `${label} — click to split`
+          : slipEnabled
+            ? `${label} — drag to move, edges to trim, Alt+drag to slip`
+            : `${label} — drag to move, edges to trim`
       }
       onClick={(event) => {
         if (suppressClickRef.current) {
@@ -212,7 +207,7 @@ export function ClipBlock({
           return;
         }
         onSelect();
-        if (tool === "blade" && !locked && durationValue > 1) {
+        if (tool === "blade" && durationValue > 1) {
           const rect = event.currentTarget.getBoundingClientRect();
           const atFrame = Math.min(
             startValue + durationValue - 1,

@@ -4,20 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Command, MediaRef, Timeline, Track } from "@framebranch/engine";
 import {
-  Copy,
-  DotsSixVertical,
   DotsThree,
   Eye,
   EyeSlash,
-  LockSimple,
-  LockSimpleOpen,
-  Minus,
   MusicNotes,
   Plus,
   SpeakerHigh,
   SpeakerSlash,
   TextT,
-  Trash,
   VideoCamera,
 } from "@phosphor-icons/react";
 
@@ -37,7 +31,6 @@ import {
 } from "./scale";
 
 const TRACK_ICON = { video: VideoCamera, audio: MusicNotes, text: TextT };
-const TRACK_COLORS = ["#4fa2ff", "#3fcf8e", "#f2b84b", "#b78cff", "#f07178"];
 
 export function TrackRow({
   track,
@@ -48,7 +41,6 @@ export function TrackRow({
   selectedClipId,
   hidden,
   muted,
-  locked,
   editingLocked = false,
   tool,
   snapping,
@@ -56,18 +48,12 @@ export function TrackRow({
   onAddClip,
   onToggleHidden,
   onToggleMuted,
-  onToggleLocked,
   onSelectClip,
   onSetPlayhead,
   onMove,
   onTrim,
   onSlip,
   onSplit,
-  onRename,
-  onAppearanceChange,
-  onDuplicate,
-  onRemove,
-  onDropTrack,
 }: {
   track: Track;
   trackLabel: string;
@@ -77,7 +63,6 @@ export function TrackRow({
   selectedClipId: string | null;
   hidden: boolean;
   muted: boolean;
-  locked: boolean;
   /** B5-1 — read-only editor: adding a clip is off, visibly. */
   editingLocked?: boolean;
   tool: TimelineTool;
@@ -86,26 +71,18 @@ export function TrackRow({
   onAddClip: (command: Command) => void;
   onToggleHidden: () => void;
   onToggleMuted: () => void;
-  onToggleLocked: () => void;
   onSelectClip: (clip: AnyClip, track: Track) => void;
   onSetPlayhead: (frame: number) => void;
   onMove: (clipId: string, newStartFrame: number) => void;
   onTrim: (clipId: string, edge: "start" | "end", deltaFrame: number) => void;
   onSlip: (clipId: string, deltaFrame: number) => void;
   onSplit: (clipId: string, atFrame: number) => void;
-  onRename: (name: string) => void;
-  onAppearanceChange: (changes: Pick<Track, "color" | "height">) => void;
-  onDuplicate: () => void;
-  onRemove: () => void;
-  onDropTrack: (sourceId: string, targetId: string) => void;
 }) {
   const height = trackHeight(track);
   const color = trackColor(track);
   const scale = pxPerFrame(timeline.projectRate, pxPerSecond);
   const TrackIcon = TRACK_ICON[track.kind];
   const [menuOpen, setMenuOpen] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [draftName, setDraftName] = useState(track.name ?? trackLabel);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
@@ -171,10 +148,6 @@ export function TrackRow({
     setMenuOpen(false);
   }
 
-  useEffect(
-    () => setDraftName(track.name ?? trackLabel),
-    [track.name, trackLabel],
-  );
   useEffect(() => {
     if (!menuOpen) return;
     const rect = menuButtonRef.current?.getBoundingClientRect();
@@ -199,23 +172,8 @@ export function TrackRow({
     return () => document.removeEventListener("pointerdown", close);
   }, [menuOpen]);
 
-  function commitName() {
-    const next = draftName.trim();
-    if (next && next !== (track.name ?? trackLabel)) onRename(next);
-    else setDraftName(track.name ?? trackLabel);
-    setRenaming(false);
-  }
-
   return (
-    <div
-      className={`timeline-track-row${locked ? " is-locked" : ""}`}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
-        event.preventDefault();
-        const sourceId = event.dataTransfer.getData("text/framebranch-track");
-        if (sourceId) onDropTrack(sourceId, track.id);
-      }}
-    >
+    <div className="timeline-track-row">
       <div
         className="timeline-track-header"
         style={
@@ -226,49 +184,10 @@ export function TrackRow({
           } as React.CSSProperties
         }
       >
-        <button
-          type="button"
-          className="track-drag-handle"
-          draggable
-          aria-label={`Reorder ${track.name ?? trackLabel}`}
-          title="Drag to reorder track"
-          onDragStart={(event) => {
-            event.dataTransfer.effectAllowed = "move";
-            event.dataTransfer.setData("text/framebranch-track", track.id);
-          }}
-        >
-          <DotsSixVertical size={14} weight="bold" aria-hidden />
-        </button>
         <div className="timeline-track-identity">
           <TrackIcon size={14} weight="duotone" aria-hidden style={{ color }} />
           <div>
-            {renaming ? (
-              <input
-                autoFocus
-                className="track-name-input"
-                aria-label="Track name"
-                value={draftName}
-                maxLength={80}
-                onChange={(event) => setDraftName(event.target.value)}
-                onBlur={commitName}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") commitName();
-                  if (event.key === "Escape") {
-                    setDraftName(track.name ?? trackLabel);
-                    setRenaming(false);
-                  }
-                }}
-              />
-            ) : (
-              <button
-                type="button"
-                className="track-name-button"
-                title="Double-click to rename"
-                onDoubleClick={() => setRenaming(true)}
-              >
-                {track.name ?? trackLabel}
-              </button>
-            )}
+            <span className="track-name">{track.name ?? trackLabel}</span>
             <small>{track.kind}</small>
           </div>
         </div>
@@ -299,18 +218,6 @@ export function TrackRow({
               )}
             </button>
           )}
-          <button
-            type="button"
-            aria-pressed={locked}
-            title={locked ? "Unlock track" : "Lock track"}
-            onClick={onToggleLocked}
-          >
-            {locked ? (
-              <LockSimple size={13} weight="fill" aria-hidden />
-            ) : (
-              <LockSimpleOpen size={13} aria-hidden />
-            )}
-          </button>
           <div ref={menuRef} className="track-menu-anchor">
             <button
               ref={menuButtonRef}
@@ -334,7 +241,7 @@ export function TrackRow({
                     <button
                       type="button"
                       role="menuitem"
-                      disabled={locked || editingLocked}
+                      disabled={editingLocked}
                       onClick={addTextClip}
                     >
                       <Plus size={14} aria-hidden /> Add text clip
@@ -345,7 +252,7 @@ export function TrackRow({
                         key={ref.id}
                         type="button"
                         role="menuitem"
-                        disabled={locked || editingLocked}
+                        disabled={editingLocked}
                         onClick={() => addMediaClip(ref)}
                       >
                         <Plus size={14} aria-hidden /> Add{" "}
@@ -357,78 +264,6 @@ export function TrackRow({
                       No project media for this track
                     </button>
                   )}
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setRenaming(true);
-                      setMenuOpen(false);
-                    }}
-                  >
-                    Rename
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      onDuplicate();
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Copy size={14} aria-hidden /> Duplicate track
-                  </button>
-                  <div className="track-menu-section">
-                    <span>Colour</span>
-                    <div className="track-color-options">
-                      {TRACK_COLORS.map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          aria-label={`Set track colour ${option}`}
-                          aria-pressed={color === option}
-                          style={{ background: option }}
-                          onClick={() => onAppearanceChange({ color: option })}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                  <div className="track-height-control">
-                    <span>Height</span>
-                    <button
-                      type="button"
-                      aria-label="Decrease track height"
-                      disabled={height <= 32}
-                      onClick={() =>
-                        onAppearanceChange({ height: Math.max(32, height - 8) })
-                      }
-                    >
-                      <Minus size={12} aria-hidden />
-                    </button>
-                    <strong>{height}</strong>
-                    <button
-                      type="button"
-                      aria-label="Increase track height"
-                      disabled={height >= 120}
-                      onClick={() =>
-                        onAppearanceChange({
-                          height: Math.min(120, height + 8),
-                        })
-                      }
-                    >
-                      <Plus size={12} aria-hidden />
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="is-danger"
-                    onClick={() => {
-                      onRemove();
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <Trash size={14} aria-hidden /> Remove track
-                  </button>
                 </div>,
                 document.body,
               )}
@@ -479,7 +314,6 @@ export function TrackRow({
                 pxPerSecond={pxPerSecond}
                 selected={clip.id === selectedClipId}
                 slipEnabled={!isTextClip(clip) && mediaRef?.kind !== "image"}
-                locked={locked}
                 tool={tool}
                 snapping={snapping}
                 onSelect={() => onSelectClip(clip, track)}

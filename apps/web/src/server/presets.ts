@@ -2,9 +2,16 @@
  * presets.ts — the server-side preset registry (G1 / C1(6) / copy #46-#47).
  *
  * "New project" = pick a preset; each preset is an OTIO fixture whose media
- * is really in `public/media` (+ pre-made thumbnails). Today there is
- * exactly ONE real preset — more presets need more media, which is out of
- * B0's scope (do not invent media). Names are placeholders per copy #46.
+ * is really in `public/media` (+ pre-made thumbnails). B4a lock (1): TWO
+ * presets, both built from the same four media files — a second media set
+ * is not something to invent. `travel-vlog` stays first and stays the
+ * default (G1 patch (a): first visit gets no choice).
+ *
+ * Every preset must also be agent-compatible (G1 patch (c)): the scripts in
+ * `agent-scripts.ts` resolve their targets positionally, so a fixture needs
+ * ≥3 video clips, a first text clip, a `broll.mp4` reference and a free
+ * stretch at 00:00:20:00–00:00:25:00 on the video track. `ad.otio` carries
+ * those constraints in its comments; `tests/agent.test.ts` proves them.
  *
  * The fixture is read once per process and handed to the engine's
  * importOtio like any user document; a fixture that fails to import is a
@@ -37,6 +44,12 @@ export const PRESETS: readonly Preset[] = [
     id: "travel-vlog",
     name: "Travel vlog",
     otioPath: "fixtures/demo.otio",
+    mediaDir: "public/media",
+  },
+  {
+    id: "thirty-second-ad",
+    name: "30s ad",
+    otioPath: "fixtures/ad.otio",
     mediaDir: "public/media",
   },
 ];

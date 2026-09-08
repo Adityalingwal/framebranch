@@ -113,13 +113,6 @@ const split = z
   })
   .strict();
 
-const replaceTracks = z
-  .object({
-    op: z.literal("replaceTracks"),
-    tracks: z.array(z.unknown()),
-  })
-  .strict();
-
 export const commandSchema = z.union([
   addClipMedia,
   addClipText,
@@ -130,7 +123,10 @@ export const commandSchema = z.union([
   propertyChange,
   rippleDelete,
   split,
-  replaceTracks,
+  // H1 — `replaceTracks` is deliberately absent: track management left the
+  // product, so the web API refuses the verb (400 E_BAD_REQUEST). The
+  // engine's Command union still carries it (public API); the cast below
+  // absorbs the narrower web schema.
 ]) as unknown as z.ZodType<Command>;
 
 /** C6(1) — the ticket is a browser `crypto.randomUUID()`. */
@@ -276,14 +272,13 @@ export const exportBodySchema = z
   .strict();
 
 /**
- * C4 (4) + F5(a) — POST agent/simulate {branch, script}. `script` is a NAME
- * (C3's branch template is literally `agent/<script>-N`), not a payload of
- * commands; the scripted edits are a server-side fixture (C8).
+ * I1 patch (a) — POST agent/run { preset }. A preset ID, not a payload of
+ * commands (the scripted edits are a server-side fixture, C8) and NOT a
+ * branch either: the run makes its own cut, `agent-‹preset›`.
  */
-export const agentSimulateBodySchema = z
+export const agentRunBodySchema = z
   .object({
-    branch: branchName,
-    script: z.string().min(1).max(100),
+    preset: z.string().min(1).max(100),
     ticket,
   })
   .strict();

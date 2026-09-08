@@ -130,7 +130,7 @@ erDiagram
 
 **Reading data** doesn't need a ticket, since nothing changes: getting the current timeline, the history, or a diff between two versions.
 
-**Every edit goes through one endpoint** (`POST ops`, described in Operations). Every other action — save a version, create a branch, switch branches, bring a cut in, restore a version, run the agent, import, export, reset the demo — has its own endpoint, but all follow the same pattern: state which branch, include a ticket, get back the same envelope shape.
+**Every edit goes through one endpoint** (`POST ops`, described in Operations). Every other action — save a version, create a branch, switch branches, bring a cut in, restore a version, run an agent preset, start a new project, import, export — has its own endpoint, but all follow the same pattern: state which branch, include a ticket, get back the same envelope shape.
 
 **Which branch, every time.** Every request scoped to a branch says which one explicitly — the server never remembers "the branch you were just on." This keeps two browser tabs on different branches from interfering with each other.
 
@@ -157,13 +157,16 @@ Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_
 | `/api/commit` | POST | yes | yes | `branch`, `name?` | commit id, name | CAS on branch head → `E_STALE_HEAD`; no-op if branch is already clean |
 | `/api/branch` | POST | yes | yes | `name`, `from` | branch id, head commit id | seals the source branch first → `E_STALE_HEAD` possible; `E_BRANCH_EXISTS` if name taken |
 | `/api/branch/switch` | POST | yes (may seal) | yes | `from`, `to` | timeline, working rev, pending count | seals dirty state before switching → `E_STALE_HEAD` possible |
-| `/api/agent/simulate` | POST | yes | yes | `branch`, `script` | commit id, ops applied | CAS on branch head → `E_STALE_HEAD` |
+| `/api/agent/presets` | GET | no | no | (project from context) | the three presets with id, name, one-line description, and the run each has had (or none) | n/a — read-only; the run state is derived from the cut list, not stored |
+| `/api/agent/run` | POST | yes | yes | `preset` | the cut it made, commit id, card name, ops applied | creates its own cut `agent-‹preset›`; that cut already existing → `E_BRANCH_EXISTS`; any command failing rolls back the whole run, cut included |
 | `/api/merge/preview` | GET | no | no | `from`, `choices?` | the whole preview: rows + count + runtime, both timelines, the conflict cards, the undecided clip ids, and a token (both heads + both working revs) | unknown cut → `E_BRANCH_NOT_FOUND`; malformed `choices` → `E_BAD_REQUEST` |
 | `/api/merge` | POST | yes | yes | `into`, `from`, `token`, `choices` | the merge commit id | either side moved since the preview → `E_STALE_HEAD` (with a message naming who, and `details`); a decision still missing → `E_MERGE_PRECONDITION` |
 | `/api/restore` | POST | yes | yes | `branch`, `commitId` | new commit id, name | seals before restoring → `E_STALE_HEAD` possible |
-| `/api/import` | POST | yes | yes | `branch`, `otioJson` | commit id, skipped items | seals first → `E_STALE_HEAD`; import failure writes nothing |
+| `/api/import` | POST | yes | yes | `branch`, `otioJson` | commit id, skipped items | seals first → `E_STALE_HEAD`; import failure writes nothing. API only — nothing in the interface calls it (see PRD Scope) |
 | `/api/export` | POST | yes (may seal) | yes | `branch` | OTIO JSON, commit id | seals first → `E_STALE_HEAD` possible |
-| `/api/demo/reset` | POST | yes (discard) | yes | (none) | `{ done: true }` | deletes and reseeds the project's rows |
+| `/api/project/new` | POST | yes (discard) | yes | `preset` | the preset, `main`, the new head and its timeline | deletes and reseeds the project's rows from the named preset; an unknown preset deletes nothing |
+| `/api/presets` | GET | no | no | (none) | each preset's id, name, clip count and duration | n/a — read-only |
+| `/api/demo/reset` | POST | yes (discard) | yes | (none) | `{ done: true }` | a thin alias for `project/new` with the default preset. API only — no interface calls it |
 
 Every mutating route requires a `ticket` field, replayed through `runWithTicket`: the same ticket on the same endpoint returns the stored result instead of re-applying the change; the same ticket reused on a *different* endpoint is rejected with `E_TICKET_REUSED`.
 

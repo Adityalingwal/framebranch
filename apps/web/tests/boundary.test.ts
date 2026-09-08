@@ -1,4 +1,4 @@
-// API route tests: POST restore/import/export/agent-simulate/demo-reset and GET diff.
+// API route tests: POST restore/import/export/agent-run/demo-reset and GET diff.
 // Real Postgres, route handlers called directly.
 import { asc, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
@@ -8,8 +8,16 @@ import type { ImportWarning, Timeline } from "@framebranch/engine";
 
 import type { DiffResponse as DiffData } from "../src/app/api/diff/route";
 
-import { commits, ops, projects, snapshots } from "../src/db/schema";
-import { POST as postAgent } from "../src/app/api/agent/simulate/route";
+import {
+  branches,
+  commits,
+  ops,
+  projectEvents,
+  projects,
+  snapshots,
+  workingState,
+} from "../src/db/schema";
+import { POST as postAgentRun } from "../src/app/api/agent/run/route";
 import { POST as postBranch } from "../src/app/api/branch/route";
 import { POST as postCommit } from "../src/app/api/commit/route";
 import { POST as postDemoReset } from "../src/app/api/demo/reset/route";
@@ -466,46 +474,33 @@ describe("C4 (4) — POST export", () => {
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// POST agent/simulate
+// POST agent/run — the boundary properties. The registry, the derived run
+// state and the 3x2 preset matrix live in `agent.test.ts`.
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-describe("C4 (4) — POST agent/simulate", () => {
+describe("C4 (4) / I1 patch (a) — POST agent/run", () => {
   /**
-   * The agent script places clip D at 0:20 on the video track (frames 480-600 @
-   * 24fps). The fixture fix shortened clip C to 18s-20s (frames
-   * 432-480) so the untouched fixture no longer overlaps D there — the
-   * choreography's step 2 (branch "tighten-intro" off pristine main, no
-   * other edits before the agent runs) now matches the script
-   * as-is, with no workaround needed.
+   * The agent script places clip D at 0:20 on the video track (frames
+   * 480-600 @ 24fps). The demo fixture's clip C ends at frame 480, so a
+   * pristine main leaves that stretch free and the script runs as-is.
+   *
+   * I1 patch (a): the run makes its OWN cut off main — nothing is created
+   * by hand first.
    */
-  async function branchForAgentRun(s: Session): Promise<string> {
-    const name = "tighten-intro";
-    expectOk(
-      await post(
-        postBranch,
-        "/api/branch",
-        { name, from: "main", ticket: ticket() },
-        s,
-      ),
-    );
-    return name;
-  }
-
-  it("an agent run is ONE commit whose ops all carry actor 'agent'", async () => {
+  it("an agent run is ONE commit on its own cut whose ops all carry actor 'agent'", async () => {
     const s = await session();
-    const branch = await branchForAgentRun(s);
     const before = await commitCount();
 
     const data = expectOk(
       await post(
-        postAgent,
-        "/api/agent/simulate",
-        { branch, script: "tighten-intro", ticket: ticket() },
+        postAgentRun,
+        "/api/agent/run",
+        { preset: "tighten-intro", ticket: ticket() },
         s,
       ),
-    ) as { commitId: string; name: string; actor: string; opsApplied: number };
+    ) as { cut: string; commitId: string; name: string; opsApplied: number };
 
-    expect(data.actor).toBe("agent");
+    expect(data.cut).toBe("agent-tighten-intro");
     // C1(3): the card is named after the preset's display name.
     expect(data.name).toBe("Tighten intro");
     expect(data.opsApplied).toBe(4); // C8: volume, caption delete, add D, B trim
@@ -515,6 +510,8 @@ describe("C4 (4) — POST agent/simulate", () => {
       await getDb().select().from(commits).where(eq(commits.id, data.commitId))
     )[0];
     expect(row.actor).toBe("agent");
+    expect(row.kind).toBe("agent-run");
+    expect(row.actorName).toBe("Agent");
 
     const opRows = await getDb()
       .select()
@@ -526,71 +523,98 @@ describe("C4 (4) — POST agent/simulate", () => {
     expect(opRows.map((op) => op.seq)).toEqual([0, 1, 2, 3]);
 
     // The edits are really there: A's volume is the agent's 40 and the
-    // caption is gone.
-    const after = await view(s, branch);
+    // caption is gone — on the AGENT's cut, and only there.
+    const after = await view(s, data.cut);
     expect(volumeOf(after.timeline, "clip-1")).toBe(40);
     expect(after.timeline.tracks[2].clips).toHaveLength(0);
+
+    const untouched = await view(s, "main");
+    expect(volumeOf(untouched.timeline, "clip-1")).not.toBe(40);
+    expect(untouched.timeline.tracks[2].clips).toHaveLength(1);
   });
 
   /**
-   * Independent of the fixture layout: pre-shrinks B (clip-2) to 1s so the
-   * script's OWN 4th command — its -2s end-trim on B — pushes B's duration
-   * negative. The script's first three commands (volume, caption delete,
-   * add D) still succeed against this branch's timeline and land in the
-   * in-memory `applied` list before the 4th one fails, so this still proves
-   * a part-way failure writes nothing (same shape as the original test).
+   * Independent of the fixture layout: pre-shrinks B (clip-2) on MAIN to 1s
+   * so the script's OWN 4th command — its -2s end-trim on B — pushes B's
+   * duration negative. The first three commands succeed against the forked
+   * timeline and land in the in-memory `applied` list before the 4th fails,
+   * so this proves a part-way failure writes nothing — and, new in B4a,
+   * that the cut the run created is rolled back with it.
    */
-  async function branchWithShortB(s: Session): Promise<string> {
-    const name = "short-b";
-    expectOk(
-      await post(
-        postBranch,
-        "/api/branch",
-        { name, from: "main", ticket: ticket() },
-        s,
-      ),
-    );
-    await edit(s, name, 0, {
+  it("a script that fails part-way writes NOTHING at all — not even its cut", async () => {
+    const s = await session();
+    await edit(s, "main", 0, {
       op: "trim",
       clipId: "clip-2",
       edge: "end",
       delta: { value: -168, rate: 24 }, // 192 frames -> 24 frames (1s)
     });
-    await save(s, name);
-    return name;
-  }
+    await save(s, "main");
 
-  it("a script that fails part-way writes NOTHING at all", async () => {
-    const s = await session();
-    const branch = await branchWithShortB(s);
+    // Everything the transaction touches, counted before the failure: a
+    // leaked working row or a stray event would be a half-written run that
+    // the commit/op counts alone cannot see (Codex GAP 1).
+    const workingRows = async () =>
+      (await getDb().select().from(workingState)).sort((a, b) =>
+        a.branchId.localeCompare(b.branchId),
+      );
+    const mainId = (
+      await getDb().select().from(branches).where(eq(branches.name, "main"))
+    )[0].id;
     const before = await commitCount();
     const beforeOpsCount = (await getDb().select().from(ops)).length;
-    const beforeTimeline = (await view(s, branch)).timeline;
+    const beforeBranchCount = (await getDb().select().from(branches)).length;
+    const beforeWorking = await workingRows();
+    const beforeMainRev = beforeWorking.find(
+      (row) => row.branchId === mainId,
+    )!.workingRev;
+    const beforeEventCount = (await getDb().select().from(projectEvents))
+      .length;
+    const beforeTimeline = (await view(s, "main")).timeline;
 
-    // B is down to 1s; the script's own -2s end-trim on B (its 4th and
-    // last command) would leave it at -1s — nonpositive duration.
     const call = await post(
-      postAgent,
-      "/api/agent/simulate",
-      { branch, script: "tighten-intro", ticket: ticket() },
+      postAgentRun,
+      "/api/agent/run",
+      { preset: "tighten-intro", ticket: ticket() },
       s,
     );
     expect(expectError(call).code).toBe("E_INVALID_RANGE");
 
     expect(await commitCount()).toBe(before);
     expect(await getDb().select().from(ops)).toHaveLength(beforeOpsCount);
-    expect((await view(s, branch)).timeline).toEqual(beforeTimeline);
+    expect(await getDb().select().from(branches)).toHaveLength(
+      beforeBranchCount,
+    );
+    // Every working row byte-identical — main's working_rev included, so a
+    // rolled-back CAS bump would show up here too.
+    const afterWorking = await workingRows();
+    expect(afterWorking).toEqual(beforeWorking);
+    expect(afterWorking.find((row) => row.branchId === mainId)!.workingRev).toBe(
+      beforeMainRev,
+    );
+    // And NOTHING was appended to the event feed: no `branch-created`, no
+    // `commit-created`, no event of any other kind.
+    expect(await getDb().select().from(projectEvents)).toHaveLength(
+      beforeEventCount,
+    );
+    expect((await view(s, "main")).timeline).toEqual(beforeTimeline);
+    // No orphan cut: the preset must not read `Done` for a run that never
+    // happened (the panel derives that from this row existing).
+    const rows = await getDb().select().from(branches);
+    expect(rows.map((row) => row.name)).toEqual(["main"]);
   });
 
-  it("E_BAD_REQUEST: an unknown script name never touches the branch", async () => {
+  it("E_BAD_REQUEST: an unknown preset id never touches the project", async () => {
     const s = await session();
     const call = await post(
-      postAgent,
-      "/api/agent/simulate",
-      { branch: "main", script: "no-such-script", ticket: ticket() },
+      postAgentRun,
+      "/api/agent/run",
+      { preset: "no-such-preset", ticket: ticket() },
       s,
     );
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
+    const rows = await getDb().select().from(branches);
+    expect(rows.map((row) => row.name)).toEqual(["main"]);
   });
 });
 

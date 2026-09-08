@@ -17,14 +17,14 @@
  *     reusing the SAME ticket for as long as the user keeps pressing it.
  */
 
-import type {
-  Command,
-  ImportWarning,
-  MergeChoice,
-  Timeline,
-} from "@framebranch/engine";
+import type { Command, MergeChoice, Timeline } from "@framebranch/engine";
 // Type-only imports: erased at build time, so no server code reaches the
 // browser bundle — but the client and the route share ONE shape definition.
+import type {
+  AgentPreset,
+  AgentPresetsData,
+  AgentRun,
+} from "../../app/api/agent/presets/route";
 import type { BranchListItem } from "../../app/api/branch/route";
 import type { DiffResponse } from "../../app/api/diff/route";
 import type {
@@ -32,6 +32,7 @@ import type {
   BringInToken,
 } from "../../app/api/merge/preview/route";
 import type { HistoryItem } from "../../app/api/history/route";
+import type { PresetSummary } from "../../server/presets";
 import type { TimelineAtResponse } from "../../app/api/timeline/route";
 import { getEditorName } from "../state/editor-name";
 
@@ -293,6 +294,20 @@ export function getBranches(): Promise<BranchesData> {
   return get<BranchesData>("/api/branch");
 }
 
+/** I1 — the Agent panel's whole data source: presets + their run state. */
+export type { AgentPreset, AgentPresetsData, AgentRun };
+
+export function getAgentPresets(): Promise<AgentPresetsData> {
+  return get<AgentPresetsData>("/api/agent/presets");
+}
+
+/** G1 — the New project picker's rows (copy #46/#47). */
+export type PresetsData = { presets: PresetSummary[] };
+
+export function getPresets(): Promise<PresetsData> {
+  return get<PresetsData>("/api/presets");
+}
+
 export function getHistory(cut: string): Promise<HistoryData> {
   return get<HistoryData>(`/api/history?cut=${encodeURIComponent(cut)}`);
 }
@@ -363,13 +378,31 @@ export function postRestore(
   );
 }
 
-export function postDemoReset(hooks: RetryHooks): Promise<{ done: true }> {
+/**
+ * G1 — "New project": the open project is closed and re-seeded from the
+ * chosen preset. (`POST /api/demo/reset` is still there, but no UI calls
+ * it any more — the picker's first row IS the default demo.)
+ */
+export function postProjectNew(
+  input: { preset: string },
+  hooks: RetryHooks,
+): Promise<{
+  preset: { id: string; name: string };
+  branch: string;
+  head: string;
+  timeline: Timeline;
+  workingRev: number;
+  pendingCount: number;
+}> {
   const ticket = newTicket();
-  return runMutation(() => postJson("/api/demo/reset", { ticket }), hooks);
+  return runMutation(
+    () => postJson("/api/project/new", { ...input, ticket }),
+    hooks,
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Editing, merge, agent, import/export
+// Editing, bring-in, agent, export
 // ---------------------------------------------------------------------------
 
 /**
@@ -428,29 +461,25 @@ export function postBringIn(
   );
 }
 
-export function postAgentSimulate(
-  input: { branch: string; script: string },
+/**
+ * I1 patch (a) — one click. The server picks the cut (`agent-‹preset›`)
+ * and creates it; the browser sends nothing but the preset id.
+ *
+ * `POST /api/import` is deliberately absent from this file: import is
+ * API-only now (G1), so no UI caller remains.
+ */
+export function postAgentRun(
+  input: { preset: string },
   hooks: RetryHooks,
 ): Promise<{
+  cut: string;
   commitId: string;
   name: string;
-  actor: "agent";
   opsApplied: number;
 }> {
   const ticket = newTicket();
   return runMutation(
-    () => postJson("/api/agent/simulate", { ...input, ticket }),
-    hooks,
-  );
-}
-
-export function postImport(
-  input: { branch: string; otioJson: unknown },
-  hooks: RetryHooks,
-): Promise<{ commitId: string; skippedItems: ImportWarning[] }> {
-  const ticket = newTicket();
-  return runMutation(
-    () => postJson("/api/import", { ...input, ticket }),
+    () => postJson("/api/agent/run", { ...input, ticket }),
     hooks,
   );
 }

@@ -3,9 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiClientError,
+  EDITOR_NAME_HEADER,
+  getAgentPresets,
+  getPresets,
   mutationErrorMessage,
+  postAgentRun,
   postBranch,
   postCommit,
+  postProjectNew,
 } from "../src/lib/data/api-client";
 import type { RetryHooks } from "../src/lib/data/api-client";
 
@@ -35,6 +40,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+  // The editor-name cases stub `window`; nothing may leak into the next test.
+  vi.unstubAllGlobals();
 });
 
 describe("api-client — envelope + error mapping", () => {
@@ -186,5 +193,138 @@ describe("api-client — C6 retry ladder", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2); // no further retries after a real answer
     expect(hooks.onConnectionLost).not.toHaveBeenCalled();
+  });
+});
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+// B4a — the four functions I1/G1 added: URL, method, body shape, and the
+// typed answer coming back out. The envelope/retry behaviour above is
+// shared by every call; these pin down what each one actually sends.
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function callOf(fetchMock: ReturnType<typeof vi.fn>): {
+  url: string;
+  init: RequestInit;
+} {
+  const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+  return { url, init };
+}
+
+function bodyOf(init: RequestInit): Record<string, unknown> {
+  return JSON.parse(init.body as string) as Record<string, unknown>;
+}
+
+function headerOf(init: RequestInit, name: string): string | undefined {
+  return (init.headers as Record<string, string> | undefined)?.[name];
+}
+
+/** F2a — the tab has been named, so mutations carry the header. */
+function withEditorName(name: string): void {
+  vi.stubGlobal("window", {
+    sessionStorage: { getItem: () => name },
+  });
+}
+
+describe("api-client — the Agent + project endpoints", () => {
+  it("getAgentPresets: GET /api/agent/presets, and the presets come back typed", async () => {
+    const data = {
+      presets: [
+        {
+          id: "tighten-intro",
+          name: "Tighten intro",
+          description: "Trims the opening…",
+          run: null,
+        },
+      ],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getAgentPresets()).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/agent/presets");
+    expect(init.method).toBe("GET");
+    expect(init.body).toBeUndefined(); // a read sends nothing
+  });
+
+  it("getPresets: GET /api/presets, the picker's rows straight through", async () => {
+    const data = {
+      presets: [{ id: "travel-vlog", name: "Travel vlog", description: "…" }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(getPresets()).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/presets");
+    expect(init.method).toBe("GET");
+  });
+
+  it("postAgentRun: POST /api/agent/run, body { preset, ticket }, with the editor's name", async () => {
+    withEditorName("Priya");
+    const data = {
+      cut: "agent-tighten-intro",
+      commitId: "c9",
+      name: "Tighten intro",
+      opsApplied: 4,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      postAgentRun({ preset: "tighten-intro" }, noopHooks()),
+    ).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/agent/run");
+    expect(init.method).toBe("POST");
+    // I1 patch (a): the browser sends the preset id and nothing else — the
+    // server picks the cut.
+    const body = bodyOf(init);
+    expect(Object.keys(body).sort()).toEqual(["preset", "ticket"]);
+    expect(body.preset).toBe("tighten-intro");
+    expect(body.ticket).toMatch(UUID);
+    expect(headerOf(init, EDITOR_NAME_HEADER)).toBe("Priya");
+  });
+
+  it("postProjectNew: POST /api/project/new, body { preset, ticket }; no name, no header", async () => {
+    const data = {
+      preset: { id: "thirty-second-ad", name: "30s ad" },
+      branch: "main",
+      head: "c1",
+      timeline: { id: "t" },
+      workingRev: 0,
+      pendingCount: 0,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ ok: true, data }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      postProjectNew({ preset: "thirty-second-ad" }, noopHooks()),
+    ).resolves.toEqual(data);
+
+    const { url, init } = callOf(fetchMock);
+    expect(url).toBe("/api/project/new");
+    expect(init.method).toBe("POST");
+    const body = bodyOf(init);
+    expect(Object.keys(body).sort()).toEqual(["preset", "ticket"]);
+    expect(body.preset).toBe("thirty-second-ad");
+    expect(body.ticket).toMatch(UUID);
+    // This tab has never been named: the header is simply absent (B0
+    // leniency — the server attributes the work to `Editor`).
+    expect(headerOf(init, EDITOR_NAME_HEADER)).toBeUndefined();
   });
 });

@@ -6,8 +6,8 @@
  * Invalidation rules:
  *  - after a commit          → invalidate timeline + refreshBranches.
  *  - after branch create/switch → invalidate timelines + refreshBranches.
- *  - after restore/merge/import/agent/export → same.
- *  - after demo reset / new project → invalidate everything.
+ *  - after restore/bring-in/agent/export → same.
+ *  - after new project → invalidate everything.
  *
  * A1a/A1b: `refreshBranches` = the branch list (heads) AND every cut's
  * History — the two must move together or the new head has no card.
@@ -34,13 +34,18 @@ import { queryKeys } from "./query-keys";
 import { showToast } from "../state/toast-status";
 
 /**
- * A1a patch (a): called after create / switch / commit / merge / restore /
- * import / agent / reset — anything that can move a head or add a cut.
+ * A1a patch (a): called after create / switch / commit / bring-in /
+ * restore / agent / export — anything that can move a head or add a cut.
+ *
+ * I1 patch (b): the Agent panel's run state is DERIVED from the cut list
+ * (there is no `agent_runs` table), so it belongs to exactly this set —
+ * whatever can move a cut or its head can move a preset's `Done`.
  */
 export function refreshBranches(queryClient: QueryClient): void {
   queryClient.invalidateQueries({ queryKey: queryKeys.branches() });
   queryClient.invalidateQueries({ queryKey: queryKeys.historyAll() });
   queryClient.invalidateQueries({ queryKey: queryKeys.diffAll() });
+  queryClient.invalidateQueries({ queryKey: queryKeys.agentPresets() });
 }
 
 function onMutationError(error: unknown): void {
@@ -98,6 +103,36 @@ export function useHistoryQuery(cut: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.history(cut),
     queryFn: () => api.getHistory(cut),
+    enabled,
+  });
+}
+
+/**
+ * I1 — the Agent panel's presets and their run state. A1a patch (c) applies
+ * with extra force here: the Agent panel is the DEFAULT view, so this query
+ * is live at boot and a cookie-less race with the timeline GET would mint a
+ * second project. Shell gates it on `timeline.isSuccess`, like the cut list.
+ */
+export function useAgentPresetsQuery(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.agentPresets(),
+    queryFn: () => api.getAgentPresets(),
+    enabled,
+  });
+}
+
+/** What `useAgentPresetsQuery` hands the Agent panel. */
+export type AgentPresetsQuery = ReturnType<typeof useAgentPresetsQuery>;
+
+/**
+ * G1 — the New project picker's rows. Enabled ONLY while the dialog is
+ * open: the fixtures are read and imported server-side per request, and
+ * nothing at boot needs them.
+ */
+export function usePresetsQuery(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.presets(),
+    queryFn: () => api.getPresets(),
     enabled,
   });
 }
@@ -192,10 +227,15 @@ export function useRestoreMutation(branch: string) {
   });
 }
 
-export function useDemoResetMutation() {
+/**
+ * G1 — "New project". The open project is replaced wholesale, so EVERY
+ * query is invalidated; nothing that was cached is about the new project.
+ */
+export function useNewProjectMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => api.postDemoReset(retryHooks),
+    mutationFn: (input: { preset: string }) =>
+      api.postProjectNew(input, retryHooks),
     onSuccess: () => {
       queryClient.invalidateQueries();
     },
@@ -352,41 +392,28 @@ export function useBringInMutation() {
 }
 
 // ---------------------------------------------------------------------------
-// Agent / import / export (all boundary/server-first).
+// Agent / export (both boundary/server-first). Import has no UI caller any
+// more (G1) — `POST /api/import` stays as an API.
 // ---------------------------------------------------------------------------
 
-export function useAgentSimulateMutation() {
+export function useAgentRunMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { branch: string; script: string }) =>
-      api.postAgentSimulate(input, retryHooks),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.timeline(variables.branch),
-      });
+    mutationFn: (input: { preset: string }) =>
+      api.postAgentRun(input, retryHooks),
+    onSuccess: (data) => {
+      // The cut the server just made, plus the cut list (which is where the
+      // preset's `Done` and the run-log come from) — and main, because a
+      // dirty main was sealed on the way in.
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeline(data.cut) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeline("main") });
       refreshBranches(queryClient);
     },
     // An agent-run failure is all-or-nothing — one verb failing mid-script
-    // writes nothing at all. Show a fixed message rather than the per-code
-    // error switch, since "this one edit failed" reads differently from
-    // "the whole run was thrown away".
-    onError: () =>
-      showToast("Agent run failed — no changes were made.", "error"),
-  });
-}
-
-export function useImportMutation() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (input: { branch: string; otioJson: unknown }) =>
-      api.postImport(input, retryHooks),
-    onSuccess: (_data, variables) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.timeline(variables.branch),
-      });
-      refreshBranches(queryClient);
-    },
-    onError: onMutationError,
+    // writes nothing at all, not even the cut. Show a fixed message (#188)
+    // rather than the per-code error switch, since "this one edit failed"
+    // reads differently from "the whole run was thrown away".
+    onError: () => showToast("Agent run failed — nothing changed.", "error"),
   });
 }
 

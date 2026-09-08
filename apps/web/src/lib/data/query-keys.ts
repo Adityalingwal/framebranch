@@ -17,6 +17,14 @@ export const queryKeys = {
   timelineAt: (cut: string, commitId: string) =>
     ["timeline-at", cut, commitId] as const,
   branches: () => ["branches"] as const,
+  /**
+   * I1 patch (b) — the Agent panel's presets AND their run state. The run
+   * state is DERIVED from the cut list, so `refreshBranches` invalidates
+   * this too: anything that moves a cut or its head can move it.
+   */
+  agentPresets: () => ["agent-presets"] as const,
+  /** G1 — the New project picker's rows; fetched only while it is open. */
+  presets: () => ["presets"] as const,
   historyAll: () => ["history"] as const,
   history: (cut: string) => ["history", cut] as const,
   diffAll: (cut?: string) =>

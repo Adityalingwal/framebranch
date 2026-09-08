@@ -8,13 +8,12 @@ import type {
   Command,
   MergeChoice,
   PropertyValue,
-  Track,
 } from "@framebranch/engine";
 import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import type { DiffRow } from "../server/diff-rows";
 import { ApiClientError } from "../lib/data/api-client";
-import type { BringInToken } from "../lib/data/api-client";
+import type { AgentRun, BringInToken } from "../lib/data/api-client";
 import { queryKeys } from "../lib/data/query-keys";
 import {
   choicesKeyFor,
@@ -26,10 +25,13 @@ import {
 import type { ConflictLine } from "../server/conflict-cards";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { quoted } from "../lib/format";
+import { createPendingDoorSlot } from "../lib/pending-door";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
 import {
+  useAgentPresetsQuery,
+  useAgentRunMutation,
   useBranchesQuery,
   useBringInMutation,
   useBringInPreviewQuery,
@@ -38,6 +40,7 @@ import {
   useHistoryQuery,
   useOpsMutation,
   useRestoreMutation,
+  useSwitchBranchMutation,
   useTimelineAtQuery,
   useTimelineQuery,
 } from "../lib/data/hooks";
@@ -52,7 +55,7 @@ import { RightPanel, type PanelView } from "./RightPanel/RightPanel";
 import { TimelineView } from "./Timeline/TimelineView";
 import { TopBar } from "./TopBar";
 
-const VALID_VIEWS: PanelView[] = ["changes", "history"];
+const VALID_VIEWS: PanelView[] = ["agent", "changes", "history"];
 const WORKSPACE_LAYOUT_KEY = "framebranch.workspace-layout.v1";
 const DEFAULT_WORKSPACE_LAYOUT = { inspectorWidth: 320, timelineHeight: 330 };
 const MIN_INSPECTOR_WIDTH = 260;
@@ -61,10 +64,13 @@ const MIN_TIMELINE_HEIGHT = 250;
 const MIN_PREVIEW_WIDTH = 420;
 const MIN_PREVIEW_HEIGHT = 220;
 
+/**
+ * C6 — the right panel's DEFAULT is the Agent panel, so an absent or
+ * unrecognised `?view=` opens Agent. That includes B3's old `?view=merge`
+ * link: it now lands on Agent rather than on History.
+ */
 function parseView(raw: string | null): PanelView {
-  return VALID_VIEWS.includes(raw as PanelView)
-    ? (raw as PanelView)
-    : "history";
+  return VALID_VIEWS.includes(raw as PanelView) ? (raw as PanelView) : "agent";
 }
 
 export function Shell() {
@@ -123,6 +129,19 @@ export function Shell() {
     cut: string;
     token: BringInToken | null;
   } | null>(null);
+  /**
+   * H1 PATCH — bumped when a NEW PROJECT is started while already standing
+   * on `main`: `currentBranch` does not change then, so the timeline's own
+   * eye/mute reset (which keys on the cut) would not fire.
+   */
+  const [timelineResetToken, setTimelineResetToken] = useState(0);
+  /**
+   * The parked Agent door + its request token (`lib/pending-door.ts`). A
+   * lazy `useState` initialiser rather than a ref, because the slot must be
+   * created exactly ONCE for the life of the Shell: a ref initialised inline
+   * would build (and throw away) a new slot on every render.
+   */
+  const [doors] = useState(createPendingDoorSlot);
   const workspaceRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
@@ -154,6 +173,27 @@ export function Shell() {
   // A1a patch (c): History is Shell-owned now, so it needs the same
   // first-load gate as the branch list (two cookie-less GETs = two projects).
   const history = useHistoryQuery(currentBranch, timeline.isSuccess);
+  // A1a patch (c) again, with more force: the Agent panel is the DEFAULT
+  // view, so this query is live at boot — without the gate it would race
+  // the first timeline GET cookie-less and mint a second project.
+  const agentPresets = useAgentPresetsQuery(timeline.isSuccess);
+  const agentRun = useAgentRunMutation();
+  const switchBranch = useSwitchBranchMutation();
+
+  /**
+   * B4a fix 1(a) — the ONE "the cut is changing" flag, and the reason it is
+   * not `editingPaused`: that flag means "editing is locked" (View mode /
+   * Compare / offline) and a cut switch is none of those.
+   *
+   * It covers Shell's OWN branch-switch mutation — `TopBar` has a separate
+   * `useSwitchBranchMutation` whose `busy` cannot see this one, which is
+   * exactly how a second navigation could start while the first was still in
+   * flight — and an in-flight agent run, which creates a cut and can seal
+   * main. While either is on, every control that moves the editor to another
+   * cut (the Cut menu, `Bring in ▾`, the Agent panel's `Run` / `View` /
+   * `Bring into main`) is off.
+   */
+  const cutSwitching = switchBranch.isPending || agentRun.isPending;
 
   const cuts = useMemo(
     () => branches.data?.branches ?? [],
@@ -601,6 +641,21 @@ export function Shell() {
     setRestoreOpen(false);
   }, []);
 
+  /**
+   * B4a fix 1(b) — the Cut menu's own switch (and its `New cut…`): a manual
+   * cut change is a NEWER navigation intent than any parked door, so the
+   * door goes and its token is burned. `switchToBranch` itself must not do
+   * this — the door's own `onSuccess` calls it, and clearing there would
+   * throw away the door on the way in.
+   */
+  const handleCutChanged = useCallback(
+    (branch: string) => {
+      doors.clear();
+      switchToBranch(branch);
+    },
+    [doors, switchToBranch],
+  );
+
   // A1a patch (e): the cut you are standing on stopped existing (a demo
   // reset elsewhere, a project rebuilt) → go back to `main`. Only once the
   // list has settled, so a cut created a moment ago is not mistaken for a
@@ -617,16 +672,143 @@ export function Shell() {
     switchToBranch,
   ]);
 
-  const resetToFreshDemo = useCallback(() => {
+  /**
+   * G1 — a new project has been seeded. Everything that names something in
+   * the OLD project has to go: the cut, the selection, the playhead, the
+   * Compare pair, any Bring-in preview and (H1 PATCH) the timeline's
+   * eye/mute sets. The view goes back to Agent — a fresh project has run no
+   * preset, so that is where there is something to do.
+   */
+  const handleNewProject = useCallback(() => {
     setCurrentBranch("main");
     setSelectedClipId(null);
     setPlayheadFrame(0);
     setViewing(null);
     setRestoreOpen(false);
     // Already on `main` → the cut-change effect would not fire, and the
-    // pair would keep pointing at commits the reset just deleted.
+    // pair would keep pointing at commits the new project just deleted.
     setComparePair(null);
-  }, []);
+    setBringIn(null);
+    doors.clear();
+    setTimelineResetToken((token) => token + 1);
+    setView("agent");
+  }, [doors, setView]);
+
+  /**
+   * I1(3)/(4) — apply a parked door once the cut switch has actually
+   * landed. Declared AFTER the `currentBranch` reset effects and the
+   * default-pair effect, so what this sets is what survives the render.
+   *
+   * A Compare door waits for the new cut's History too: effect (i-b) drops
+   * any pair naming a commit that is not on the settled chain, so setting
+   * one before the chain arrives would be undone by it.
+   */
+  useEffect(() => {
+    const door = doors.peek();
+    if (door === null || door.target !== currentBranch) return;
+    if (door.kind === "compare") {
+      if (!history.isSuccess || history.isFetching) return;
+      const known = (ref: string) =>
+        historyCommits.some((commit) => commit.commitId === ref);
+      if (!known(door.pair.a) || !known(door.pair.b)) return;
+      doors.clear();
+      openCompare(door.pair);
+    } else {
+      doors.clear();
+      openBringIn(door.from);
+    }
+  }, [
+    doors,
+    currentBranch,
+    history.isSuccess,
+    history.isFetching,
+    historyCommits,
+    openCompare,
+    openBringIn,
+  ]);
+
+  /** I1(5) — one run at a time; the panel disables every other button. */
+  const runPreset = useCallback(
+    (presetId: string) => {
+      agentRun.mutate(
+        { preset: presetId },
+        {
+          onSuccess: (data) =>
+            showToast(`Agent finished ${quoted(data.name)} on Cut: ${data.cut}.`),
+        },
+      );
+    },
+    [agentRun],
+  );
+
+  /**
+   * I1(3) — `View` a run: stand on the agent's cut and open Compare on the
+   * run's OWN before and after (the card's parent → the card). NOT the
+   * head→Now door: on a fresh agent cut that door is empty (`No changes`),
+   * which is the opposite of "show me what the agent did".
+   */
+  const viewRun = useCallback(
+    (run: AgentRun) => {
+      if (run.commitId === null || run.parentId === null) return;
+      const pair = { a: run.parentId, b: run.commitId };
+      if (currentBranch === run.cut) {
+        openCompare(pair);
+        return;
+      }
+      // Fix 1(b): the answer may come back after the user has asked for
+      // somewhere else. It navigates only if this door is still the door.
+      const seq = doors.park({ kind: "compare", target: run.cut, pair });
+      switchBranch.mutate(
+        { from: currentBranch, to: run.cut },
+        {
+          onSuccess: () => {
+            if (!doors.isCurrent(seq)) return;
+            switchToBranch(run.cut);
+          },
+          onError: () => {
+            if (!doors.isCurrent(seq)) return;
+            doors.clear();
+          },
+        },
+      );
+    },
+    [currentBranch, doors, openCompare, switchBranch, switchToBranch],
+  );
+
+  /**
+   * I1(4) / lock (3) — `Bring into main` from anywhere: switch to main
+   * first (the same mutation the Cut menu runs, so a dirty cut auto-seals),
+   * then open the B3 preview for the agent's cut. One click; the top bar
+   * says `Cut: main` before the preview appears, so the landing's card
+   * lands in the History the user is looking at.
+   */
+  const bringRunIntoMain = useCallback(
+    (run: AgentRun) => {
+      if (currentBranch === "main") {
+        openBringIn(run.cut);
+        return;
+      }
+      const seq = doors.park({
+        kind: "bring-in",
+        target: "main",
+        from: run.cut,
+      });
+      switchBranch.mutate(
+        { from: currentBranch, to: "main" },
+        {
+          onSuccess: () => {
+            if (!doors.isCurrent(seq)) return;
+            switchToBranch("main");
+          },
+          onError: () => {
+            if (!doors.isCurrent(seq)) return;
+            doors.clear();
+          },
+        },
+      );
+    },
+    [currentBranch, doors, openBringIn, switchBranch, switchToBranch],
+  );
 
   /**
    * What the preview, the timeline and the inspector are looking at: the
@@ -691,8 +873,8 @@ export function Shell() {
   const emit = useCallback(
     (command: Command, options?: { onError?: () => void }) => {
       // ONE funnel: every edit verb (add/move/trim/slip/split/delete/
-      // ripple-delete/property/replaceTracks) comes through here, so this
-      // is the only place the read-only states have to be enforced.
+      // ripple-delete/property) comes through here, so this is the only
+      // place the read-only states have to be enforced.
       //
       // Compare first, and SILENTLY: the lanes are not an editing surface,
       // there is no copy-sheet string for "you can't edit here", and the
@@ -748,10 +930,6 @@ export function Shell() {
       emit({ op: "split", clipId, at: { value: atFrame, rate } });
     },
     [emit, rate],
-  );
-  const handleReplaceTracks = useCallback(
-    (tracks: Track[]) => emit({ op: "replaceTracks", tracks }),
-    [emit],
   );
   const handleDelete = useCallback(
     (clipId: string) => {
@@ -883,9 +1061,12 @@ export function Shell() {
         headCardName={headCard?.name ?? null}
         changesCount={changesCount}
         editingLocked={editingPaused}
+        // Fix 1(a): Shell's own switch (and a run) locks the cut controls
+        // here too — TopBar's `busy` only knows about TopBar's mutations.
+        cutSwitching={cutSwitching}
         comparing={compareOpen}
         onChangesClick={openChangesDoor}
-        onBranchChanged={switchToBranch}
+        onBranchChanged={handleCutChanged}
         onBringIn={openBringIn}
       />
       <div style={{ flex: 1, display: "flex", minHeight: 0, minWidth: 0 }}>
@@ -901,7 +1082,7 @@ export function Shell() {
           onViewChange={(next) =>
             next === "changes" ? openChangesDoor() : setView(next)
           }
-          onDemoReset={resetToFreshDemo}
+          onNewProject={handleNewProject}
         />
         <div
           ref={workspaceRef}
@@ -1023,8 +1204,16 @@ export function Shell() {
                   onCancelBringIn={() => setCancelBringInOpen(true)}
                   onStartAgain={restartBringIn}
                   onLineClick={handleLineClick}
-                  hasInspector={Boolean(selectedClip)}
-                  onCloseToInspector={() => setRightPanelMode("inspector")}
+                  agentPresets={agentPresets}
+                  runPending={
+                    agentRun.isPending
+                      ? (agentRun.variables?.preset ?? null)
+                      : null
+                  }
+                  cutSwitching={cutSwitching}
+                  onRunPreset={runPreset}
+                  onViewRun={viewRun}
+                  onBringRunIntoMain={bringRunIntoMain}
                 />
               ) : (
                 <ClipProperties
@@ -1208,7 +1397,8 @@ export function Shell() {
                 onSlip={handleSlip}
                 onSplit={handleSplit}
                 onAddClip={handleAddClip}
-                onReplaceTracks={handleReplaceTracks}
+                currentBranch={currentBranch}
+                resetToken={timelineResetToken}
                 editingLocked={editingPaused}
               />
             )}

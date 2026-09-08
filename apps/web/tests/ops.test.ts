@@ -216,6 +216,24 @@ describe("C4 (3) — POST ops", () => {
     expect(expectError(call).code).toBe("E_BAD_REQUEST");
   });
 
+  it("H1: `replaceTracks` left the web API — the door refuses it (E_BAD_REQUEST)", async () => {
+    const { session, view } = await seeded();
+    // The engine still exports the verb (public API); the WEB schema does
+    // not, so track management has no reachable path at all.
+    const call = await post(
+      postOps,
+      "/api/ops",
+      {
+        branch: "main",
+        workingRev: 0,
+        ticket: ticket(),
+        command: { op: "replaceTracks", tracks: view.timeline.tracks },
+      },
+      session,
+    );
+    expect(expectError(call).code).toBe("E_BAD_REQUEST");
+  });
+
   it("C4 (5): a well-formed command the ENGINE rejects keeps its own verb code, not E_BAD_REQUEST", async () => {
     const { session } = await seeded();
     // The body is valid in every schema sense — the clip simply is not there.

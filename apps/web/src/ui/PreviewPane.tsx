@@ -9,7 +9,6 @@ import {
   Play,
   SpeakerHigh,
   SpeakerSlash,
-  UploadSimple,
 } from "@phosphor-icons/react";
 
 import type { MediaRef } from "@framebranch/engine";
@@ -56,14 +55,11 @@ export function PreviewPane({
     if (variant === "compare") return <Frame />;
     return (
       <Frame>
-        <div
-          className="preview-empty-dropzone"
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault();
-            window.dispatchEvent(new Event("framebranch:open-import"));
-          }}
-        >
+        {/* G1 / copy #227 — the drop target and the `Import media` button
+            were a fiction: import only ever took an OTIO document, never
+            media, and it has left the UI entirely (the API stays). Nothing
+            listens for `framebranch:open-import` any more either. */}
+        <div className="preview-empty-placeholder">
           <div
             style={{
               width: 42,
@@ -80,31 +76,15 @@ export function PreviewPane({
           >
             <FilmStrip size={23} weight="duotone" aria-hidden />
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            <span
-              style={{
-                color: "var(--fb-text-body-2)",
-                fontSize: 13,
-                fontWeight: 500,
-              }}
-            >
-              Select a clip to start editing
-            </span>
-            <span style={{ color: "var(--fb-text-dim)", fontSize: 11.5 }}>
-              Choose a timeline clip or import project media
-            </span>
-          </div>
-          <button
-            type="button"
-            className="preview-import-button"
-            onClick={() =>
-              window.dispatchEvent(new Event("framebranch:open-import"))
-            }
+          <span
+            style={{
+              color: "var(--fb-text-body-2)",
+              fontSize: 13,
+              fontWeight: 500,
+            }}
           >
-            <UploadSimple size={14} weight="bold" aria-hidden />
-            Import media
-          </button>
-          <small>Drop a project file here</small>
+            Select a clip to start editing
+          </span>
         </div>
       </Frame>
     );

@@ -15,7 +15,7 @@ import type {
   Track,
 } from "@framebranch/engine";
 
-import { presentDiff, summaryName } from "../src/server/diff-rows";
+import { presentDiff, runSummary, summaryName } from "../src/server/diff-rows";
 import type { DiffRow } from "../src/server/diff-rows";
 
 const R = 24;
@@ -479,6 +479,42 @@ describe("presentDiff — names, timecode boundaries, empty diff", () => {
     );
     expect(long.length).toBeLessThanOrEqual(60);
     expect(long.endsWith("…")).toBe(true);
+  });
+
+  // I1 / copy #184 line 3 — `‹N› changes: ‹runSummary›`. Same verbs, same
+  // order, same distinct-clip counting; the `clip(s)` word goes, because
+  // the count already stands in front of it.
+  it("runSummary: the verb list without the leading `clip(s)`", () => {
+    const rows = (kinds: DiffRow["kind"][]): DiffRow[] =>
+      kinds.map((kind, i) => ({
+        key: `${i}`,
+        kind,
+        clipIds:
+          kind === "ripple" ? ["p", "q", "r", "s"] : [`c${i}`],
+        clipName: kind === "ripple" ? "4 clips" : `Clip ${i}`,
+        thumbnail: null,
+        text: "x",
+        where: "",
+        trackId: "v1",
+        trackName: "V1",
+        jump: { side: "after" as const, frame: 0, clipId: `c${i}` },
+        laneIds: { before: [`c${i}`], after: [`c${i}`] },
+      }));
+    expect(
+      runSummary(rows(["trimmed", "trimmed", "trimmed", "removed", "moved", "moved"])),
+    ).toBe("2 moved, 3 trimmed, 1 removed");
+    // A one-row run keeps the VERB form — never the clip-name sentence, so
+    // `1 change: 1 trimmed` reads like every other entry.
+    expect(runSummary(rows(["trimmed"]))).toBe("1 trimmed");
+    expect(runSummary(rows(["ripple"]))).toBe("4 moved along");
+    expect(runSummary([])).toBe("");
+    // distinct clips, not rows — two property rows on one clip is `1 changed`
+    const twoRowsOneClip = rows(["property", "property"]).map((r) => ({
+      ...r,
+      clipIds: ["same"],
+      clipName: "Welcome",
+    }));
+    expect(runSummary(twoRowsOneClip)).toBe("1 changed");
   });
 });
 

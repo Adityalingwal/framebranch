@@ -13,6 +13,8 @@ import type { Timeline } from "@framebranch/engine";
 
 import { branches, workingState } from "../db/schema";
 import { ApiError } from "./envelope";
+import { appendEvent } from "./events";
+import { INITIAL_WORKING_REV } from "./project";
 import { loadCommitTimeline, replayOps } from "./timeline";
 import type { PendingOp } from "./types";
 import type { Tx } from "./tx";
@@ -129,3 +131,57 @@ export async function loadBranchView(
 }
 
 export const isDirty = (view: BranchView): boolean => view.pending.length > 0;
+
+/**
+ * Create a cut at a head that already exists, plus its working row and the
+ * `branch-created` event. Two callers: `POST /api/branch` (a person makes a
+ * cut) and `POST /api/agent/run` (the agent makes its own, I1 patch (a)) —
+ * so the shape of a new cut is written once.
+ *
+ * `headCommitId` is passed IN rather than read off a `BranchView`, because
+ * both callers auto-seal the source first and the fork must start at the
+ * POST-seal head. The seal stays in the caller: only it knows whose name to
+ * put on the auto card.
+ *
+ * `createdBy` is the editor's typed name (F2a) — or `AGENT_ACTOR_NAME` for
+ * an agent cut, which is why it is a parameter and not read from the
+ * request here.
+ */
+export async function createBranch(
+  tx: Tx,
+  projectId: string,
+  input: {
+    name: string;
+    /** The cut this one forks from — recorded on the event. */
+    from: string;
+    headCommitId: string;
+    createdBy: string | null;
+  },
+): Promise<{ branch: BranchRow; headCommitId: string }> {
+  const [created] = await tx
+    .insert(branches)
+    .values({
+      projectId,
+      name: input.name,
+      headCommitId: input.headCommitId,
+      createdBy: input.createdBy,
+    })
+    .returning();
+
+  await tx.insert(workingState).values({
+    branchId: created.id,
+    projectId,
+    baseCommitId: input.headCommitId,
+    pendingOps: [],
+    workingRev: INITIAL_WORKING_REV,
+  });
+
+  await appendEvent(tx, projectId, "branch-created", {
+    branch: created.name,
+    from: input.from,
+    head: input.headCommitId,
+    createdBy: input.createdBy,
+  });
+
+  return { branch: created, headCommitId: input.headCommitId };
+}

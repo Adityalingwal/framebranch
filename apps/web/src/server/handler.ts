@@ -39,9 +39,10 @@ export type RequestContext = {
 export const EDITOR_NAME_HEADER = "X-Editor-Name";
 
 /**
- * B0 is lenient: a mutating request without the header (tests, curl,
- * agent/simulate today) is attributed to `Editor` instead of being
- * refused. The web client always sends the header.
+ * B0 is lenient: a mutating request without the header (tests, curl) is
+ * attributed to `Editor` instead of being refused. The web client always
+ * sends the header. An agent run is the one path that ignores it outright:
+ * its cut and its card are always `Agent`, whoever clicked.
  */
 export const FALLBACK_EDITOR_NAME = "Editor";
 

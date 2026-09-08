@@ -32,6 +32,7 @@ export function TopBar({
   headCardName,
   changesCount,
   editingLocked,
+  cutSwitching,
   comparing,
   onBranchChanged,
   onChangesClick,
@@ -44,6 +45,13 @@ export function TopBar({
   /** undefined = the diff has not answered yet: show the chip without a number. */
   changesCount: number | undefined;
   editingLocked: boolean;
+  /**
+   * B4a fix 1(a) — a cut change Shell started (the Agent panel's `View` /
+   * `Bring into main`) or an agent run is in flight. The mutation lives in
+   * Shell, so this bar's own `busy` cannot see it; without it a second
+   * navigation could start from here while the first was still in the air.
+   */
+  cutSwitching: boolean;
   /** B2 #36 — the Compare view is open: the chip's slot says `Comparing`. */
   comparing: boolean;
   onBranchChanged: (branch: string) => void;
@@ -59,7 +67,10 @@ export function TopBar({
   const switchBranch = useSwitchBranchMutation();
 
   const busy =
-    saveVersion.isPending || createBranch.isPending || switchBranch.isPending;
+    saveVersion.isPending ||
+    createBranch.isPending ||
+    switchBranch.isPending ||
+    cutSwitching;
 
   // E1: nothing changed since the head card → marking again would write a
   // duplicate card. While the count is still unknown the button stays off
