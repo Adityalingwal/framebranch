@@ -392,6 +392,37 @@ export function useBringInMutation() {
 }
 
 // ---------------------------------------------------------------------------
+// F3(4) — Ready for main. Marking changes nothing on main and locks
+// nothing: only the cut's own four `ready_*` columns move, so the cut list
+// (and with it the top-bar tag, the Bring-in dot and the badge) is the
+// whole refresh.
+//
+// The success toasts (#166 / #169) live in the CALLER, following the
+// convention `Marked "‹name›".` set in `TopBar.tsx` — no hook in this file
+// toasts on success. Errors go through `onMutationError` like everything
+// else; 400 and 404 are already in the friendly map, so B4b adds no code.
+// ---------------------------------------------------------------------------
+
+export function useReadyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { cut: string; note: string }) =>
+      api.postReady(input, retryHooks),
+    onSuccess: () => refreshBranches(queryClient),
+    onError: onMutationError,
+  });
+}
+
+export function useUnreadyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { cut: string }) => api.deleteReady(input, retryHooks),
+    onSuccess: () => refreshBranches(queryClient),
+    onError: onMutationError,
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Agent / export (both boundary/server-first). Import has no UI caller any
 // more (G1) — `POST /api/import` stays as an API.
 // ---------------------------------------------------------------------------

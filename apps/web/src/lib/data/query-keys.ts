@@ -40,12 +40,13 @@ export const queryKeys = {
     ["diff", cut, "compare", a, b] as const,
   /**
    * B3 §2.4 — the Bring-in preview. Deliberately NOT under `diffAll`: that
-   * prefix is invalidated after every edit (and B4's poller will invalidate
-   * it on every event), and a silent refetch here would mint a new token and
-   * drop the decisions the user is halfway through. Only a choice change and
-   * `Start again` refetch this.
+   * prefix is invalidated after every edit (and the `/api/sync` poller
+   * invalidates it on every event), and a silent refetch here would mint a
+   * new token and drop the decisions the user is halfway through. Only a
+   * choice change and `Start again` refetch this.
    *
-   * B4 carry-over: the poller must not touch `["bring-in"]`.
+   * B4b: the `/api/sync` poller must not touch `["bring-in"]` — it calls
+   * `refreshBranches` and nothing else (`sync-plan.ts`).
    */
   bringInAll: () => ["bring-in"] as const,
   bringIn: (cut: string, choicesKey: string) =>

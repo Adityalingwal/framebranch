@@ -26,7 +26,13 @@ import type {
   AgentRun,
 } from "../../app/api/agent/presets/route";
 import type { BranchListItem } from "../../app/api/branch/route";
+import type { ReadyResponse } from "../../app/api/branch/ready/route";
 import type { DiffResponse } from "../../app/api/diff/route";
+import type {
+  Peer,
+  SyncData as SyncResponse,
+  SyncEvent,
+} from "../../app/api/sync/route";
 import type {
   BringInPreview,
   BringInToken,
@@ -158,19 +164,41 @@ function get<T>(path: string): Promise<T> {
 /** F2a — the header every mutating request carries; reads never do. */
 export const EDITOR_NAME_HEADER = "X-Editor-Name";
 
-function postJson<T>(path: string, body: unknown): Promise<T> {
+/**
+ * The headers every body-carrying request sends. One place, so the name
+ * header can never disagree between verbs (B4b adds DELETE and the sync
+ * heartbeat to the two that existed).
+ */
+function jsonHeaders(): Record<string, string> {
   const editorName = getEditorName();
+  return {
+    "Content-Type": "application/json",
+    // The NameGate makes sure a name exists before the UI can mutate;
+    // when it somehow does not, the server attributes the work to
+    // `Editor` (B0 leniency) rather than refusing it.
+    ...(editorName ? { [EDITOR_NAME_HEADER]: editorName } : {}),
+  };
+}
+
+function sendJson<T>(method: string, path: string, body: unknown): Promise<T> {
   return fetchEnvelope<T>(path, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      // The NameGate makes sure a name exists before the UI can mutate;
-      // when it somehow does not, the server attributes the work to
-      // `Editor` (B0 leniency) rather than refusing it.
-      ...(editorName ? { [EDITOR_NAME_HEADER]: editorName } : {}),
-    },
+    method,
+    headers: jsonHeaders(),
     body: JSON.stringify(body),
   });
+}
+
+function postJson<T>(path: string, body: unknown): Promise<T> {
+  return sendJson<T>("POST", path, body);
+}
+
+/**
+ * F3(4) lock (1) — one resource, two verbs. `fetch` allows a body on
+ * DELETE and the Next route handler reads it the same way POST does, so
+ * un-marking carries `{ cut, ticket }` exactly like marking does.
+ */
+function deleteJson<T>(path: string, body: unknown): Promise<T> {
+  return sendJson<T>("DELETE", path, body);
 }
 
 // ---------------------------------------------------------------------------
@@ -482,6 +510,65 @@ export function postAgentRun(
     () => postJson("/api/agent/run", { ...input, ticket }),
     hooks,
   );
+}
+
+// ---------------------------------------------------------------------------
+// F3(4) — Ready for main. A MARK on the cut, never a lock on main.
+// ---------------------------------------------------------------------------
+
+export type ReadyData = ReadyResponse;
+
+/**
+ * Mark a cut Ready. Re-marking an already-Ready cut overwrites it (new
+ * note, new time, new rev) — that is a normal answer, not a conflict, so
+ * there is nothing to confirm and nothing to merge.
+ */
+export function postReady(
+  input: { cut: string; note: string },
+  hooks: RetryHooks,
+): Promise<ReadyData> {
+  const ticket = newTicket();
+  return runMutation(
+    () => postJson("/api/branch/ready", { ...input, ticket }),
+    hooks,
+  );
+}
+
+/** Un-mark. A cut that is not Ready answers `{ ready: null }` all the same. */
+export function deleteReady(
+  input: { cut: string },
+  hooks: RetryHooks,
+): Promise<ReadyData> {
+  const ticket = newTicket();
+  return runMutation(
+    () => deleteJson("/api/branch/ready", { ...input, ticket }),
+    hooks,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// J1 — the 3s heartbeat. The one POST that is NOT a mutation.
+// ---------------------------------------------------------------------------
+
+export type { Peer, SyncEvent };
+export type SyncData = SyncResponse;
+
+/**
+ * `POST /api/sync` — presence in, events + peers out.
+ *
+ * Deliberately outside `runMutation` and without a ticket: a heartbeat is
+ * not something anyone may replay, and a failed tick is simply the next
+ * tick's problem. It must never reach `reportConnectionLost` either — a
+ * lost poll is not a lost edit, and the C6 banner locks editing.
+ */
+export function postSync(body: {
+  tabId: string;
+  cut: string;
+  playheadFrame: number;
+  colourSeed: number;
+  cursor: number | null;
+}): Promise<SyncData> {
+  return postJson<SyncData>("/api/sync", body);
 }
 
 export function postExport(
