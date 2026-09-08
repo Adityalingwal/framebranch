@@ -1,11 +1,5 @@
-import type { Position, PropertyValue, TextStyle, Timeline } from "../types";
-import type {
-  DiffEntry,
-  DiffPropertyName,
-  DiffResult,
-  KeyedEntry,
-  Located,
-} from "./types";
+import type { Timeline } from "../types";
+import type { DiffResult, KeyedEntry, Located } from "./types";
 import {
   KHAANA_ORDER,
   clipKey,
@@ -30,76 +24,6 @@ export type {
   TrimmedEntry,
 } from "./types";
 
-const COUNT_WORDS = [
-  "two",
-  "three",
-  "four",
-  "five",
-  "six",
-  "seven",
-  "eight",
-  "nine",
-  "ten",
-];
-
-function countWord(n: number): string {
-  return n >= 2 && n <= 10 ? COUNT_WORDS[n - 2] : String(n);
-}
-
-function nFrames(n: number): string {
-  return `${n} frame${n === 1 ? "" : "s"}`;
-}
-
-function fmtPropValue(property: DiffPropertyName, v: PropertyValue): string {
-  if (property === "position") {
-    const p = v as Position;
-    return `(${p.x}, ${p.y})`;
-  }
-  if (property === "textContent") return `"${String(v)}"`;
-  if (property === "textStyle") {
-    const s = v as TextStyle;
-    return `${s.font} ${s.size} ${s.color}`;
-  }
-  return String(v);
-}
-
-const PROPERTY_LABEL: Readonly<Record<DiffPropertyName, string>> = {
-  volume: "volume",
-  opacity: "opacity",
-  scale: "scale",
-  position: "position",
-  textContent: "text",
-  textStyle: "text style",
-};
-
-function renderEntry(e: DiffEntry): string {
-  switch (e.kind) {
-    case "moved":
-      return `Clip ${e.clipId} moved from frame ${e.fromStart} to frame ${e.toStart}`;
-    case "trimmed":
-      return `Clip ${e.clipId} ${e.change} by ${nFrames(e.frames)} at the ${e.edge}`;
-    case "slipped":
-      return `Clip ${e.clipId} slipped: source window moved from ${e.fromSourceStart} to ${e.toSourceStart}`;
-    case "propertyChanged":
-      return `Clip ${e.clipId} ${PROPERTY_LABEL[e.property]} changed: ${fmtPropValue(e.property, e.before)} → ${fmtPropValue(e.property, e.after)}`;
-    case "added":
-      return `Clip ${e.clipId} added at frame ${e.start} (${nFrames(e.duration)} long)`;
-    case "removed":
-      return `Clip ${e.clipId} removed`;
-    case "split":
-      return `Clip ${e.clipId} split into ${countWord(e.cuts.length + 1)} at ${e.cuts.join(", ")}`;
-    case "rawChanged": {
-      const subject =
-        e.scope === "timeline"
-          ? "Timeline"
-          : e.scope === "track"
-            ? `Track ${e.trackId}`
-            : `Clip ${e.clipId}`;
-      return `${subject} changed: ${e.field} ${e.before} → ${e.after}`;
-    }
-  }
-}
-
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // Public API #2 of 7 — computeDiff
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -107,7 +31,7 @@ function renderEntry(e: DiffEntry): string {
 /**
  * Compute the deterministic semantic diff of two timelines: what changed
  * going from `a` (before) to `b` (after). Returns the khaana-level
- * machine entries plus their rendered English sentences (1:1).
+ * machine entries.
  * diff(A, A) is empty (PRD invariant).
  */
 export function computeDiff(a: Timeline, b: Timeline): DiffResult {
@@ -239,8 +163,7 @@ export function computeDiff(a: Timeline, b: Timeline): DiffResult {
     });
   }
 
-  // ORDER + RENDER.
+  // ORDER.
   keyed.sort((x, y) => cmpKey(x.key, y.key));
-  const entries = keyed.map((k) => k.entry);
-  return { entries, sentences: entries.map(renderEntry) };
+  return { entries: keyed.map((k) => k.entry) };
 }

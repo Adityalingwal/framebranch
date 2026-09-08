@@ -892,7 +892,7 @@ function runCase(index: number, rootSeed = masterSeed): void {
     ["theirs", theirs],
   ] as const) {
     const selfDiff = computeDiff(timeline, timeline);
-    if (selfDiff.entries.length !== 0 || selfDiff.sentences.length !== 0) {
+    if (selfDiff.entries.length !== 0) {
       throw new Error(`${label}: diff(A, A) was not empty`);
     }
   }

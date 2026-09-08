@@ -108,12 +108,15 @@ export type DiffEntry =
   | RawChangedEntry;
 
 /**
- * computeDiff result: parallel arrays — sentences[i] is rendered from
- * entries[i] (strict 1:1; the GET-diff endpoint serves `sentences`).
+ * computeDiff result: the machine entries, and nothing else.
+ *
+ * B5 (#129) — the rendered English `sentences` array is gone. Nothing read
+ * it: the web layer presents every change through `diff-rows.ts` (D4/C5
+ * Group 5), which speaks the product's own vocabulary, and a second,
+ * divergent rendering of the same facts was a liability, not an API.
  */
 export type DiffResult = {
   entries: DiffEntry[];
-  sentences: string[];
 };
 type AnyClip = Clip | TextClip;
 

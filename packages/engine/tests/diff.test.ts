@@ -9,7 +9,15 @@ import { describe, expect, it } from "vitest";
 import { computeDiff } from "../src/diff";
 import type { DiffResult } from "../src/diff";
 import { applyCommand } from "../src/verbs";
-import type { Clip, Command, Timeline } from "../src/types";
+import type { DiffEntry, DiffPropertyName } from "../src/diff";
+import type {
+  Clip,
+  Command,
+  Position,
+  PropertyValue,
+  TextStyle,
+  Timeline,
+} from "../src/types";
 import { baseTimeline, EMPTY_TIMELINE, range, t } from "./fixtures";
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
@@ -39,6 +47,91 @@ function rules(d: DiffResult): number[] {
   return d.entries.map((e) => e.rule);
 }
 
+/**
+ * B5 (#129) — `computeDiff` no longer renders English: `DiffResult` is the
+ * machine entries alone, and the product's own wording comes from the web
+ * layer's `diff-rows.ts`. The renderer below is the engine's own, moved here
+ * BYTE-FOR-BYTE so every golden in this file still pins the same thing it
+ * always did: the entry's own fields (clip id, frame numbers, before/after
+ * values). It is a serializer for the assertions, not code under test — the
+ * one test that checked the RENDERER (1:1 with entries) went with it.
+ */
+const COUNT_WORDS = [
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+];
+
+function countWord(n: number): string {
+  return n >= 2 && n <= 10 ? COUNT_WORDS[n - 2] : String(n);
+}
+
+function nFrames(n: number): string {
+  return `${n} frame${n === 1 ? "" : "s"}`;
+}
+
+function fmtPropValue(property: DiffPropertyName, v: PropertyValue): string {
+  if (property === "position") {
+    const p = v as Position;
+    return `(${p.x}, ${p.y})`;
+  }
+  if (property === "textContent") return `"${String(v)}"`;
+  if (property === "textStyle") {
+    const s = v as TextStyle;
+    return `${s.font} ${s.size} ${s.color}`;
+  }
+  return String(v);
+}
+
+const PROPERTY_LABEL: Readonly<Record<DiffPropertyName, string>> = {
+  volume: "volume",
+  opacity: "opacity",
+  scale: "scale",
+  position: "position",
+  textContent: "text",
+  textStyle: "text style",
+};
+
+function renderEntry(e: DiffEntry): string {
+  switch (e.kind) {
+    case "moved":
+      return `Clip ${e.clipId} moved from frame ${e.fromStart} to frame ${e.toStart}`;
+    case "trimmed":
+      return `Clip ${e.clipId} ${e.change} by ${nFrames(e.frames)} at the ${e.edge}`;
+    case "slipped":
+      return `Clip ${e.clipId} slipped: source window moved from ${e.fromSourceStart} to ${e.toSourceStart}`;
+    case "propertyChanged":
+      return `Clip ${e.clipId} ${PROPERTY_LABEL[e.property]} changed: ${fmtPropValue(e.property, e.before)} → ${fmtPropValue(e.property, e.after)}`;
+    case "added":
+      return `Clip ${e.clipId} added at frame ${e.start} (${nFrames(e.duration)} long)`;
+    case "removed":
+      return `Clip ${e.clipId} removed`;
+    case "split":
+      return `Clip ${e.clipId} split into ${countWord(e.cuts.length + 1)} at ${e.cuts.join(", ")}`;
+    case "rawChanged": {
+      const subject =
+        e.scope === "timeline"
+          ? "Timeline"
+          : e.scope === "track"
+            ? `Track ${e.trackId}`
+            : `Clip ${e.clipId}`;
+      return `${subject} changed: ${e.field} ${e.before} → ${e.after}`;
+    }
+  }
+}
+
+/** The goldens read `rendered(d)` where they used to read the removed `sentences`. */
+function rendered(d: DiffResult): string[] {
+  return d.entries.map(renderEntry);
+}
+
+
 /** Deep clone for hand-built out-of-family states (plain JSON data). */
 function clone<T>(x: T): T {
   return JSON.parse(JSON.stringify(x)) as T;
@@ -52,7 +145,8 @@ type RuleRow = {
   name: string;
   edit: (tl: Timeline) => Timeline;
   rules: number[];
-  sentences: string[];
+  /** The rendered form of the expected entries — see `renderEntry` above. */
+  lines: string[];
 };
 
 const RULE_ROWS: RuleRow[] = [
@@ -60,41 +154,41 @@ const RULE_ROWS: RuleRow[] = [
     name: "#1 moved — jagah khaana",
     edit: (tl) => apply(tl, { op: "move", clipId: "A", newStart: t(40) }),
     rules: [1],
-    sentences: ["Clip A moved from frame 10 to frame 40"],
+    lines: ["Clip A moved from frame 10 to frame 40"],
   },
   {
     name: "#2 trim start shortened",
     edit: (tl) =>
       apply(tl, { op: "trim", clipId: "A", edge: "start", delta: t(-3) }),
     rules: [2],
-    sentences: ["Clip A shortened by 3 frames at the start"],
+    lines: ["Clip A shortened by 3 frames at the start"],
   },
   {
     name: "#3 trim start extended",
     edit: (tl) =>
       apply(tl, { op: "trim", clipId: "A", edge: "start", delta: t(3) }),
     rules: [3],
-    sentences: ["Clip A extended by 3 frames at the start"],
+    lines: ["Clip A extended by 3 frames at the start"],
   },
   {
     name: "#4 trim end shortened",
     edit: (tl) =>
       apply(tl, { op: "trim", clipId: "A", edge: "end", delta: t(-3) }),
     rules: [4],
-    sentences: ["Clip A shortened by 3 frames at the end"],
+    lines: ["Clip A shortened by 3 frames at the end"],
   },
   {
     name: "#5 trim end extended",
     edit: (tl) =>
       apply(tl, { op: "trim", clipId: "A", edge: "end", delta: t(3) }),
     rules: [5],
-    sentences: ["Clip A extended by 3 frames at the end"],
+    lines: ["Clip A extended by 3 frames at the end"],
   },
   {
     name: "#6 slipped — khidki khaana",
     edit: (tl) => apply(tl, { op: "slip", clipId: "A", delta: t(3) }),
     rules: [6],
-    sentences: ["Clip A slipped: source window moved from 5 to 8"],
+    lines: ["Clip A slipped: source window moved from 5 to 8"],
   },
   {
     name: "#7 volume changed (old → new values)",
@@ -106,7 +200,7 @@ const RULE_ROWS: RuleRow[] = [
         value: 40,
       }),
     rules: [7],
-    sentences: ["Clip A volume changed: 80 → 40"],
+    lines: ["Clip A volume changed: 80 → 40"],
   },
   {
     name: "#8 opacity changed (default 100 materialized as old value)",
@@ -118,7 +212,7 @@ const RULE_ROWS: RuleRow[] = [
         value: 50,
       }),
     rules: [8],
-    sentences: ["Clip A opacity changed: 100 → 50"],
+    lines: ["Clip A opacity changed: 100 → 50"],
   },
   {
     name: "#9 scale changed",
@@ -130,7 +224,7 @@ const RULE_ROWS: RuleRow[] = [
         value: 2,
       }),
     rules: [9],
-    sentences: ["Clip A scale changed: 1 → 2"],
+    lines: ["Clip A scale changed: 1 → 2"],
   },
   {
     name: "#10 position changed",
@@ -142,7 +236,7 @@ const RULE_ROWS: RuleRow[] = [
         value: { x: 100, y: 50 },
       }),
     rules: [10],
-    sentences: ["Clip A position changed: (0, 0) → (100, 50)"],
+    lines: ["Clip A position changed: (0, 0) → (100, 50)"],
   },
   {
     name: "#11 textContent changed",
@@ -154,7 +248,7 @@ const RULE_ROWS: RuleRow[] = [
         value: "Hello",
       }),
     rules: [11],
-    sentences: ['Clip TX text changed: "Welcome" → "Hello"'],
+    lines: ['Clip TX text changed: "Welcome" → "Hello"'],
   },
   {
     name: "#12 textStyle changed (whole-atom)",
@@ -166,7 +260,7 @@ const RULE_ROWS: RuleRow[] = [
         value: { font: "Georgia", size: 60, color: "#00ff00" },
       }),
     rules: [12],
-    sentences: [
+    lines: [
       "Clip TX text style changed: Arial 48 #ffffff → Georgia 60 #00ff00",
     ],
   },
@@ -185,19 +279,19 @@ const RULE_ROWS: RuleRow[] = [
         "N",
       ),
     rules: [13],
-    sentences: ["Clip N added at frame 70 (5 frames long)"],
+    lines: ["Clip N added at frame 70 (5 frames long)"],
   },
   {
     name: "#14 removed",
     edit: (tl) => apply(tl, { op: "deleteClip", clipId: "B" }),
     rules: [14],
-    sentences: ["Clip B removed"],
+    lines: ["Clip B removed"],
   },
   {
     name: "#15 split (khandaan-record; cut in root-local coordinates)",
     edit: (tl) => apply(tl, { op: "split", clipId: "A", at: t(15) }),
     rules: [15],
-    sentences: ["Clip A split into two at 5"],
+    lines: ["Clip A split into two at 5"],
   },
 ];
 
@@ -206,18 +300,18 @@ describe("C1: the 15 classify+render rules (table-driven)", () => {
     it(`C1 ${row.name}`, () => {
       const a = baseTimeline();
       const d = computeDiff(a, row.edit(a));
-      expect(d.sentences).toEqual(row.sentences);
+      expect(rendered(d)).toEqual(row.lines);
       expect(rules(d)).toEqual(row.rules);
     });
   }
 });
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// multi-change clip → multiple sentences (-F golden)
+// multi-change clip → multiple entries (-F golden)
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
-describe("C1: multi-change clip = multiple sentences", () => {
-  it("C1: move + end-trim + volume on one clip → 3 sentences, khaana order", () => {
+describe("C1: multi-change clip = multiple entries", () => {
+  it("C1: move + end-trim + volume on one clip → 3 entries, khaana order", () => {
     const a = baseTimeline();
     let b = apply(a, { op: "move", clipId: "A", newStart: t(40) });
     b = apply(b, { op: "trim", clipId: "A", edge: "end", delta: t(-3) });
@@ -228,7 +322,7 @@ describe("C1: multi-change clip = multiple sentences", () => {
       value: 40,
     });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A moved from frame 10 to frame 40",
       "Clip A shortened by 3 frames at the end",
       "Clip A volume changed: 80 → 40",
@@ -236,14 +330,14 @@ describe("C1: multi-change clip = multiple sentences", () => {
     expect(rules(d)).toEqual([1, 4, 7]);
   });
 
-  it("C1: composed move ⊕ trim-start decompose into independent sentences (B2.1 content-anchored atoms)", () => {
+  it("C1: composed move ⊕ trim-start decompose into independent entries (B2.1 content-anchored atoms)", () => {
     const a = baseTimeline();
     let b = apply(a, { op: "move", clipId: "A", newStart: t(13) });
     b = apply(b, { op: "trim", clipId: "A", edge: "start", delta: t(-2) });
     const d = computeDiff(a, b);
     // anchor moved by +3; coverage start cut by 2 — exactly one sentence each
     expect(rules(d)).toEqual([1, 2]);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A moved from frame 12 to frame 15",
       "Clip A shortened by 2 frames at the start",
     ]);
@@ -259,7 +353,7 @@ describe("C1: rippleDelete diff = #14 + N×#1", () => {
     const a = baseTimeline();
     const b = apply(a, { op: "rippleDelete", clipId: "A" });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A removed",
       "Clip B moved from frame 30 to frame 20",
       "Clip IM moved from frame 50 to frame 40",
@@ -305,7 +399,7 @@ describe("C1 #16: catch-all on out-of-family states", () => {
     const b = clone(a);
     clipById(b, "A").sourceRange = range(5, 7); // no verb can do this (BC.4)
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Clip A changed: sourceRange 5–15 → 5–12"]);
+    expect(rendered(d)).toEqual(["Clip A changed: sourceRange 5–15 → 5–12"]);
     expect(rules(d)).toEqual([16]);
   });
 
@@ -314,7 +408,7 @@ describe("C1 #16: catch-all on out-of-family states", () => {
     const b = clone(a);
     clipById(b, "A").mediaRefId = "mI";
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Clip A changed: mediaRefId mV → mI"]);
+    expect(rendered(d)).toEqual(["Clip A changed: mediaRefId mV → mI"]);
     expect(rules(d)).toEqual([16]);
   });
 
@@ -323,7 +417,7 @@ describe("C1 #16: catch-all on out-of-family states", () => {
     const b = clone(a);
     b.projectRate = 30;
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Timeline changed: projectRate 24 → 30"]);
+    expect(rendered(d)).toEqual(["Timeline changed: projectRate 24 → 30"]);
     expect(rules(d)).toEqual([16]);
   });
 
@@ -332,7 +426,7 @@ describe("C1 #16: catch-all on out-of-family states", () => {
     const b = clone(a);
     b.tracks = b.tracks.filter((track) => track.id !== "a1");
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Track a1 changed: existence present → absent",
       "Clip AU removed",
     ]);
@@ -347,20 +441,20 @@ describe("C1 #16: catch-all on out-of-family states", () => {
 describe("C1/B3.1: empty diff", () => {
   it("C1: diff(A, A) = empty (same reference)", () => {
     const a = baseTimeline();
-    expect(computeDiff(a, a)).toEqual({ entries: [], sentences: [] });
+    expect(computeDiff(a, a)).toEqual({ entries: [] });
+    // B5 #129 — the key is GONE, not empty.
+    expect("sentences" in computeDiff(a, a)).toBe(false);
   });
 
   it("C1: diff of two structurally equal timelines = empty (different objects)", () => {
     expect(computeDiff(baseTimeline(), baseTimeline())).toEqual({
       entries: [],
-      sentences: [],
     });
   });
 
   it("C1: empty timeline vs itself = empty (A4 — empty is a valid state)", () => {
     expect(computeDiff(EMPTY_TIMELINE, clone(EMPTY_TIMELINE))).toEqual({
       entries: [],
-      sentences: [],
     });
   });
 
@@ -373,16 +467,16 @@ describe("C1/B3.1: empty diff", () => {
       scale: 1,
       position: { x: 0, y: 0 },
     };
-    expect(computeDiff(a, b).sentences).toEqual([]);
+    expect(computeDiff(a, b).entries).toEqual([]);
     // and the mirror direction (explicit defaults in `a`)
-    expect(computeDiff(b, a).sentences).toEqual([]);
+    expect(computeDiff(b, a).entries).toEqual([]);
   });
 
   it("B3.1: trim + untrim back = no changes (net-state authority)", () => {
     const a = baseTimeline();
     let b = apply(a, { op: "trim", clipId: "A", edge: "end", delta: t(-3) });
     b = apply(b, { op: "trim", clipId: "A", edge: "end", delta: t(3) });
-    expect(computeDiff(a, b).sentences).toEqual([]);
+    expect(computeDiff(a, b).entries).toEqual([]);
   });
 });
 
@@ -395,7 +489,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     const a = baseTimeline();
     const b = apply(a, { op: "split", clipId: "A", at: t(15) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Clip A split into two at 5"]);
+    expect(rendered(d)).toEqual(["Clip A split into two at 5"]);
     expect(d.entries).toEqual([
       {
         rule: 15,
@@ -413,7 +507,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "split", clipId: "A@5", at: t(17) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Clip A split into three at 5, 7"]);
+    expect(rendered(d)).toEqual(["Clip A split into three at 5, 7"]);
     expect(d.entries).toEqual([
       {
         rule: 15,
@@ -431,7 +525,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "move", clipId: "A@5", newStart: t(60) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A split into two at 5",
       "Clip A@5 moved from frame 15 to frame 60",
     ]);
@@ -448,7 +542,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
       value: 30,
     });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A split into two at 5",
       "Clip A@5 volume changed: 80 → 30",
     ]);
@@ -460,7 +554,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "slip", clipId: "A@5", delta: t(3) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A split into two at 5",
       "Clip A@5 slipped: source window moved from 10 to 13",
     ]);
@@ -472,7 +566,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "trim", clipId: "A@5", edge: "end", delta: t(-2) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A split into two at 5",
       "Clip A@5 shortened by 2 frames at the end",
     ]);
@@ -484,7 +578,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "trim", clipId: "A@5", edge: "end", delta: t(3) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A split into two at 5",
       "Clip A@5 extended by 3 frames at the end",
     ]);
@@ -496,7 +590,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     let b = apply(a, { op: "split", clipId: "A", at: t(15) });
     b = apply(b, { op: "deleteClip", clipId: "A" });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A removed",
       "Clip A split into two at 5",
     ]);
@@ -517,7 +611,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     expect(b).toEqual(trimmed);
     // …so the diff is the same sentence (raasta irrelevant — sirf aakhri shakal)
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Clip A shortened by 5 frames at the end"]);
+    expect(rendered(d)).toEqual(["Clip A shortened by 5 frames at the end"]);
     expect(rules(d)).toEqual([4]);
   });
 
@@ -526,7 +620,7 @@ describe("B1.1: split khandaan — descendants matched to base, rule #15", () =>
     const a = apply(a0, { op: "split", clipId: "A", at: t(15) }); // family already in base
     const b = apply(a, { op: "split", clipId: "A@5", at: t(17) });
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual(["Clip A@5 split into two at 7"]);
+    expect(rendered(d)).toEqual(["Clip A@5 split into two at 7"]);
     expect(rules(d)).toEqual([15]);
   });
 });
@@ -551,7 +645,7 @@ describe("B3.1: ID-only matching", () => {
       "A2",
     );
     const d = computeDiff(a, b);
-    expect(d.sentences).toEqual([
+    expect(rendered(d)).toEqual([
       "Clip A removed",
       "Clip A2 added at frame 10 (10 frames long)",
     ]);
@@ -581,7 +675,7 @@ describe("C1: deterministic ordering", () => {
       value: "Hello",
     });
     const d1 = computeDiff(a, b);
-    expect(d1.sentences).toEqual([
+    expect(rendered(d1)).toEqual([
       "Clip A volume changed: 80 → 40",
       "Clip B moved from frame 30 to frame 60",
       "Clip AU removed",
@@ -590,29 +684,5 @@ describe("C1: deterministic ordering", () => {
     // same inputs ⇒ byte-identical output
     const d2 = computeDiff(a, b);
     expect(JSON.stringify(d2)).toBe(JSON.stringify(d1));
-  });
-});
-
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-// Machine form — every sentence derived from a structured entry (1:1)
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
-
-describe("C1: machine form ↔ sentences", () => {
-  it("C1: entries and sentences are strictly 1:1 and every entry names its clip in its sentence", () => {
-    const a = baseTimeline();
-    let b = apply(a, { op: "split", clipId: "A", at: t(15) });
-    b = apply(b, { op: "move", clipId: "A@5", newStart: t(60) });
-    b = apply(b, { op: "deleteClip", clipId: "B" });
-    // (2026-08-04): slip is not applicable to an image, so the #6
-    // sentence is taken on the audio clip instead of the image clip IM.
-    b = apply(b, { op: "slip", clipId: "AU", delta: t(2) });
-    const d = computeDiff(a, b);
-    expect(d.sentences.length).toBe(d.entries.length);
-    d.entries.forEach((entry, i) => {
-      if (entry.kind !== "rawChanged") {
-        expect(d.sentences[i]).toContain(`Clip ${entry.clipId}`);
-      }
-      expect(d.sentences[i].length).toBeGreaterThan(0);
-    });
   });
 });
