@@ -6,6 +6,7 @@ import type { Command, Timeline, Track } from "@framebranch/engine";
 import { Cursor, Magnet, Minus, Plus, Scissors } from "@phosphor-icons/react";
 
 import type { AnyClip } from "../../lib/clip-helpers";
+import { formatFrames } from "../../lib/format";
 import {
   DEFAULT_PX_PER_SECOND,
   LANE_LABEL_WIDTH,
@@ -266,7 +267,7 @@ export function TimelineView({
           className="timeline-timecode"
           aria-label="Current playhead timecode"
         >
-          {formatTimecode(playheadFrame, timeline.projectRate)}
+          {formatFrames(playheadFrame, timeline.projectRate)}
         </div>
 
         <div className="timeline-zoom" aria-label="Timeline zoom">
@@ -377,24 +378,17 @@ export function TimelineView({
             aria-hidden
             style={{ left: LANE_LABEL_WIDTH + playheadFrame * scale }}
           >
+            {/* C-3 (resolved 2026-09-07): the timecode is the full 4-part
+                `HH:MM:SS:FF` EVERYWHERE. The bubble used to print
+                `.slice(3, 8)` — a bare `MM:SS`, the one place in the
+                product that still spoke a different dialect. The bubble is
+                `width: max-content`, so 11 characters need no new size. */}
             <span className="timeline-playhead-bubble" {...scrubHandlers()}>
-              {formatTimecode(playheadFrame, timeline.projectRate).slice(3, 8)}
+              {formatFrames(playheadFrame, timeline.projectRate)}
             </span>
           </div>
         </div>
       </div>
     </section>
   );
-}
-
-function formatTimecode(frame: number, rate: number) {
-  const safeRate = Math.max(1, Math.round(rate));
-  const totalSeconds = Math.floor(frame / safeRate);
-  const frames = Math.max(0, frame % safeRate);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  return [hours, minutes, seconds, frames]
-    .map((value) => String(value).padStart(2, "0"))
-    .join(":");
 }

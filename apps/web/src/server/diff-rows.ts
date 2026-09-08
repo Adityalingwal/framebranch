@@ -704,6 +704,11 @@ function verbCounts(rows: readonly DiffRow[]): [number, string][] {
  * the count already stands in front of it. Unlike the card name, a ONE-row
  * run also gets the verb form (`1 trimmed`), never the clip-name sentence —
  * `2 changes: 2 added` and `1 change: 1 added` have to read alike.
+ *
+ * B5 lock (3): capped by the SAME `cap()` the card name uses (60 chars +
+ * `…`). A run touching every verb would otherwise overflow both places it
+ * is printed — the run-log's third line and, through `summaryName`, the
+ * agent's own Ready note.
  */
 export function runSummary(rows: readonly DiffRow[]): string {
   if (rows.length === 0) return "";
@@ -711,7 +716,7 @@ export function runSummary(rows: readonly DiffRow[]): string {
   for (const r of rows) {
     if (r.kind === "ripple") parts.push(`${r.clipIds.length} moved along`);
   }
-  return parts.join(", ");
+  return cap(parts.join(", "));
 }
 
 function cap(s: string): string {
