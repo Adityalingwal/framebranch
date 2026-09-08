@@ -507,6 +507,12 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ── A2 top bar: cut menu + current-card name ────────────────────── */
+/* The squeeze order in `.topbar-left`, left to right, is deliberate: the
+   presence chips give way FIRST (they are the least load-bearing thing on
+   the bar), then the current-card name ellipsizes, and `Cut: ‹cut›` — the
+   answer to "where am I" — never shrinks at all. Before this, one presence
+   chip at 1280px was enough to turn the trigger into `Cut: priy…` and the
+   card name into `Travel vl…`. */
 .topbar-cut-cluster {
   display: inline-flex;
   align-items: center;
@@ -516,6 +522,10 @@ input[type="range"]::-moz-range-thumb {
 
 .topbar-current-card {
   min-width: 0;
+  /* The last thing on the bar to give, and the only thing inside the
+     cluster that CAN: the trigger and the tag hold their size, so every
+     pixel the cluster loses comes out of this name, which ellipsizes. */
+  flex-shrink: 1;
   color: var(--fb-text-dim);
   font-size: 12px;
   overflow: hidden;
@@ -550,6 +560,11 @@ input[type="range"]::-moz-range-thumb {
   display: inline-flex;
   align-items: center;
   min-width: 0;
+  /* `Cut: ‹cut›` is readable at every width a chip can appear at. The cap
+     is what stops a 60-character cut name doing the pushing instead; past
+     it the LABEL ellipsizes, never the word `Cut:`. */
+  flex-shrink: 0;
+  max-width: 220px;
   gap: 6px;
   padding: 4px 10px;
   background: rgba(255, 255, 255, 0.04);
@@ -726,6 +741,7 @@ input[type="range"]::-moz-range-thumb {
 .topbar-comparing-pill {
   display: inline-flex;
   align-items: center;
+  flex-shrink: 0;
   border-radius: var(--fb-radius-pill);
   padding: 3px 10px;
   font-size: 11px;
@@ -737,6 +753,9 @@ input[type="range"]::-moz-range-thumb {
 .topbar-changes-chip {
   display: inline-flex;
   align-items: center;
+  /* Keeps its footprint beside the chips: the count is a live number and a
+     half-drawn one would read as a different number. */
+  flex-shrink: 0;
   gap: 5px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -761,6 +780,15 @@ input[type="range"]::-moz-range-thumb {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  /* The first thing on the bar to give way — it shrinks 3× faster than the
+     cut cluster beside it — but only down to a floor where a chip still
+     reads as words rather than as a lone dot. Past that floor the CARD
+     NAME is what ellipsizes; `Cut: ‹cut›` never does. The floor is written
+     as `min(92px, 28%)` so it disappears on a narrow bar instead of
+     pushing the cluster out of its column. */
+  flex: 0 3 auto;
+  min-width: min(92px, 28%);
+  max-width: 28%;
   overflow: hidden;
 }
 
