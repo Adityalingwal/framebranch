@@ -8,7 +8,15 @@ import type { ImportWarning, Timeline } from "@framebranch/engine";
 
 import type { DiffResponse as DiffData } from "../src/app/api/diff/route";
 
-import { branches, commits, ops, projects, snapshots } from "../src/db/schema";
+import {
+  branches,
+  commits,
+  ops,
+  projectEvents,
+  projects,
+  snapshots,
+  workingState,
+} from "../src/db/schema";
 import { POST as postAgentRun } from "../src/app/api/agent/run/route";
 import { POST as postBranch } from "../src/app/api/branch/route";
 import { POST as postCommit } from "../src/app/api/commit/route";
@@ -543,8 +551,25 @@ describe("C4 (4) / I1 patch (a) — POST agent/run", () => {
     });
     await save(s, "main");
 
+    // Everything the transaction touches, counted before the failure: a
+    // leaked working row or a stray event would be a half-written run that
+    // the commit/op counts alone cannot see (Codex GAP 1).
+    const workingRows = async () =>
+      (await getDb().select().from(workingState)).sort((a, b) =>
+        a.branchId.localeCompare(b.branchId),
+      );
+    const mainId = (
+      await getDb().select().from(branches).where(eq(branches.name, "main"))
+    )[0].id;
     const before = await commitCount();
     const beforeOpsCount = (await getDb().select().from(ops)).length;
+    const beforeBranchCount = (await getDb().select().from(branches)).length;
+    const beforeWorking = await workingRows();
+    const beforeMainRev = beforeWorking.find(
+      (row) => row.branchId === mainId,
+    )!.workingRev;
+    const beforeEventCount = (await getDb().select().from(projectEvents))
+      .length;
     const beforeTimeline = (await view(s, "main")).timeline;
 
     const call = await post(
@@ -557,6 +582,21 @@ describe("C4 (4) / I1 patch (a) — POST agent/run", () => {
 
     expect(await commitCount()).toBe(before);
     expect(await getDb().select().from(ops)).toHaveLength(beforeOpsCount);
+    expect(await getDb().select().from(branches)).toHaveLength(
+      beforeBranchCount,
+    );
+    // Every working row byte-identical — main's working_rev included, so a
+    // rolled-back CAS bump would show up here too.
+    const afterWorking = await workingRows();
+    expect(afterWorking).toEqual(beforeWorking);
+    expect(afterWorking.find((row) => row.branchId === mainId)!.workingRev).toBe(
+      beforeMainRev,
+    );
+    // And NOTHING was appended to the event feed: no `branch-created`, no
+    // `commit-created`, no event of any other kind.
+    expect(await getDb().select().from(projectEvents)).toHaveLength(
+      beforeEventCount,
+    );
     expect((await view(s, "main")).timeline).toEqual(beforeTimeline);
     // No orphan cut: the preset must not read `Done` for a run that never
     // happened (the panel derives that from this row existing).

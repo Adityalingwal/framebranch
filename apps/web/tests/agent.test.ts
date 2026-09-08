@@ -192,9 +192,31 @@ describe("POST /api/agent/run — one click, one cut, one card", () => {
     expect(history.commits[0].parents).toEqual([mainBefore.headCommitId]);
     expect(history.commits[0].changes).toBeGreaterThan(0);
 
-    // A `branch-created` event and the commit's own event were written.
+    // Both events rode in the run's own transaction, with their payloads.
     const events = await getDb().select().from(projectEvents);
-    expect(events.filter((e) => e.kind === "branch-created")).toHaveLength(1);
+    const branchCreated = events.filter((e) => e.kind === "branch-created");
+    expect(branchCreated).toHaveLength(1);
+    expect(branchCreated[0].payload).toEqual({
+      branch: "agent-tighten-intro",
+      from: "main",
+      head: mainBefore.headCommitId,
+      // #186 — the CUT belongs to the agent, on the event too.
+      createdBy: "Agent",
+    });
+    // The seed's first card already wrote a `commit-created` event, so the
+    // run's own is found by its commit id, never by kind alone.
+    const commitEvents = events.filter(
+      (e) =>
+        e.kind === "commit-created" && e.payload.commitId === data.commitId,
+    );
+    expect(commitEvents).toHaveLength(1);
+    expect(commitEvents[0].payload).toEqual({
+      commitId: data.commitId,
+      kind: "agent-run",
+      name: "Tighten intro",
+      branch: "agent-tighten-intro",
+      actorName: "Agent",
+    });
   });
 
   it("a dirty main is sealed first and the fork starts at that auto card", async () => {
