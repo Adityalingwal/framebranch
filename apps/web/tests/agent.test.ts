@@ -11,7 +11,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
-import type { Timeline } from "@framebranch/engine";
+import type { Clip, TextClip, Timeline } from "@framebranch/engine";
 
 import { branches, commits, projectEvents } from "../src/db/schema";
 import { GET as getAgentPresets } from "../src/app/api/agent/presets/route";
@@ -29,6 +29,7 @@ import type { HistoryItem } from "../src/app/api/history/route";
 import { POST as postOps } from "../src/app/api/ops/route";
 import { POST as postProjectNew } from "../src/app/api/project/new/route";
 import { GET as getTimeline } from "../src/app/api/timeline/route";
+import { clipDisplayName, findMediaRef } from "../src/lib/clip-helpers";
 import { runSummary } from "../src/server/diff-rows";
 import {
   closeDb,
@@ -119,6 +120,20 @@ function textClips(timeline: Timeline) {
     (a, b) => a.timelineRange.start.value - b.timelineRange.start.value,
   );
 }
+
+/**
+ * `Track.clips` is `Clip[] | TextClip[]`, so reading a media clip's own
+ * fields needs the narrowing the track kind already guarantees.
+ */
+const asMediaClip = (clip: unknown): Clip => clip as Clip;
+const asTextClip = (clip: unknown): TextClip => clip as TextClip;
+
+/** The name the editor sees on a clip — what a caption has to read. */
+const displayNameOf = (timeline: Timeline, clip: unknown): string =>
+  clipDisplayName(
+    asMediaClip(clip),
+    findMediaRef(timeline, asMediaClip(clip).mediaRefId),
+  );
 
 // - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 // The registry (copy #176-#178)
@@ -307,22 +322,50 @@ describe("every preset runs on every shipped preset project", () => {
         const s = await session();
         await startProject(s, project);
         const before = await view(s, "main");
-        const beforeVideo = videoClips(before.timeline).length;
+        // Everything is identified by the id it had BEFORE the run: the
+        // added clip lands inside the track, so positions move.
+        const beforeVideo = videoClips(before.timeline);
+        const [clipA, clipB] = beforeVideo;
+        const caption = textClips(before.timeline)[0];
 
         const data = await run(s, "tighten-intro");
         expect(data.opsApplied).toBe(4);
 
         const after = await view(s, data.cut);
+        const afterVideo = videoClips(after.timeline);
         // the added B-roll clip sits in the free 0:20-0:25 stretch
-        expect(videoClips(after.timeline)).toHaveLength(beforeVideo + 1);
-        const added = videoClips(after.timeline).find(
+        expect(afterVideo).toHaveLength(beforeVideo.length + 1);
+        const added = afterVideo.find(
           (c) => c.timelineRange.start.value === 480,
         );
+        expect(added).toBeDefined();
         expect(added?.timelineRange.duration.value).toBe(120);
-        // the first caption is gone
+        // …and it really is the fixture's b-roll, not some other media ref
+        const broll = before.timeline.mediaRefs.find((ref) =>
+          ref.url.endsWith("broll.mp4"),
+        );
+        expect(broll).toBeDefined();
+        expect(asMediaClip(added).mediaRefId).toBe(broll?.id);
+
+        // V1[0] carries the agent's 40 …
+        const afterA = afterVideo.find((c) => c.id === clipA.id);
+        expect(asMediaClip(afterA).properties.volume).toBe(40);
+        // … V1[1] is exactly 2s (48 frames) shorter, trimmed at its END
+        // (its start does not move) …
+        const afterB = afterVideo.find((c) => c.id === clipB.id);
+        expect(afterB?.timelineRange.duration.value).toBe(
+          clipB.timelineRange.duration.value - 48,
+        );
+        expect(afterB?.timelineRange.start.value).toBe(
+          clipB.timelineRange.start.value,
+        );
+        // … and T1's first clip is gone, that one and no other.
         expect(textClips(after.timeline)).toHaveLength(
           textClips(before.timeline).length - 1,
         );
+        expect(
+          textClips(after.timeline).some((c) => c.id === caption.id),
+        ).toBe(false);
       });
 
       it("trim-silences: the first video clip loses 48 frames (1s at each end)", async () => {
@@ -364,6 +407,15 @@ describe("every preset runs on every shipped preset project", () => {
         expect(captions).toHaveLength(2);
         expect(captions[0].timelineRange).toEqual(second.timelineRange);
         expect(captions[1].timelineRange).toEqual(third.timelineRange);
+        // Each caption reads exactly what the editor sees on the clip it
+        // covers — the SAME `clipDisplayName` the Inspector and the Compare
+        // rows use, so the two can never disagree.
+        expect(asTextClip(captions[0]).textContent).toBe(
+          displayNameOf(before.timeline, second),
+        );
+        expect(asTextClip(captions[1]).textContent).toBe(
+          displayNameOf(before.timeline, third),
+        );
       });
 
       it("all three run on one project and none of them applies zero ops", async () => {
