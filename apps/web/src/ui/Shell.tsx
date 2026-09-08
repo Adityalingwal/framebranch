@@ -13,7 +13,7 @@ import { ArrowsInLineHorizontal, Scissors, Trash } from "@phosphor-icons/react";
 
 import type { DiffRow } from "../server/diff-rows";
 import { ApiClientError } from "../lib/data/api-client";
-import type { AgentRun, BringInToken } from "../lib/data/api-client";
+import type { AgentRun, BringInToken, SyncEvent } from "../lib/data/api-client";
 import { queryKeys } from "../lib/data/query-keys";
 import {
   choicesKeyFor,
@@ -27,6 +27,9 @@ import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers
 import { quoted } from "../lib/format";
 import { createPendingDoorSlot } from "../lib/pending-door";
 import { useConnectionStatus } from "../lib/state/connection-status";
+import { useEditorName } from "../lib/state/editor-name";
+import { syncInvalidations } from "../lib/data/sync-plan";
+import { useSyncPoller } from "../lib/data/use-sync-poller";
 import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
 import {
@@ -39,6 +42,7 @@ import {
   useDiffQuery,
   useHistoryQuery,
   useOpsMutation,
+  refreshBranches,
   useRestoreMutation,
   useSwitchBranchMutation,
   useTimelineAtQuery,
@@ -695,6 +699,57 @@ export function Shell() {
   }, [doors, setView]);
 
   /**
+   * J1 — the 3s poller, called ONCE for the whole app.
+   *
+   * The gate is two traps at once: a tick before the first
+   * `GET /api/timeline` would reach `handleRequest` with no cookie and
+   * BOOTSTRAP A SECOND PROJECT under the running app, and a tick before
+   * the name gate would write a presence row literally named `Editor` for
+   * everyone else to see.
+   *
+   * `onEvents` does exactly what `sync-plan.ts` decides and nothing else —
+   * in particular it never touches `["bring-in"]` (a refetch there mints a
+   * new token and drops half-made decisions) and never the current cut's
+   * timeline (this tab's own optimistic surface; nothing another tab does
+   * moves this tab's working rev).
+   */
+  const editorName = useEditorName();
+  const { peers } = useSyncPoller({
+    enabled: timeline.isSuccess && editorName !== null,
+    cut: currentBranch,
+    playheadFrame,
+    onEvents: useCallback(
+      (events: SyncEvent[]) => {
+        const plan = syncInvalidations(events);
+        if (plan.resetProject) {
+          // The OTHER tab started a New project: the cookie is shared, so
+          // this tab's whole project (and possibly its cut) is gone. The
+          // same reset this tab runs after its own New project, plus the
+          // wholesale invalidation `useNewProjectMutation` does — nothing
+          // cached is about the new project. No toast: no copy row exists
+          // for it (a B5 question, not a string to invent).
+          queryClient.invalidateQueries();
+          handleNewProject();
+          return;
+        }
+        if (plan.refreshBranches) refreshBranches(queryClient);
+      },
+      [handleNewProject, queryClient],
+    ),
+  });
+
+  // Lock (2) — a peer on THIS cut gets a coloured playhead and no words; a
+  // peer anywhere else gets a chip and no line.
+  const samePeers = useMemo(
+    () => peers.filter((peer) => peer.cut === currentBranch),
+    [peers, currentBranch],
+  );
+  const otherPeers = useMemo(
+    () => peers.filter((peer) => peer.cut !== currentBranch),
+    [peers, currentBranch],
+  );
+
+  /**
    * I1(3)/(4) — apply a parked door once the cut switch has actually
    * landed. Declared AFTER the `currentBranch` reset effects and the
    * default-pair effect, so what this sets is what survives the render.
@@ -1063,6 +1118,8 @@ export function Shell() {
         // F3(4) — the cut list is the only source of Ready; nothing about
         // the mark is remembered in the browser.
         ready={cuts.find((cut) => cut.name === currentBranch)?.ready ?? null}
+        // Lock (2) — chips are for peers on ANOTHER cut only.
+        peers={otherPeers}
         editingLocked={editingPaused}
         // Fix 1(a): Shell's own switch (and a run) locks the cut controls
         // here too — TopBar's `busy` only knows about TopBar's mutations.
@@ -1409,6 +1466,9 @@ export function Shell() {
                 currentBranch={currentBranch}
                 resetToken={timelineResetToken}
                 editingLocked={editingPaused}
+                // Lock (2) — only the editing timeline carries peer
+                // playheads; Compare's lanes do not (not in the lock).
+                peers={samePeers}
               />
             )}
           </div>

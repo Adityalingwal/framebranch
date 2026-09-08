@@ -4,6 +4,7 @@ import { useState } from "react";
 import { GitBranch } from "@phosphor-icons/react";
 
 import type { BranchListItem } from "../app/api/branch/route";
+import type { Peer } from "../lib/data/api-client";
 import { quoted } from "../lib/format";
 import { showToast } from "../lib/state/toast-status";
 import {
@@ -34,6 +35,7 @@ export function TopBar({
   headCardName,
   changesCount,
   ready,
+  peers,
   editingLocked,
   cutSwitching,
   comparing,
@@ -49,6 +51,12 @@ export function TopBar({
   changesCount: number | undefined;
   /** F3(4) — the CURRENT cut's Ready state (null on main, and when unmarked). */
   ready: BranchListItem["ready"];
+  /**
+   * J1 lock (2) — the peers standing on ANOTHER cut, one chip each (#218).
+   * A peer on the SAME cut gets no words at all: their coloured playhead in
+   * the timeline is the whole signal.
+   */
+  peers: Peer[];
   editingLocked: boolean;
   /**
    * B4a fix 1(a) — a cut change Shell started (the Agent panel's `View` /
@@ -234,6 +242,33 @@ export function TopBar({
             "No changes"
           )}
         </button>
+        )}
+
+        {/* #218 / lock (2) — right of the chip, in the flexible middle
+            space. Not buttons: there is nothing to press, and jumping to
+            someone else's cut is what the Cut menu is for. Many peers →
+            many chips in a row; the container clips rather than wrapping,
+            because a wrapped top bar would change height. */}
+        {peers.length > 0 && (
+          <div className="topbar-presence">
+            {peers.map((peer) => {
+              const text = `${peer.name} is on ${peer.cut}`;
+              return (
+                <span
+                  key={peer.tabId}
+                  className="topbar-presence-chip"
+                  title={text}
+                >
+                  <span
+                    aria-hidden
+                    className="topbar-presence-dot"
+                    style={{ background: `hsl(${peer.colourSeed} 70% 55%)` }}
+                  />
+                  {text}
+                </span>
+              );
+            })}
+          </div>
         )}
       </div>
 

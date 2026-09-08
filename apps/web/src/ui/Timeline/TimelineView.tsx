@@ -33,6 +33,7 @@ export function TimelineView({
   currentBranch,
   resetToken = 0,
   editingLocked = false,
+  peers = [],
 }: {
   timeline: Timeline;
   selectedClipId: string | null;
@@ -62,6 +63,19 @@ export function TimelineView({
    * verb is already refused at Shell's `emit` funnel.
    */
   editingLocked?: boolean;
+  /**
+   * J1 — the other tabs standing on THIS cut. Display only: a peer line
+   * never sets the playhead, never scrolls the region, never snaps and
+   * never touches an edit. Its position is a FRAME (broadcast in frames,
+   * not pixels) drawn with the same `scale` the own playhead uses, so
+   * zooming keeps everyone in the same place.
+   */
+  peers?: {
+    tabId: string;
+    name: string;
+    playheadFrame: number;
+    colourSeed: number;
+  }[];
 }) {
   const [pxPerSecond, setPxPerSecond] = useState(DEFAULT_PX_PER_SECOND);
   const [tool, setTool] = useState<TimelineTool>("select");
@@ -336,6 +350,26 @@ export function TimelineView({
               />
             ))}
           </div>
+
+          {/* J1 — peer playheads, UNDER the own one in the DOM so a
+              collision leaves the editor's line on top. Clamped to the
+              content so a peer past the end still draws (they may be on a
+              longer version of this cut than this tab has fetched). */}
+          {peers.map((peer) => (
+            <div
+              key={peer.tabId}
+              className="timeline-peer-playhead"
+              aria-hidden
+              style={{
+                left:
+                  LANE_LABEL_WIDTH +
+                  Math.min(Math.max(0, peer.playheadFrame) * scale, canvasWidth),
+                ["--fb-peer-colour" as string]: `hsl(${peer.colourSeed} 70% 55%)`,
+              }}
+            >
+              <span className="timeline-peer-label">{peer.name}</span>
+            </div>
+          ))}
 
           <div
             ref={playheadRef}
