@@ -1,5 +1,6 @@
 /**
- * schema.ts — the 10 table schema (8 original + project_events + presence).
+ * schema.ts — the 9-table schema (7 original + project_events + presence —
+ * merge_attempts dropped in 0004).
  */
 
 import {
