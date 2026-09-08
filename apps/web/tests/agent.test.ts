@@ -17,7 +17,10 @@ import { branches, commits, projectEvents } from "../src/db/schema";
 import { GET as getAgentPresets } from "../src/app/api/agent/presets/route";
 import type { AgentPresetsData } from "../src/app/api/agent/presets/route";
 import { POST as postAgentRun } from "../src/app/api/agent/run/route";
-import { GET as getBranches } from "../src/app/api/branch/route";
+import {
+  GET as getBranches,
+  POST as postBranch,
+} from "../src/app/api/branch/route";
 import { POST as postCommit } from "../src/app/api/commit/route";
 import { GET as getDiff } from "../src/app/api/diff/route";
 import type { DiffResponse } from "../src/app/api/diff/route";
@@ -447,5 +450,81 @@ describe("GET /api/agent/presets — the derived run state", () => {
     await startProject(s, "thirty-second-ad");
     const answers = await presetsOf(s);
     expect(answers.presets.every((p) => p.run === null)).toBe(true);
+  });
+
+  /**
+   * B4a fix 2 (Codex BUG 2) — nothing reserves the `agent-` prefix, so a
+   * person can make `agent-add-captions` by hand from the New-cut box. The
+   * preset then reads `Done` with no run card behind it, and the time the
+   * panel shows must be when that CUT appeared — the head card's time moves
+   * on every Mark, which is a run log that changes by itself.
+   */
+  it("a hand-made `agent-‹id›` cut reports the branch's creation time, not its head card's", async () => {
+    const s = await session();
+    const cut = "agent-add-captions";
+    expectOk(
+      await post(
+        postBranch,
+        "/api/branch",
+        { name: cut, from: "main", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    );
+
+    const created = (await getDb().select().from(projectEvents)).find(
+      (event) =>
+        event.kind === "branch-created" && event.payload.branch === cut,
+    );
+    expect(created).toBeDefined();
+
+    // …and then Marks a version on it: the head moves, with a later time.
+    const cutView = await view(s, cut);
+    expectOk(
+      await post(
+        postOps,
+        "/api/ops",
+        {
+          branch: cut,
+          workingRev: cutView.workingRev,
+          ticket: ticket(),
+          command: {
+            op: "propertyChange",
+            clipId: videoClips(cutView.timeline)[0].id,
+            property: "volume",
+            value: 55,
+          },
+        },
+        s,
+        NAME_HEADER,
+      ),
+    );
+    const mark = expectOk(
+      await post(
+        postCommit,
+        "/api/commit",
+        { branch: cut, name: "By hand", ticket: ticket() },
+        s,
+        NAME_HEADER,
+      ),
+    ) as { commitId: string };
+
+    const answers = await presetsOf(s);
+    const preset = answers.presets.find((p) => p.id === "add-captions");
+    // The panel-facing shape is unchanged: `Done`, and a log entry with no
+    // line 3 and a dead `View` (commitId null).
+    expect(preset?.run).toEqual({
+      cut,
+      commitId: null,
+      parentId: null,
+      at: created!.createdAt.toISOString(),
+      changes: 0,
+      summary: "",
+    });
+
+    const head = (
+      await getDb().select().from(commits).where(eq(commits.id, mark.commitId))
+    )[0];
+    expect(preset?.run?.at).not.toBe(head.createdAt.toISOString());
   });
 });

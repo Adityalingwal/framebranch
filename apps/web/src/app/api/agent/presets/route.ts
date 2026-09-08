@@ -17,6 +17,9 @@
  * button would fail with E_BRANCH_EXISTS.
  */
 
+import { and, desc, eq, sql } from "drizzle-orm";
+
+import { projectEvents } from "../../../../db/schema";
 import { AGENT_PRESETS, agentCutName } from "../../../../server/agent-scripts";
 import { chainOf } from "../../../../server/ancestry";
 import { findBranch } from "../../../../server/branches";
@@ -51,6 +54,40 @@ export type AgentPreset = {
 
 export type AgentPresetsData = { presets: AgentPreset[] };
 
+/**
+ * When the cut appeared. `branches` has no `created_at` column (A1a did not
+ * add one and B4a adds no migration), but the moment IS recorded: every
+ * `createBranch` appends a `branch-created` event inside the same
+ * transaction (`server/branches.ts`), and the event table has its own
+ * `created_at`. The newest one naming this cut is therefore the honest
+ * creation time — and, unlike the head card's time, it does not move every
+ * time someone Marks a version on the cut.
+ *
+ * Newest rather than oldest: a cut can be deleted and re-made under the same
+ * name, and what the panel means is "when this cut appeared". `id` breaks a
+ * created_at tie (both columns are written by the same insert, so the
+ * bigserial is the later-of-two answer).
+ */
+async function branchCreatedAt(
+  tx: Tx,
+  projectId: string,
+  cut: string,
+): Promise<Date | null> {
+  const rows = await tx
+    .select({ createdAt: projectEvents.createdAt })
+    .from(projectEvents)
+    .where(
+      and(
+        eq(projectEvents.projectId, projectId),
+        eq(projectEvents.kind, "branch-created"),
+        sql`${projectEvents.payload}->>'branch' = ${cut}`,
+      ),
+    )
+    .orderBy(desc(projectEvents.createdAt), desc(projectEvents.id))
+    .limit(1);
+  return rows[0]?.createdAt ?? null;
+}
+
 async function runOf(
   tx: Tx,
   projectId: string,
@@ -70,14 +107,19 @@ async function runOf(
   // diff to summarise, so it takes the same shape as "no card at all".
   const parentId = card?.parentId ?? null;
   if (!card || parentId === null) {
+    // The contract is the cut's CREATION time (I1 patch (b)). The head
+    // card's time is kept only as a last resort, for rows made by hand with
+    // no `branch-created` event behind them — it moves on every Mark, which
+    // is the bug this fallback order fixes.
+    const createdAt =
+      (await branchCreatedAt(tx, projectId, cut)) ??
+      chain[0]?.createdAt ??
+      new Date(0);
     return {
       cut,
       commitId: null,
       parentId: null,
-      // `branches` has no created_at (A1a deliberately did not add one and
-      // B4a adds no migration), so the head card's time is the honest
-      // stand-in for "when this cut appeared".
-      at: (chain[0]?.createdAt ?? new Date(0)).toISOString(),
+      at: createdAt.toISOString(),
       changes: 0,
       summary: "",
     };
