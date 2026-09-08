@@ -246,32 +246,33 @@ packages/engine/src/
 Everything below works as described — these are the edges the demo does not
 reach, recorded so nobody has to rediscover them.
 
-- **A rename does not read as a change.** `presentDiff` compares semantics, and
-  a clip's name is not one of them: a cut whose only difference is a renamed
-  clip shows `No changes` and `Bring in now` stays off. Names do survive a
-  bring-in. Unreachable from the app — there is no rename control.
-- **A restore on a cut marked ready leaves `Edited since ready` unset.**
-  `editedSince` compares the working revision, and a restore moves the cut's
-  head instead. The mark stays plain `Ready`.
-- **Two tabs duplicated from one another share one presence identity.**
-  Duplicating a browser tab copies its session storage, tab id included, so the
-  two show as one person. Presence is display-only, so this costs a name, never
-  an edit.
+- **A hand-made cut named `agent-‹preset›` counts as that preset's run.** Run
+  state is derived from the cut list rather than stored, and the `agent-`
+  prefix is not reserved, so a cut a person names `agent-tighten-intro` makes
+  the Agent panel read `Done` for that preset.
+- **The preview pane's empty state is a single line.** With no clip selected
+  it reads `Select a clip to start editing` and nothing else — no thumbnail
+  strip, no hint about what a clip is.
 - **A New-project reset can run twice in the tab that started it.** The tab
-  arms a six-second guard against its own `seed` event; an event that arrives
-  in the few milliseconds between the server committing and the mutation
-  answering can still slip in front of the guard and reset the tab a second
-  time.
-- **The ready note is capped at 200 characters, silently.** The field stops
-  accepting them and the schema refuses a longer one; nothing on screen says
-  so.
-- **A hand-made cut named `agent-‹something›` counts as that preset's run.**
-  Run state is derived from the cut list rather than stored, and the `agent-`
-  prefix is not reserved.
-- **`GET /api/agent/presets` walks the commit chain once per preset** and is
-  refetched on every eventful three-second tick. Three walks at demo scale;
-  it would need its own narrower query at any real size.
+  arms a six-second one-shot guard against its own `seed` event; an event
+  that arrives in the window between the server committing and the mutation
+  answering (0–3 seconds, one poll tick) can still outrun the guard and reset
+  that tab a second time.
+- **`GET /api/agent/presets` walks the commit chain once per preset**, and is
+  refetched on every eventful three-second sync tick. Three walks at demo
+  scale; it would need its own narrower query at any real size.
+- **Two tabs duplicated from one another share one presence identity.**
+  Duplicating a browser tab copies its session storage, the `fb_tab` id
+  included, so the two show as one person. Presence is display-only, so this
+  costs a name, never an edit.
+- **A conflict card names a clip by its ORIGINAL name.** The card reads the
+  name off the merge base, so a clip renamed on either cut is still called
+  what it was called before the cut was made.
+- **A slipped clip's `Original` line reads an absolute timecode.** The two
+  cut lines say how far the slip went (`starts 12 frames later`), while the
+  Original line says where the source started (`starts 00:00:02:00`) — two
+  different units in one card.
 - **The top bar reserves an empty column** the width of its left cluster, to
-  centre the version controls. Below 940px that spacer collapses; above it,
-  a long cut name and a presence chip share a capped left side while the
-  mirrored column sits empty.
+  centre the version controls. Below 940px that spacer collapses; above it, a
+  long cut name and a presence chip share a capped left side, ellipsizing
+  while the mirrored column sits empty.
