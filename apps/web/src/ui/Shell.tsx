@@ -25,7 +25,7 @@ import {
 import type { ConflictLine } from "../server/conflict-cards";
 import { clipDisplayName, findClipById, findMediaRef } from "../lib/clip-helpers";
 import { quoted } from "../lib/format";
-import { createPendingDoorSlot } from "../lib/pending-door";
+import { canOpenParkedCompare, createPendingDoorSlot } from "../lib/pending-door";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { useEditorName } from "../lib/state/editor-name";
 import { decideSyncAction, syncInvalidations } from "../lib/data/sync-plan";
@@ -789,15 +789,35 @@ export function Shell() {
    * A Compare door waits for the new cut's History too: effect (i-b) drops
    * any pair naming a commit that is not on the settled chain, so setting
    * one before the chain arrives would be undone by it.
+   *
+   * Codex BUG 2 — that wait is `history.isSuccess` AND BOTH IDS PRESENT,
+   * never `!history.isFetching`. Every eventful 3s tick calls
+   * `refreshBranches`, which invalidates `historyAll`; with another tab
+   * editing at least once per tick and History answering slower than the
+   * tick, each invalidation restarts the refetch before `isFetching` can
+   * settle and the door stays parked FOREVER — B4a's guarantee is
+   * "possibly one fetch later; never dropped".
+   *
+   * Dropping `isFetching` is safe precisely because the ids check does the
+   * real work. `useHistoryQuery` has no `placeholderData`, so a cut switch
+   * makes `isSuccess` false until the NEW cut's chain lands — the data
+   * this reads while a refetch is in flight is always this cut's own, one
+   * generation old at worst. And effect (i-b) judges the pair against the
+   * same `historyCommits` array: a pair whose ids are both on it cannot be
+   * dropped by the validation that runs on it. If a refetch later removes
+   * one of them, (i-b) clears the pair — which is correct, the commit is
+   * genuinely gone.
    */
   useEffect(() => {
     const door = doors.peek();
     if (door === null || door.target !== currentBranch) return;
     if (door.kind === "compare") {
-      if (!history.isSuccess || history.isFetching) return;
-      const known = (ref: string) =>
-        historyCommits.some((commit) => commit.commitId === ref);
-      if (!known(door.pair.a) || !known(door.pair.b)) return;
+      const ready = canOpenParkedCompare({
+        historyIsSuccess: history.isSuccess,
+        historyCommitIds: historyCommits.map((commit) => commit.commitId),
+        pair: door.pair,
+      });
+      if (!ready) return;
       doors.clear();
       openCompare(door.pair);
     } else {
@@ -808,7 +828,6 @@ export function Shell() {
     doors,
     currentBranch,
     history.isSuccess,
-    history.isFetching,
     historyCommits,
     openCompare,
     openBringIn,

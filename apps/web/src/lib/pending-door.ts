@@ -57,3 +57,35 @@ export function createPendingDoorSlot(): PendingDoorSlot {
     },
   };
 }
+
+/**
+ * Codex BUG 2 — the whole condition for applying a PARKED Compare door,
+ * kept here so it can be asserted rather than argued.
+ *
+ * Note what is NOT a parameter: whether History is currently refetching.
+ * Every eventful 3s sync tick calls `refreshBranches`, which invalidates
+ * every History query; with another tab editing at least once per tick and
+ * History answering slower than the tick, `isFetching` never settles and a
+ * door gated on it would stay parked forever — B4a's guarantee is
+ * "possibly one fetch later; never dropped or starved".
+ *
+ * What replaces it is the pair itself: BOTH ids have to be on the chain
+ * this tab is holding. `useHistoryQuery` carries no `placeholderData`, so
+ * on a cut switch `isSuccess` is false until the NEW cut's chain lands —
+ * a chain that answers this is always the standing cut's own. Shell's
+ * validate-against-chain effect judges the pair against the very same
+ * array, so a pair that passes here cannot be dropped by it.
+ */
+export function canOpenParkedCompare(input: {
+  /** The current cut's History has answered at least once. */
+  historyIsSuccess: boolean;
+  /** The commit ids on the chain this tab is holding right now. */
+  historyCommitIds: readonly string[];
+  pair: { a: string; b: string };
+}): boolean {
+  if (!input.historyIsSuccess) return false;
+  return (
+    input.historyCommitIds.includes(input.pair.a) &&
+    input.historyCommitIds.includes(input.pair.b)
+  );
+}

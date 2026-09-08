@@ -10,7 +10,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createPendingDoorSlot } from "../src/lib/pending-door";
+import {
+  canOpenParkedCompare,
+  createPendingDoorSlot,
+} from "../src/lib/pending-door";
 import type { PendingDoor } from "../src/lib/pending-door";
 
 const compareDoor: PendingDoor = {
@@ -80,5 +83,69 @@ describe("pending-door — one door, one token", () => {
     expect(a.isCurrent(seqA)).toBe(true);
     expect(a.peek()).toEqual(compareDoor);
     expect(b.peek()).toEqual(bringInDoor);
+  });
+});
+
+/**
+ * Codex BUG 2 — the parked Compare door must not starve under event
+ * traffic. Every eventful 3s sync tick invalidates every History query, so
+ * a door that waited for `isFetching` to settle could wait forever.
+ */
+describe("canOpenParkedCompare", () => {
+  const pair = { a: "c1", b: "c2" };
+
+  it("waits while History has never answered for this cut", () => {
+    expect(
+      canOpenParkedCompare({
+        historyIsSuccess: false,
+        historyCommitIds: ["c1", "c2"],
+        pair,
+      }),
+    ).toBe(false);
+  });
+
+  it("waits while either id is missing from the chain in hand", () => {
+    expect(
+      canOpenParkedCompare({
+        historyIsSuccess: true,
+        historyCommitIds: ["c1"],
+        pair,
+      }),
+    ).toBe(false);
+    expect(
+      canOpenParkedCompare({
+        historyIsSuccess: true,
+        historyCommitIds: ["c2", "c9"],
+        pair,
+      }),
+    ).toBe(false);
+    expect(
+      canOpenParkedCompare({ historyIsSuccess: true, historyCommitIds: [], pair }),
+    ).toBe(false);
+  });
+
+  it("opens as soon as both ids are on the chain", () => {
+    expect(
+      canOpenParkedCompare({
+        historyIsSuccess: true,
+        historyCommitIds: ["c3", "c2", "c1"],
+        pair,
+      }),
+    ).toBe(true);
+  });
+
+  it("takes NO refetch flag: a permanently refetching History cannot starve it", () => {
+    // The regression this pins. With another tab editing once per tick and
+    // History slower than the tick, `isFetching` never becomes false —
+    // there is deliberately no input here that could carry it.
+    const inputs = canOpenParkedCompare.length;
+    expect(inputs).toBe(1);
+    expect(
+      Object.keys({
+        historyIsSuccess: true,
+        historyCommitIds: ["c1", "c2"],
+        pair,
+      }).sort(),
+    ).toEqual(["historyCommitIds", "historyIsSuccess", "pair"]);
   });
 });
