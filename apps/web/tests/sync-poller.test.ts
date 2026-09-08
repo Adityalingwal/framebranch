@@ -183,7 +183,9 @@ describe("createSyncPoller", () => {
 
     poller.start();
     poller.stop();
-    release!(answer({ cursor: 5, events: [event(5, "import")] }));
+    release!(
+      answer({ cursor: 5, events: [event(5, "commit-created", { kind: "seed" })] }),
+    );
     await vi.advanceTimersByTimeAsync(100);
 
     // A double `refreshBranches` would be harmless; a second project reset
@@ -231,10 +233,18 @@ describe("syncInvalidations", () => {
     });
   });
 
-  it("an `import` event asks for the New-project reset as well", () => {
+  it("an `import` is NOT a project reset — only a refresh", () => {
+    // `POST /api/import` lands OTIO on ONE cut; the project and every
+    // other cut survive, so resetting the whole tab would be the wrong
+    // reaction. (The B4b brief listed `import` as a reset trigger; the
+    // review's recommendation to drop it was taken.)
     expect(syncInvalidations([event(1, "edit"), event(2, "import")])).toEqual({
       refreshBranches: true,
-      resetProject: true,
+      resetProject: false,
+    });
+    expect(syncInvalidations([event(2, "import")])).toEqual({
+      refreshBranches: true,
+      resetProject: false,
     });
   });
 

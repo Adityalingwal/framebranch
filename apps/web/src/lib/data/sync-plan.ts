@@ -39,26 +39,28 @@ export type SyncPlan = {
    * OTHER tab's New project is this tab's too) and its cut may not exist
    * any more: the Shell runs the same reset it runs after its own.
    *
-   * TWO kinds mean that, and the brief named only the second:
+   * ONE kind means that: `commit-created` with `payload.kind === "seed"`.
+   * That is what New project actually writes — `resetProjectToPreset`
+   * DELETES the whole event feed and re-seeds, so a seed card is the first
+   * row of a brand new feed. A seed can reach a tab from nowhere else: the
+   * only other place one is written is the first-visit bootstrap, and a
+   * project nobody yet holds a cookie for has no second tab to tell, while
+   * a fresh tab's own first tick asks with `cursor: null` and is answered
+   * with no events at all.
    *
-   *  - `commit-created` with `payload.kind === "seed"`. This is what New
-   *    project actually writes: `resetProjectToPreset` DELETES the whole
-   *    event feed and re-seeds, so a seed card is the first row of a brand
-   *    new feed. A seed can reach a tab from nowhere else — the only other
-   *    place one is written is the first-visit bootstrap, and a project
-   *    nobody yet holds a cookie for has no second tab to tell, while a
-   *    fresh tab's own first tick asks with `cursor: null` and is answered
-   *    with no events at all.
-   *  - `import`. `POST /api/import` has had no interface caller since G1
-   *    (it lands OTIO on ONE cut, leaving the project standing), so this
-   *    is kept because B4b's brief locks it, not because it fires — see
-   *    the reviewer question in the findings.
+   * `import` is deliberately NOT one (the review's recommendation, taken).
+   * `POST /api/import` lands OTIO on ONE cut and leaves the project and
+   * every other cut standing, so a full tab reset — playhead to 0,
+   * selection gone, view back to Agent — is the wrong reaction to it. It
+   * gets the ordinary `refreshBranches` like every other event kind. It is
+   * reachable only by curl today (no interface caller since G1), so this
+   * changes nothing that fires; it stops a wrong reaction being waiting
+   * there for whoever gives import a button.
    */
   resetProject: boolean;
 };
 
 function isProjectReplaced(event: SyncEvent): boolean {
-  if (event.kind === "import") return true;
   return event.kind === "commit-created" && event.payload.kind === "seed";
 }
 
