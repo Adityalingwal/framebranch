@@ -157,6 +157,9 @@ Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_
 | `/api/commit` | POST | yes | yes | `branch`, `name?` | commit id, name | CAS on branch head → `E_STALE_HEAD`; no-op if branch is already clean |
 | `/api/branch` | POST | yes | yes | `name`, `from` | branch id, head commit id | seals the source branch first → `E_STALE_HEAD` possible; `E_BRANCH_EXISTS` if name taken |
 | `/api/branch/switch` | POST | yes (may seal) | yes | `from`, `to` | timeline, working rev, pending count | seals dirty state before switching → `E_STALE_HEAD` possible |
+| `/api/branch/ready` | POST | yes | yes | `cut`, `note` | the cut and its ready state (note, who, when, edited-since) | marks a cut ready for main; re-marking overwrites rather than refusing; `main` itself → `E_BAD_REQUEST`; unknown cut → `E_BRANCH_NOT_FOUND` |
+| `/api/branch/ready` | DELETE | yes | yes | `cut` | the cut with a null ready state | un-marks; a cut that was never marked answers the same thing and records nothing; `main` → `E_BAD_REQUEST` |
+| `/api/sync` | POST | yes (presence only) | **no** | `tabId`, `cut`, `playheadFrame`, `colourSeed`, `cursor` | events since the cursor (200 at a time), the new cursor, and the other tabs alive in the last 10s | no ticket and no retry: a heartbeat is not replayable and a lost tick is the next tick's problem. `cursor: null` returns the current high-water mark and no events, so a fresh tab never replays the feed |
 | `/api/agent/presets` | GET | no | no | (project from context) | the three presets with id, name, one-line description, and the run each has had (or none) | n/a — read-only; the run state is derived from the cut list, not stored |
 | `/api/agent/run` | POST | yes | yes | `preset` | the cut it made, commit id, card name, ops applied | creates its own cut `agent-‹preset›`; that cut already existing → `E_BRANCH_EXISTS`; any command failing rolls back the whole run, cut included |
 | `/api/merge/preview` | GET | no | no | `from`, `choices?` | the whole preview: rows + count + runtime, both timelines, the conflict cards, the undecided clip ids, and a token (both heads + both working revs) | unknown cut → `E_BRANCH_NOT_FOUND`; malformed `choices` → `E_BAD_REQUEST` |
@@ -168,7 +171,9 @@ Each error's `code` is one specific, fixed string (like `E_OVERLAP` or `E_STALE_
 | `/api/presets` | GET | no | no | (none) | each preset's id, name, clip count and duration | n/a — read-only |
 | `/api/demo/reset` | POST | yes (discard) | yes | (none) | `{ done: true }` | a thin alias for `project/new` with the default preset. API only — no interface calls it |
 
-Every mutating route requires a `ticket` field, replayed through `runWithTicket`: the same ticket on the same endpoint returns the stored result instead of re-applying the change; the same ticket reused on a *different* endpoint is rejected with `E_TICKET_REUSED`.
+`/api/sync` is the one exception to the rule below, and deliberately so: presence is display-only — nothing else reads the `presence` table and no compare-and-swap ever consults it, because a lost heartbeat would then become a lost edit.
+
+Every other mutating route requires a `ticket` field, replayed through `runWithTicket`: the same ticket on the same endpoint returns the stored result instead of re-applying the change; the same ticket reused on a *different* endpoint is rejected with `E_TICKET_REUSED`.
 
 ## OTIO Adapter Details
 
