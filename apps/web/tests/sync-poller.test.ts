@@ -11,8 +11,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SyncData, SyncEvent } from "../src/lib/data/api-client";
-import { createSyncPoller } from "../src/lib/data/sync-poller";
-import { syncInvalidations } from "../src/lib/data/sync-plan";
+import { SYNC_INTERVAL_MS, createSyncPoller } from "../src/lib/data/sync-poller";
+import {
+  SELF_RESET_WINDOW_MS,
+  decideSyncAction,
+  syncInvalidations,
+} from "../src/lib/data/sync-plan";
 
 function answer(over: Partial<SyncData> = {}): SyncData {
   return { cursor: 0, events: [], peers: [], ...over };
@@ -257,5 +261,71 @@ describe("syncInvalidations", () => {
     const plan = syncInvalidations([event(1, "ready-set")]);
     expect(Object.keys(plan).sort()).toEqual(["refreshBranches", "resetProject"]);
     expect(JSON.stringify(plan)).not.toContain("bring-in");
+  });
+});
+
+/**
+ * Codex BUG 1 — the one-shot guard that stops the tab which CLICKED
+ * New project from resetting itself a second time when its own `seed`
+ * event comes home 0-3s later.
+ */
+describe("decideSyncAction — the self-reset guard", () => {
+  const NOW = 1_700_000_000_000;
+  const seed = () => syncInvalidations([event(9, "commit-created", { kind: "seed" })]);
+  const edit = () => syncInvalidations([event(9, "edit")]);
+
+  it("no arm → a seed is the OTHER tab's New project: reset, as always", () => {
+    expect(decideSyncAction(seed(), null, NOW)).toEqual({
+      action: "reset-project",
+      disarmSelfReset: true,
+    });
+  });
+
+  it("armed → this tab's OWN seed is swallowed, but the batch still refreshes", () => {
+    // The reset already ran on the click. Running it again would undo the
+    // playhead move / selection / panel switch made since.
+    expect(decideSyncAction(seed(), NOW - 2500, NOW)).toEqual({
+      action: "refresh-branches",
+      disarmSelfReset: true,
+    });
+  });
+
+  it("the arm is ONE-SHOT: the second seed in the same window still resets", () => {
+    const first = decideSyncAction(seed(), NOW - 100, NOW);
+    expect(first.disarmSelfReset).toBe(true);
+    // The Shell drops the arm on `disarmSelfReset`, so the next call is
+    // the unarmed one — the other tab is allowed to reset us immediately.
+    expect(decideSyncAction(seed(), null, NOW + 50).action).toBe("reset-project");
+  });
+
+  it("the arm expires with the window, so a stale one cannot swallow a real reset", () => {
+    expect(decideSyncAction(seed(), NOW - (SELF_RESET_WINDOW_MS - 1), NOW).action).toBe(
+      "refresh-branches",
+    );
+    expect(decideSyncAction(seed(), NOW - SELF_RESET_WINDOW_MS, NOW).action).toBe(
+      "reset-project",
+    );
+    expect(decideSyncAction(seed(), NOW - 60_000, NOW).action).toBe("reset-project");
+  });
+
+  it("a batch with no reset does NOT consume the arm", () => {
+    // The tick already in the air when the mutation answered can come back
+    // holding the other tab's `edit`. Clearing here would leave the seed on
+    // the NEXT tick to reset this tab anyway — the exact bug being fixed.
+    expect(decideSyncAction(edit(), NOW - 10, NOW)).toEqual({
+      action: "refresh-branches",
+      disarmSelfReset: false,
+    });
+  });
+
+  it("a quiet tick asks for nothing and leaves the arm alone", () => {
+    expect(decideSyncAction(syncInvalidations([]), NOW - 10, NOW)).toEqual({
+      action: "none",
+      disarmSelfReset: false,
+    });
+  });
+
+  it("the window is one poll interval plus the tick already in flight", () => {
+    expect(SELF_RESET_WINDOW_MS).toBe(2 * SYNC_INTERVAL_MS);
   });
 });

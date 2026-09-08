@@ -74,3 +74,80 @@ export function syncInvalidations(events: readonly SyncEvent[]): SyncPlan {
     resetProject: events.some(isProjectReplaced),
   };
 }
+
+/**
+ * How long the tab that CLICKED New project stays armed to swallow its
+ * OWN seed event — one poll window (3s) plus a whole one for the tick
+ * that was already in the air when the mutation answered.
+ *
+ * A ceiling rather than a flag that waits forever: if the seed never
+ * arrives (the poller is disabled through the whole window, the answer
+ * fails, the feed is past its 200-event page) the arm must not survive to
+ * swallow a LATER, genuine reset started by the other tab.
+ */
+export const SELF_RESET_WINDOW_MS = 6000;
+
+/** What the Shell does with one tick's events. Exactly one of these. */
+export type SyncAction =
+  /** Nothing came back that this tab cares about. */
+  | "none"
+  /** `refreshBranches(queryClient)` and nothing else. */
+  | "refresh-branches"
+  /** The project was replaced: the full New-project reset + a wholesale invalidate. */
+  | "reset-project";
+
+export type SyncDecision = {
+  action: SyncAction;
+  /** The self-reset arm has been used up (or judged expired): drop it. */
+  disarmSelfReset: boolean;
+};
+
+/**
+ * Codex BUG 1 — the tab that starts New project must not reset itself a
+ * SECOND time.
+ *
+ * The click already ran the whole reset locally (playhead 0, selection
+ * null, view Agent, `timelineResetToken++`, every query invalidated). The
+ * same transaction also appends `commit-created { kind: "seed" }`, and the
+ * poller does not filter self-events — so 0-3s later this tab is handed
+ * its own seed and runs the identical reset again, silently undoing every
+ * playhead move, clip selection, panel switch and eye/mute toggle made in
+ * that window. That window is the demo's first beat, where a presenter is
+ * most likely to touch something.
+ *
+ * The fix is a ONE-SHOT arm, set only on this tab's own New-project
+ * success path (`NewProjectDialog` → `onStarted`), never on the poller
+ * path. `armedAt` is the moment of that success:
+ *
+ *  - a reset within `SELF_RESET_WINDOW_MS` → this is our own seed coming
+ *    home. Skip the reset, still `refreshBranches` for the batch (the
+ *    events beside the seed are real), and consume the arm.
+ *  - a reset outside the window, or with no arm at all → the OTHER tab
+ *    replaced the project. Reset as always, and drop any stale arm.
+ *
+ * Deliberately NOT keyed on the batch carrying no reset: the tick already
+ * in flight when the mutation answered can come back holding the other
+ * tab's `edit` — consuming the arm there would leave the seed on the NEXT
+ * tick to reset us anyway. The time window has no such hole, and it needs
+ * no timer to clear itself.
+ *
+ * `tabId` cannot do this job: `/api/sync` events carry no author.
+ */
+export function decideSyncAction(
+  plan: SyncPlan,
+  selfResetArmedAt: number | null,
+  now: number,
+): SyncDecision {
+  if (plan.resetProject) {
+    const armed =
+      selfResetArmedAt !== null && now - selfResetArmedAt < SELF_RESET_WINDOW_MS;
+    return {
+      action: armed ? "refresh-branches" : "reset-project",
+      disarmSelfReset: true,
+    };
+  }
+  return {
+    action: plan.refreshBranches ? "refresh-branches" : "none",
+    disarmSelfReset: false,
+  };
+}

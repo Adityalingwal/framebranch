@@ -28,7 +28,7 @@ import { quoted } from "../lib/format";
 import { createPendingDoorSlot } from "../lib/pending-door";
 import { useConnectionStatus } from "../lib/state/connection-status";
 import { useEditorName } from "../lib/state/editor-name";
-import { syncInvalidations } from "../lib/data/sync-plan";
+import { decideSyncAction, syncInvalidations } from "../lib/data/sync-plan";
 import { useSyncPoller } from "../lib/data/use-sync-poller";
 import { NOW_SIDE } from "../lib/data/api-client";
 import { showToast } from "../lib/state/toast-status";
@@ -699,6 +699,27 @@ export function Shell() {
   }, [doors, setView]);
 
   /**
+   * Codex BUG 1 — the moment this tab's OWN New project succeeded, or
+   * `null`. Set on the click path only (`IconRail` → `NewProjectDialog` →
+   * `onStarted`), never on the poller path, so it can only ever swallow a
+   * reset this tab has already performed.
+   *
+   * A ref and not state: nothing renders differently because of it, and it
+   * has to be readable by the poller callback in the same turn it is set.
+   */
+  const selfResetAtRef = useRef<number | null>(null);
+
+  /**
+   * The New-project reset AS THIS TAB'S OWN ACTION. Identical to
+   * `handleNewProject` plus the arm — the poller keeps calling the plain
+   * one, so the guard can never be set by an event.
+   */
+  const handleOwnNewProject = useCallback(() => {
+    selfResetAtRef.current = Date.now();
+    handleNewProject();
+  }, [handleNewProject]);
+
+  /**
    * J1 — the 3s poller, called ONCE for the whole app.
    *
    * The gate is two traps at once: a tick before the first
@@ -720,25 +741,30 @@ export function Shell() {
     playheadFrame,
     onEvents: useCallback(
       (events: SyncEvent[]) => {
-        const plan = syncInvalidations(events);
-        if (plan.resetProject) {
+        // `decideSyncAction` holds the whole rule, including the one-shot
+        // self-reset guard, so it can be proved in a node test.
+        const decision = decideSyncAction(
+          syncInvalidations(events),
+          selfResetAtRef.current,
+          Date.now(),
+        );
+        if (decision.disarmSelfReset) selfResetAtRef.current = null;
+
+        if (decision.action === "reset-project") {
           // The OTHER tab started a New project: the cookie is shared, so
           // this tab's whole project (and possibly its cut) is gone. The
           // same reset this tab runs after its own New project, plus the
           // wholesale invalidation `useNewProjectMutation` does — nothing
           // cached is about the new project. No toast: no copy row exists
           // for it (a B5 question, not a string to invent).
-          //
-          // Self-events are not filtered, so the tab that CLICKED New
-          // project runs this a second time within 3s. Harmless (it is
-          // already on `main` with nothing selected) and inherent to the
-          // design — a "recently reset" timer would be a worse lie than
-          // one redundant reset. Written up in the findings.
           queryClient.invalidateQueries();
           handleNewProject();
           return;
         }
-        if (plan.refreshBranches) refreshBranches(queryClient);
+        // Includes the swallowed self-seed: the reset already happened on
+        // the click, but the events beside it are real and the cut list
+        // still has to catch up.
+        if (decision.action === "refresh-branches") refreshBranches(queryClient);
       },
       [handleNewProject, queryClient],
     ),
@@ -1148,7 +1174,7 @@ export function Shell() {
           onViewChange={(next) =>
             next === "changes" ? openChangesDoor() : setView(next)
           }
-          onNewProject={handleNewProject}
+          onNewProject={handleOwnNewProject}
         />
         <div
           ref={workspaceRef}
